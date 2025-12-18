@@ -5,14 +5,16 @@ from task_manager.commands import (
     complete_task,
     delete_task,
     stats_tasks,
+    show_help,
 )
 
 
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python main.py [add | list | complete | delete | stats]")
+        show_help()
         return
+
 
     command = sys.argv[1]
 
@@ -41,6 +43,8 @@ def main():
     elif command == "stats":
         stats_tasks()
 
+    elif command == "help":
+        show_help()
 
     else:
         print("Unknown command")

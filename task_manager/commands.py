@@ -63,3 +63,12 @@ def stats_tasks():
     print(f"Completed     : {completed}")
     print(f"Pending       : {pending}")
 
+def show_help():
+    print("CLI Task Manager – Commands\n")
+    print("add                 Add a new task")
+    print("list                List all tasks")
+    print("complete <id>       Mark a task as completed")
+    print("delete <id>         Delete a task")
+    print("stats               Show task statistics")
+    print("help                Show this help message")
+
