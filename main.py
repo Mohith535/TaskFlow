@@ -1,10 +1,10 @@
 import sys
-from task_manager.commands import add_task, list_tasks, complete_task
+from task_manager.commands import add_task, list_tasks, complete_task, delete_task
 
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python main.py [add | list | complete]")
+        print("Usage: python main.py [add | list | complete | delete]")
         return
 
     command = sys.argv[1]
@@ -23,10 +23,17 @@ def main():
         task_id = int(sys.argv[2])
         complete_task(task_id)
 
+    elif command == "delete":
+        if len(sys.argv) < 3:
+            print("Please provide task ID.")
+            return
+
+        task_id = int(sys.argv[2])
+        delete_task(task_id)
+
     else:
         print("Unknown command")
 
 
 if __name__ == "__main__":
     main()
-
