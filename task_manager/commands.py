@@ -27,3 +27,16 @@ def list_tasks():
     for task in tasks:
         status = "✔" if task.completed else "✘"
         print(f"[{status}] {task.id}. {task.title} ({task.priority})")
+
+def complete_task(task_id):
+    tasks = load_tasks()
+
+    for task in tasks:
+        if task.id == task_id:
+            task.completed = True
+            save_tasks(tasks)
+            print(f"✔ Task {task_id} marked as completed!")
+            return
+
+    print("Task not found.")
+
