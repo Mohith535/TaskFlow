@@ -14,7 +14,7 @@ def add_task():
     tasks.append(task)
     save_tasks(tasks)
 
-    print("✅ Task added successfully!")
+    print(" Task added successfully!")
 
 
 def list_tasks():
@@ -52,4 +52,14 @@ def delete_task(task_id):
 
     print("Task not found.")
 
+def stats_tasks():
+    tasks = load_tasks()
+
+    total = len(tasks)
+    completed = sum(1 for task in tasks if task.completed)
+    pending = total - completed
+
+    print(f"Total tasks   : {total}")
+    print(f"Completed     : {completed}")
+    print(f"Pending       : {pending}")
 
