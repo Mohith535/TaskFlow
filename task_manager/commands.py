@@ -1,5 +1,6 @@
 from task_manager.storage import load_tasks, save_tasks
 from task_manager.models import Task
+from datetime import datetime
 
 
 def add_task():
@@ -9,7 +10,15 @@ def add_task():
     priority = input("Priority (Low/Medium/High): ")
 
     task_id = len(tasks) + 1
-    task = Task(id=task_id, title=title, priority=priority)
+    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    task = Task(
+        id=task_id,
+        title=title,
+        priority=priority,
+        created_at=now
+    )
+
 
     tasks.append(task)
     save_tasks(tasks)
@@ -26,7 +35,18 @@ def list_tasks():
 
     for task in tasks:
         status = "[DONE]" if task.completed else "[TODO]"
-        print(f"{status} {task.id}. {task.title} ({task.priority})")
+        print(
+            f"[{status}] {task.id}. {task.title} ({task.priority}) | "
+            f"Created: {task.created_at}"
+        )
+
+        if task.completed:
+            print(
+                f"[DONE] {task.id}. {task.title} ({task.priority}) | "
+                f"Created: {task.created_at} | Completed: {task.completed_at}"
+            )
+
+
 
 def complete_task(task_id):
     tasks = load_tasks()
@@ -34,6 +54,7 @@ def complete_task(task_id):
     for task in tasks:
         if task.id == task_id:
             task.completed = True
+            task.completed_at = datetime.now().strftime("%Y-%m-%d %H:%M")
             save_tasks(tasks)
             print(f" Task {task_id} marked as completed!")
             return
