@@ -6,6 +6,8 @@ from task_manager.commands import (
     delete_task,
     stats_tasks,
     show_help,
+    undo_task,
+    edit_task,
 )
 
 
@@ -22,7 +24,26 @@ def main():
         add_task()
 
     elif command == "list":
-        list_tasks()
+        if len(sys.argv) == 3 and sys.argv[2] == "--todo":
+            list_tasks(filter_status="todo")
+        elif len(sys.argv) == 3 and sys.argv[2] == "--done":
+            list_tasks(filter_status="done")
+        else:
+            list_tasks()
+
+
+    elif command == "undo":
+        if len(sys.argv) != 3:
+            print("Usage: python main.py undo <id>")
+        else:
+            undo_task(int(sys.argv[2]))
+
+    elif command == "edit":
+        if len(sys.argv) != 3:
+            print("Usage: python main.py edit <id>")
+        else:
+            edit_task(int(sys.argv[2]))
+
 
     elif command == "complete":
         if len(sys.argv) < 3:

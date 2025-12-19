@@ -50,6 +50,76 @@ def list_tasks():
             f"{created:<16} | {completed:<16}"
         )
 
+def list_tasks(filter_status=None):
+    tasks = load_tasks()
+
+    if not tasks:
+        print("No tasks found.")
+        return
+
+    print("ID | STATUS | TITLE                     | PRIORITY | CREATED             | COMPLETED")
+    print("-" * 80)
+
+    for task in tasks:
+        if filter_status == "todo" and task.completed:
+            continue
+        if filter_status == "done" and not task.completed:
+            continue
+
+        status = "DONE" if task.completed else "TODO"
+
+        print(
+            f"{task.id:<3}| "
+            f"{status:<6}| "
+            f"{task.title:<25}| "
+            f"{task.priority:<8}| "
+            f"{(task.created_at or '-'): <19}| "
+            f"{(task.completed_at or '-'): <19}"
+        )
+
+
+def undo_task(task_id):
+    tasks = load_tasks()
+
+    for task in tasks:
+        if task.id == task_id:
+            if not task.completed:
+                print(f"Task {task_id} is already TODO.")
+                return
+
+            task.completed = False
+            task.completed_at = None
+            save_tasks(tasks)
+
+            print(f"Task {task_id} marked as TODO again.")
+            return
+
+    print("Task not found.")
+
+
+def edit_task(task_id):
+    tasks = load_tasks()
+
+    for task in tasks:
+        if task.id == task_id:
+            print(f"Current title: {task.title}")
+            new_title = input("New title (leave empty to keep): ").strip()
+
+            print(f"Current priority: {task.priority}")
+            new_priority = input("New priority (Low/Medium/High, leave empty to keep): ").strip()
+
+            if new_title:
+                task.title = new_title
+
+            if new_priority:
+                task.priority = new_priority
+
+            save_tasks(tasks)
+            print(f"Task {task_id} updated successfully.")
+            return
+
+    print("Task not found.")
+
 
 def complete_task(task_id):
     tasks = load_tasks()
