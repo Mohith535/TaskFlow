@@ -33,19 +33,22 @@ def list_tasks():
         print("No tasks found.")
         return
 
-    for task in tasks:
-        status = "[DONE]" if task.completed else "[TODO]"
-        print(
-            f"[{status}] {task.id}. {task.title} ({task.priority}) | "
-            f"Created: {task.created_at}"
+    print(
+        f"{'ID':<2} | {'STATUS':<6} | {'TITLE':<27} | {'PRIORITY':<8} | "
+        f"{'CREATED':<16} | {'COMPLETED':<16}"
         )
+    
+    print("-" * 90)
 
-        if task.completed:
-            print(
-                f"[DONE] {task.id}. {task.title} ({task.priority}) | "
-                f"Created: {task.created_at} | Completed: {task.completed_at}"
-            )
+    for task in tasks:
+        status = "DONE" if task.completed else "TODO"
+        created = task.created_at if task.created_at else "-"
+        completed = task.completed_at if task.completed_at else "-"
 
+        print(
+            f"{task.id:<2} | {status:<6} | {task.title:<27} | {task.priority:<8} | "
+            f"{created:<16} | {completed:<16}"
+        )
 
 
 def complete_task(task_id):
