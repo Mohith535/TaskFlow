@@ -8,6 +8,10 @@ from task_manager.commands import (
     show_help,
     undo_task,
     edit_task,
+    search_tasks,
+    clear_completed_tasks,
+    summary,
+    reset_tasks,
 )
 
 
@@ -60,6 +64,22 @@ def main():
 
         task_id = int(sys.argv[2])
         delete_task(task_id)
+
+    elif command == "search":
+        if len(sys.argv) < 3:
+            print("Usage: python main.py search <keyword>")
+        else:
+            search_tasks(sys.argv[2])
+
+    elif command == "clear" and len(sys.argv) > 2 and sys.argv[2] == "completed":
+        clear_completed_tasks()
+
+    elif command == "summary":
+        summary()
+
+    elif command == "reset":
+        reset_tasks()
+
 
     elif command == "stats":
         stats_tasks()

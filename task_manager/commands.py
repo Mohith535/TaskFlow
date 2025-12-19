@@ -146,6 +146,68 @@ def delete_task(task_id):
 
     print("Task not found.")
 
+
+def search_tasks(keyword):
+    tasks = load_tasks()
+    keyword = keyword.lower()
+
+    found = False
+    for task in tasks:
+        if keyword in task.title.lower():
+            status = "DONE" if task.completed else "TODO"
+            print(f"{task.id} | {status} | {task.title} | {task.priority}")
+            found = True
+
+    if not found:
+        print("No matching tasks found.")
+
+
+def clear_completed_tasks():
+    tasks = load_tasks()
+    pending_tasks = [task for task in tasks if not task.completed]
+
+    removed_count = len(tasks) - len(pending_tasks)
+
+    if removed_count == 0:
+        print("No completed tasks to clear.")
+        return
+
+    save_tasks(pending_tasks)
+    print(f"Cleared {removed_count} completed task(s).")
+
+
+
+def summary():
+    tasks = load_tasks()
+
+    total = len(tasks)
+    completed = sum(1 for t in tasks if t.completed)
+    pending = total - completed
+    high_pending = sum(
+        1 for t in tasks if not t.completed and t.priority.lower() == "high"
+    )
+
+    print(f"You have {total} task(s).")
+    print(f"Completed: {completed}")
+    print(f"Pending: {pending}")
+    print(f"High priority pending: {high_pending}")
+
+
+
+def reset_tasks():
+    confirm = input("This will delete ALL tasks. Continue? (y/n): ").strip().lower()
+
+    if confirm != "y":
+        print("Reset cancelled.")
+        return
+
+    save_tasks([])
+    print("All tasks have been deleted.")
+
+
+
+
+
 def stats_tasks():
     tasks = load_tasks()
 
