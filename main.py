@@ -18,8 +18,8 @@ from task_manager.commands import (
 )
 
 APP_NAME = "TaskFlow"
-APP_VERSION = "v1.1"
-APP_TAGLINE = "Power Commands Update"
+APP_VERSION = "v1.2"
+APP_TAGLINE = "Calm, Powerful CLI Task Assistant"
 
 
 def show_version():

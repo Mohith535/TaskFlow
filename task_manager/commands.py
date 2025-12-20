@@ -1,6 +1,18 @@
+"""
+TaskFlow Commands Module
+------------------------
+This file contains all CLI task operations.
+Designed for clarity, calm UX, and reliability.
+"""
+
 from task_manager.storage import load_tasks, save_tasks
 from task_manager.models import Task
 from datetime import datetime
+
+
+# =========================================================
+# CONFIGURATION
+# =========================================================
 
 COL_WIDTHS = {
     "id": 3,
@@ -13,6 +25,10 @@ COL_WIDTHS = {
 
 MAX_VISIBLE_TASKS = 15
 
+
+# =========================================================
+# MESSAGE HELPERS (Emotion-safe output)
+# =========================================================
 
 def info(msg):
     print(f"Info: {msg}")
@@ -27,8 +43,17 @@ def careful(msg):
     print(f"Careful: {msg}")
 
 
+def task_not_found(task_id):
+    """Unified message when a task ID does not exist."""
+    info(f"Task {task_id} isn’t available right now.")
+
+
+# =========================================================
+# UTILITIES
+# =========================================================
 
 def normalize_priority(priority):
+    """Normalize priority input to Low / Medium / High."""
     if not priority:
         return "Medium"
 
@@ -44,14 +69,17 @@ def normalize_priority(priority):
     return "Medium"
 
 
+# =========================================================
+# CORE TASK CREATION
+# =========================================================
 
 def add_task():
+    """Add a new task with automatic timestamp."""
     tasks = load_tasks()
 
-    title = input("Task title: ")
+    title = input("Task title: ").strip()
     priority_input = input("Priority (Low/Medium/High): ")
     priority = normalize_priority(priority_input)
-
 
     task_id = len(tasks) + 1
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -63,21 +91,24 @@ def add_task():
         created_at=now
     )
 
-
     tasks.append(task)
     save_tasks(tasks)
 
-    success(" Task added successfully!")
+    success("Task added successfully.")
 
+
+# =========================================================
+# LISTING & VIEWING
+# =========================================================
 
 def list_tasks(filter_status=None):
+    """List tasks with optional filtering and soft output limit."""
     tasks = load_tasks()
 
     if not tasks:
         note("Your task list is empty. A good place to start.")
         return
 
-    # Apply filter first
     filtered_tasks = []
     for task in tasks:
         if filter_status == "todo" and task.completed:
@@ -86,7 +117,6 @@ def list_tasks(filter_status=None):
             continue
         filtered_tasks.append(task)
 
-    # Handle empty filtered result
     if not filtered_tasks:
         if filter_status == "done":
             note("You haven’t completed any tasks yet.")
@@ -96,7 +126,7 @@ def list_tasks(filter_status=None):
             note("No tasks to display right now.")
         return
 
-    # Header
+    # Table header
     print(
         f"{'ID':<{COL_WIDTHS['id']}} | "
         f"{'STATUS':<{COL_WIDTHS['status']}} | "
@@ -116,16 +146,13 @@ def list_tasks(filter_status=None):
         15
     ))
 
-
     shown = 0
-
     for task in filtered_tasks:
         if shown >= MAX_VISIBLE_TASKS:
             note(f"Showing first {MAX_VISIBLE_TASKS} tasks. Use '--all' to view everything.")
             break
 
         status = "DONE" if task.completed else "TODO"
-
         created = task.created_at or "-"
         completed = task.completed_at or "-"
 
@@ -140,6 +167,39 @@ def list_tasks(filter_status=None):
         shown += 1
 
 
+def view_task(task_id):
+    """View a single task in detail."""
+    tasks = load_tasks()
+
+    for task in tasks:
+        if task.id == task_id:
+            print(f"ID        : {task.id}")
+            print(f"Title     : {task.title}")
+            print(f"Status    : {'DONE' if task.completed else 'TODO'}")
+            print(f"Priority  : {task.priority}")
+            print(f"Created   : {task.created_at or '-'}")
+            print(f"Completed : {task.completed_at or '-'}")
+            return
+
+    task_not_found(task_id)
+
+
+# =========================================================
+# TASK STATE CHANGES
+# =========================================================
+
+def complete_task(task_id):
+    tasks = load_tasks()
+
+    for task in tasks:
+        if task.id == task_id:
+            task.completed = True
+            task.completed_at = datetime.now().strftime("%Y-%m-%d %H:%M")
+            save_tasks(tasks)
+            success(f"Task {task_id} marked as completed.")
+            return
+
+    task_not_found(task_id)
 
 
 def undo_task(task_id):
@@ -154,11 +214,10 @@ def undo_task(task_id):
             task.completed = False
             task.completed_at = None
             save_tasks(tasks)
-
-            success(f"Task {task_id} marked as TODO again.")
+            success(f"Task {task_id} moved back to TODO.")
             return
 
-    info(f"Task {task_id} isn’t available right now.")
+    task_not_found(task_id)
 
 
 def edit_task(task_id):
@@ -166,38 +225,56 @@ def edit_task(task_id):
 
     for task in tasks:
         if task.id == task_id:
-            print(f"Current title: {task.title}")
             new_title = input("New title (leave empty to keep): ").strip()
-
-            print(f"Current priority: {task.priority}")
             new_priority = input("New priority (Low/Medium/High, leave empty to keep): ").strip()
 
             if new_title:
                 task.title = new_title
-
             if new_priority:
-                task.priority = new_priority
+                task.priority = normalize_priority(new_priority)
 
             save_tasks(tasks)
             success(f"Task {task_id} updated successfully.")
             return
 
-    info(f"Task {task_id} isn’t available right now.")
+    task_not_found(task_id)
 
 
-def complete_task(task_id):
+def rename_task(task_id):
     tasks = load_tasks()
 
     for task in tasks:
         if task.id == task_id:
-            task.completed = True
-            task.completed_at = datetime.now().strftime("%Y-%m-%d %H:%M")
+            new_title = input("New title: ").strip()
+            if not new_title:
+                note("Title cannot be empty.")
+                return
+
+            task.title = new_title
             save_tasks(tasks)
-            success(f"Task {task_id} marked as completed.")
+            success("Task renamed successfully.")
             return
 
-    info(f"Task {task_id} isn’t available right now.")
+    task_not_found(task_id)
 
+
+def change_priority(task_id, level):
+    tasks = load_tasks()
+    priority = normalize_priority(level)
+
+    for task in tasks:
+        if task.id == task_id:
+            task.priority = priority
+            save_tasks(tasks)
+            success(f"Priority updated to {priority}.")
+            return
+
+    task_not_found(task_id)
+
+
+# =========================================================
+# DESTRUCTIVE ACTIONS
+# =========================================================
 
 def delete_task(task_id):
     tasks = load_tasks()
@@ -209,35 +286,19 @@ def delete_task(task_id):
             success(f"Task {task_id} removed successfully.")
             return
 
-    info(f"Task {task_id} isn’t available right now.")
-
-
-def search_tasks(keyword):
-    tasks = load_tasks()
-    keyword = keyword.lower()
-
-    found = False
-    for task in tasks:
-        if keyword in task.title.lower():
-            status = "DONE" if task.completed else "TODO"
-            print(f"{task.id} | {status} | {task.title} | {task.priority}")
-            found = True
-
-    if not found:
-        note("No matching tasks found.")
+    task_not_found(task_id)
 
 
 def clear_completed_tasks():
     tasks = load_tasks()
+    completed = [t for t in tasks if t.completed]
 
-    completed_tasks = [t for t in tasks if t.completed]
-
-    if not completed_tasks:
+    if not completed:
         note("No completed tasks to clear.")
         return
 
     confirm = input(
-        f"This will permanently delete {len(completed_tasks)} completed task(s). Continue? (y/n): "
+        f"This will permanently delete {len(completed)} completed task(s). Continue? (y/n): "
     ).strip().lower()
 
     if confirm != "y":
@@ -246,27 +307,7 @@ def clear_completed_tasks():
 
     tasks = [t for t in tasks if not t.completed]
     save_tasks(tasks)
-
-    success(f"Cleared {len(completed_tasks)} completed task(s).")
-
-
-
-
-def summary():
-    tasks = load_tasks()
-
-    total = len(tasks)
-    completed = sum(1 for t in tasks if t.completed)
-    pending = total - completed
-    high_pending = sum(
-        1 for t in tasks if not t.completed and t.priority.lower() == "high"
-    )
-
-    print(f"You have {total} task(s).")
-    print(f"Completed: {completed}")
-    print(f"Pending: {pending}")
-    print(f"High priority pending: {high_pending}")
-
+    success(f"Cleared {len(completed)} completed task(s).")
 
 
 def reset_tasks():
@@ -288,79 +329,56 @@ def reset_tasks():
     success("All tasks have been cleared.")
 
 
-def view_task(task_id):
+# =========================================================
+# SUMMARY & STATS
+# =========================================================
+
+def summary():
     tasks = load_tasks()
 
-    for task in tasks:
-        if task.id == task_id:
-            print(f"ID        : {task.id}")
-            print(f"Title     : {task.title}")
-            print(f"Status    : {'DONE' if task.completed else 'TODO'}")
-            print(f"Priority  : {task.priority}")
-            print(f"Created   : {task.created_at or '-'}")
-            print(f"Completed : {task.completed_at or '-'}")
-            return
+    total = len(tasks)
+    completed = sum(1 for t in tasks if t.completed)
+    pending = total - completed
+    high_pending = sum(
+        1 for t in tasks if not t.completed and t.priority == "High"
+    )
 
-    info(f"Task {task_id} isn’t available right now.")
-
-
-def rename_task(task_id):
-    tasks = load_tasks()
-
-    for task in tasks:
-        if task.id == task_id:
-            new_title = input("New title: ").strip()
-
-            if not new_title:
-                note("Title cannot be empty.")
-                return
-
-            task.title = new_title
-            save_tasks(tasks)
-
-            success("Task renamed successfully.")
-            return
-
-    info(f"Task {task_id} isn’t available right now.")
-
-
-def change_priority(task_id, level):
-    level = level.lower()
-
-    if level not in ("low", "medium", "high"):
-        note("Priority must be low, medium, or high.")
-        return
-
-    tasks = load_tasks()
-
-    for task in tasks:
-        if task.id == task_id:
-            task.priority = level.capitalize()
-            save_tasks(tasks)
-            success(f"Priority updated to {task.priority}.")
-            return
-
-    info(f"Task {task_id} isn’t available right now.")
-
+    print(f"You have {total} task(s).")
+    print(f"Completed: {completed}")
+    print(f"Pending: {pending}")
+    print(f"High priority pending: {high_pending}")
 
 
 def stats_tasks():
     tasks = load_tasks()
 
     total = len(tasks)
-    completed = sum(1 for task in tasks if task.completed)
+    completed = sum(1 for t in tasks if t.completed)
     pending = total - completed
 
-    print(f"Total tasks   : {total}")
-    print(f"Completed     : {completed}")
-    print(f"Pending       : {pending}")
+    print(f"Total     : {total}")
+    print(f"Completed : {completed}")
+    print(f"Pending   : {pending}")
+
+
+# =========================================================
+# HELP
+# =========================================================
 
 def show_help():
-    print("CLI Task Manager – Commands\n")
-    print("add                 Add a new task")
-    print("list                List all tasks")
-    print("complete <id>       Mark a task as completed")
-    print("delete <id>         Delete a task")
-    print("stats               Show task statistics")
-    print("help                Show this help message")
-
+    print("TaskFlow — Commands\n")
+    print("add                     Add a new task")
+    print("list                    List all tasks")
+    print("list --todo             List pending tasks")
+    print("list --done             List completed tasks")
+    print("view <id>               View task details")
+    print("complete <id>           Mark a task as completed")
+    print("undo <id>               Move task back to TODO")
+    print("rename <id>             Rename a task")
+    print("priority <id> <level>   Change priority")
+    print("delete <id>             Delete a task")
+    print("clear completed         Clear all completed tasks")
+    print("summary                 Human-readable summary")
+    print("stats                   Task statistics")
+    print("reset                   Reset all tasks")
+    print("help                    Show this help")
