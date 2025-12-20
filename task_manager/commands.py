@@ -2,12 +2,41 @@ from task_manager.storage import load_tasks, save_tasks
 from task_manager.models import Task
 from datetime import datetime
 
+COL_WIDTHS = {
+    "id": 3,
+    "status": 6,
+    "title": 30,
+    "priority": 8,
+    "created": 16,
+    "completed": 16
+}
+
+
+
+def normalize_priority(priority):
+    if not priority:
+        return "Medium"
+
+    priority = priority.strip().lower()
+
+    if priority in ("high", "h"):
+        return "High"
+    if priority in ("medium", "m"):
+        return "Medium"
+    if priority in ("low", "l"):
+        return "Low"
+
+    return "Medium"
+
+
 
 def add_task():
     tasks = load_tasks()
 
     title = input("Task title: ")
-    priority = input("Priority (Low/Medium/High): ")
+    priority_input = input("Priority (Low/Medium/High): ")
+    priority = normalize_priority(priority_input)
+
 
     task_id = len(tasks) + 1
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -57,8 +86,17 @@ def list_tasks(filter_status=None):
         print("No tasks found.")
         return
 
-    print("ID | STATUS | TITLE                     | PRIORITY | CREATED             | COMPLETED")
-    print("-" * 80)
+    # Table header
+    print(
+        f"{'ID':<{COL_WIDTHS['id']}} | "
+        f"{'STATUS':<{COL_WIDTHS['status']}} | "
+        f"{'TITLE':<{COL_WIDTHS['title']}} | "
+        f"{'PRIORITY':<{COL_WIDTHS['priority']}} | "
+        f"{'CREATED':<{COL_WIDTHS['created']}} | "
+        f"{'COMPLETED':<{COL_WIDTHS['completed']}}"
+    )
+
+    print("-" * 90)
 
     for task in tasks:
         if filter_status == "todo" and task.completed:
@@ -68,14 +106,18 @@ def list_tasks(filter_status=None):
 
         status = "DONE" if task.completed else "TODO"
 
+        created = task.created_at if task.created_at else "-"
+        completed = task.completed_at if task.completed_at else "-"
+
         print(
-            f"{task.id:<3}| "
-            f"{status:<6}| "
-            f"{task.title:<25}| "
-            f"{task.priority:<8}| "
-            f"{(task.created_at or '-'): <19}| "
-            f"{(task.completed_at or '-'): <19}"
+            f"{task.id:<{COL_WIDTHS['id']}} | "
+            f"{status:<{COL_WIDTHS['status']}} | "
+            f"{task.title:<{COL_WIDTHS['title']}} | "
+            f"{task.priority:<{COL_WIDTHS['priority']}} | "
+            f"{created:<{COL_WIDTHS['created']}} | "
+            f"{completed:<{COL_WIDTHS['completed']}}"
         )
+
 
 
 def undo_task(task_id):
@@ -118,7 +160,7 @@ def edit_task(task_id):
             print(f"Task {task_id} updated successfully.")
             return
 
-    print("Task not found.")
+    print(f"Error: Task with ID {task_id} not found.")
 
 
 def complete_task(task_id):
@@ -132,7 +174,7 @@ def complete_task(task_id):
             print(f" Task {task_id} marked as completed!")
             return
 
-    print("Task not found.")
+    print(f"Error: Task with ID {task_id} not found.")
 
 def delete_task(task_id):
     tasks = load_tasks()
@@ -144,7 +186,7 @@ def delete_task(task_id):
             print(f" Task {task_id} deleted!")
             return
 
-    print("Task not found.")
+    print(f"Error: Task with ID {task_id} not found.")
 
 
 def search_tasks(keyword):
