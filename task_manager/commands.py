@@ -31,17 +31,16 @@ MAX_VISIBLE_TASKS = 15
 # =========================================================
 
 def info(msg):
-    print(f"Info: {msg}")
+    print(f"\nInfo: {msg}")
 
 def note(msg):
-    print(f"Note: {msg}")
+    print(f"\nNote: {msg}")
 
 def success(msg):
-    print(f"OK: {msg}")
+    print(f"\nOK: {msg}")
 
 def careful(msg):
-    print(f"Careful: {msg}")
-
+    print(f"\nCareful: {msg}")
 
 def task_not_found(task_id):
     """Unified message when a task ID does not exist."""
