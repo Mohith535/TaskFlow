@@ -55,30 +55,6 @@ def add_task():
     print(" Task added successfully!")
 
 
-def list_tasks():
-    tasks = load_tasks()
-
-    if not tasks:
-        print("No tasks found.")
-        return
-
-    print(
-        f"{'ID':<2} | {'STATUS':<6} | {'TITLE':<27} | {'PRIORITY':<8} | "
-        f"{'CREATED':<16} | {'COMPLETED':<16}"
-        )
-    
-    print("-" * 90)
-
-    for task in tasks:
-        status = "DONE" if task.completed else "TODO"
-        created = task.created_at if task.created_at else "-"
-        completed = task.completed_at if task.completed_at else "-"
-
-        print(
-            f"{task.id:<2} | {status:<6} | {task.title:<27} | {task.priority:<8} | "
-            f"{created:<16} | {completed:<16}"
-        )
-
 def list_tasks(filter_status=None):
     tasks = load_tasks()
 
@@ -86,7 +62,26 @@ def list_tasks(filter_status=None):
         print("No tasks found.")
         return
 
-    # Table header
+    # Apply filter first
+    filtered_tasks = []
+    for task in tasks:
+        if filter_status == "todo" and task.completed:
+            continue
+        if filter_status == "done" and not task.completed:
+            continue
+        filtered_tasks.append(task)
+
+    # Handle empty filtered result
+    if not filtered_tasks:
+        if filter_status == "done":
+            print("You haven’t completed any tasks yet.")
+        elif filter_status == "todo":
+            print("No pending tasks. Everything is completed.")
+        else:
+            print("No tasks to display.")
+        return
+
+    # Header
     print(
         f"{'ID':<{COL_WIDTHS['id']}} | "
         f"{'STATUS':<{COL_WIDTHS['status']}} | "
@@ -98,16 +93,11 @@ def list_tasks(filter_status=None):
 
     print("-" * 90)
 
-    for task in tasks:
-        if filter_status == "todo" and task.completed:
-            continue
-        if filter_status == "done" and not task.completed:
-            continue
-
+    for task in filtered_tasks:
         status = "DONE" if task.completed else "TODO"
 
-        created = task.created_at if task.created_at else "-"
-        completed = task.completed_at if task.completed_at else "-"
+        created = task.created_at or "-"
+        completed = task.completed_at or "-"
 
         print(
             f"{task.id:<{COL_WIDTHS['id']}} | "
@@ -117,6 +107,7 @@ def list_tasks(filter_status=None):
             f"{created:<{COL_WIDTHS['created']}} | "
             f"{completed:<{COL_WIDTHS['completed']}}"
         )
+
 
 
 
