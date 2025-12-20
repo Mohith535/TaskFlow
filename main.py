@@ -1,9 +1,11 @@
 import sys
 from task_manager.commands import (
     add_task,
+    change_priority,
     list_tasks,
     complete_task,
     delete_task,
+    rename_task,
     stats_tasks,
     show_help,
     undo_task,
@@ -12,8 +14,16 @@ from task_manager.commands import (
     clear_completed_tasks,
     summary,
     reset_tasks,
+    view_task,
 )
 
+APP_NAME = "TaskFlow"
+APP_VERSION = "v1.1"
+APP_TAGLINE = "Power Commands Update"
+
+
+def show_version():
+    print(f"{APP_NAME} {APP_VERSION} — {APP_TAGLINE}")
 
 
 def main():
@@ -86,6 +96,27 @@ def main():
 
     elif command == "help":
         show_help()
+
+    elif command == "view":
+        if len(sys.argv) < 3:
+            print("Usage: python main.py view <id>")
+        else:
+            view_task(int(sys.argv[2]))
+
+    elif command == "rename":
+        if len(sys.argv) < 3:
+            print("Usage: python main.py rename <id>")
+        else:
+            rename_task(int(sys.argv[2]))
+
+    elif command == "priority":
+        if len(sys.argv) < 4:
+            print("Usage: python main.py priority <id> <low|medium|high>")
+        else:
+            change_priority(int(sys.argv[2]), sys.argv[3])
+
+    elif command == "version":
+        show_version()
 
     else:
         print("Unknown command")

@@ -197,16 +197,26 @@ def search_tasks(keyword):
 
 def clear_completed_tasks():
     tasks = load_tasks()
-    pending_tasks = [task for task in tasks if not task.completed]
 
-    removed_count = len(tasks) - len(pending_tasks)
+    completed_tasks = [t for t in tasks if t.completed]
 
-    if removed_count == 0:
+    if not completed_tasks:
         print("No completed tasks to clear.")
         return
 
-    save_tasks(pending_tasks)
-    print(f"Cleared {removed_count} completed task(s).")
+    confirm = input(
+        f"This will permanently delete {len(completed_tasks)} completed task(s). Continue? (y/n): "
+    ).strip().lower()
+
+    if confirm != "y":
+        print("Operation cancelled.")
+        return
+
+    tasks = [t for t in tasks if not t.completed]
+    save_tasks(tasks)
+
+    print(f"Cleared {len(completed_tasks)} completed task(s).")
+
 
 
 
@@ -228,15 +238,79 @@ def summary():
 
 
 def reset_tasks():
-    confirm = input("This will delete ALL tasks. Continue? (y/n): ").strip().lower()
+    tasks = load_tasks()
 
-    if confirm != "y":
+    if not tasks:
+        print("No tasks to reset.")
+        return
+
+    confirm = input(
+        "This will delete ALL tasks permanently.\nType RESET to confirm: "
+    ).strip()
+
+    if confirm != "RESET":
         print("Reset cancelled.")
         return
 
     save_tasks([])
     print("All tasks have been deleted.")
 
+
+
+def view_task(task_id):
+    tasks = load_tasks()
+
+    for task in tasks:
+        if task.id == task_id:
+            print(f"ID        : {task.id}")
+            print(f"Title     : {task.title}")
+            print(f"Status    : {'DONE' if task.completed else 'TODO'}")
+            print(f"Priority  : {task.priority}")
+            print(f"Created   : {task.created_at or '-'}")
+            print(f"Completed : {task.completed_at or '-'}")
+            return
+
+    print("Task not found.")
+
+
+def rename_task(task_id):
+    tasks = load_tasks()
+
+    for task in tasks:
+        if task.id == task_id:
+            new_title = input("New title: ").strip()
+
+            if not new_title:
+                print("Title cannot be empty.")
+                return
+
+            task.title = new_title
+            save_tasks(tasks)
+
+            print("Task renamed successfully.")
+            return
+
+    print("Task not found.")
+
+
+
+def change_priority(task_id, level):
+    level = level.lower()
+
+    if level not in ("low", "medium", "high"):
+        print("Priority must be low, medium, or high.")
+        return
+
+    tasks = load_tasks()
+
+    for task in tasks:
+        if task.id == task_id:
+            task.priority = level.capitalize()
+            save_tasks(tasks)
+            print(f"Priority updated to {task.priority}.")
+            return
+
+    print("Task not found.")
 
 
 
