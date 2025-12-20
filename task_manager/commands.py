@@ -11,6 +11,18 @@ COL_WIDTHS = {
     "completed": 16
 }
 
+def info(msg):
+    print(f"Info: {msg}")
+
+def note(msg):
+    print(f"Note: {msg}")
+
+def success(msg):
+    print(f"✓ {msg}")
+
+def careful(msg):
+    print(f"Careful: {msg}")
+
 
 
 def normalize_priority(priority):
@@ -52,14 +64,14 @@ def add_task():
     tasks.append(task)
     save_tasks(tasks)
 
-    print(" Task added successfully!")
+    success(" Task added successfully!")
 
 
 def list_tasks(filter_status=None):
     tasks = load_tasks()
 
     if not tasks:
-        print("No tasks found.")
+        note("Your task list is empty. A good place to start.")
         return
 
     # Apply filter first
@@ -74,11 +86,11 @@ def list_tasks(filter_status=None):
     # Handle empty filtered result
     if not filtered_tasks:
         if filter_status == "done":
-            print("You haven’t completed any tasks yet.")
+            note("You haven’t completed any tasks yet.")
         elif filter_status == "todo":
-            print("No pending tasks. Everything is completed.")
+            note("No pending tasks. Everything is completed.")
         else:
-            print("No tasks to display.")
+            note("No tasks to display right now.")
         return
 
     # Header
@@ -117,17 +129,17 @@ def undo_task(task_id):
     for task in tasks:
         if task.id == task_id:
             if not task.completed:
-                print(f"Task {task_id} is already TODO.")
+                info(f"Task {task_id} is already TODO.")
                 return
 
             task.completed = False
             task.completed_at = None
             save_tasks(tasks)
 
-            print(f"Task {task_id} marked as TODO again.")
+            success(f"Task {task_id} marked as TODO again.")
             return
 
-    print("Task not found.")
+    info(f"Task {task_id} isn’t available right now.")
 
 
 def edit_task(task_id):
@@ -148,10 +160,10 @@ def edit_task(task_id):
                 task.priority = new_priority
 
             save_tasks(tasks)
-            print(f"Task {task_id} updated successfully.")
+            success(f"Task {task_id} updated successfully.")
             return
 
-    print(f"Error: Task with ID {task_id} not found.")
+    info(f"Task {task_id} isn’t available right now.")
 
 
 def complete_task(task_id):
@@ -162,10 +174,11 @@ def complete_task(task_id):
             task.completed = True
             task.completed_at = datetime.now().strftime("%Y-%m-%d %H:%M")
             save_tasks(tasks)
-            print(f" Task {task_id} marked as completed!")
+            success(f"Task {task_id} marked as completed.")
             return
 
-    print(f"Error: Task with ID {task_id} not found.")
+    info(f"Task {task_id} isn’t available right now.")
+
 
 def delete_task(task_id):
     tasks = load_tasks()
@@ -174,10 +187,10 @@ def delete_task(task_id):
         if task.id == task_id:
             tasks.remove(task)
             save_tasks(tasks)
-            print(f" Task {task_id} deleted!")
+            success(f"Task {task_id} removed successfully.")
             return
 
-    print(f"Error: Task with ID {task_id} not found.")
+    info(f"Task {task_id} isn’t available right now.")
 
 
 def search_tasks(keyword):
@@ -192,7 +205,7 @@ def search_tasks(keyword):
             found = True
 
     if not found:
-        print("No matching tasks found.")
+        note("No matching tasks found.")
 
 
 def clear_completed_tasks():
@@ -201,7 +214,7 @@ def clear_completed_tasks():
     completed_tasks = [t for t in tasks if t.completed]
 
     if not completed_tasks:
-        print("No completed tasks to clear.")
+        note("No completed tasks to clear.")
         return
 
     confirm = input(
@@ -209,13 +222,13 @@ def clear_completed_tasks():
     ).strip().lower()
 
     if confirm != "y":
-        print("Operation cancelled.")
+        info("Operation cancelled.")
         return
 
     tasks = [t for t in tasks if not t.completed]
     save_tasks(tasks)
 
-    print(f"Cleared {len(completed_tasks)} completed task(s).")
+    success(f"Cleared {len(completed_tasks)} completed task(s).")
 
 
 
@@ -241,7 +254,7 @@ def reset_tasks():
     tasks = load_tasks()
 
     if not tasks:
-        print("No tasks to reset.")
+        note("No tasks to reset.")
         return
 
     confirm = input(
@@ -249,12 +262,11 @@ def reset_tasks():
     ).strip()
 
     if confirm != "RESET":
-        print("Reset cancelled.")
+        info("Reset cancelled.")
         return
 
     save_tasks([])
-    print("All tasks have been deleted.")
-
+    success("All tasks have been cleared.")
 
 
 def view_task(task_id):
@@ -270,7 +282,7 @@ def view_task(task_id):
             print(f"Completed : {task.completed_at or '-'}")
             return
 
-    print("Task not found.")
+    info(f"Task {task_id} isn’t available right now.")
 
 
 def rename_task(task_id):
@@ -281,24 +293,23 @@ def rename_task(task_id):
             new_title = input("New title: ").strip()
 
             if not new_title:
-                print("Title cannot be empty.")
+                note("Title cannot be empty.")
                 return
 
             task.title = new_title
             save_tasks(tasks)
 
-            print("Task renamed successfully.")
+            success("Task renamed successfully.")
             return
 
-    print("Task not found.")
-
+    info(f"Task {task_id} isn’t available right now.")
 
 
 def change_priority(task_id, level):
     level = level.lower()
 
     if level not in ("low", "medium", "high"):
-        print("Priority must be low, medium, or high.")
+        note("Priority must be low, medium, or high.")
         return
 
     tasks = load_tasks()
@@ -307,11 +318,10 @@ def change_priority(task_id, level):
         if task.id == task_id:
             task.priority = level.capitalize()
             save_tasks(tasks)
-            print(f"Priority updated to {task.priority}.")
+            success(f"Priority updated to {task.priority}.")
             return
 
-    print("Task not found.")
-
+    info(f"Task {task_id} isn’t available right now.")
 
 
 
