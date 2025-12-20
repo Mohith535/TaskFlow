@@ -11,6 +11,9 @@ COL_WIDTHS = {
     "completed": 16
 }
 
+MAX_VISIBLE_TASKS = 15
+
+
 def info(msg):
     print(f"Info: {msg}")
 
@@ -18,7 +21,7 @@ def note(msg):
     print(f"Note: {msg}")
 
 def success(msg):
-    print(f"✓ {msg}")
+    print(f"OK: {msg}")
 
 def careful(msg):
     print(f"Careful: {msg}")
@@ -103,9 +106,24 @@ def list_tasks(filter_status=None):
         f"{'COMPLETED':<{COL_WIDTHS['completed']}}"
     )
 
-    print("-" * 90)
+    print("-" * (
+        COL_WIDTHS['id'] +
+        COL_WIDTHS['status'] +
+        COL_WIDTHS['title'] +
+        COL_WIDTHS['priority'] +
+        COL_WIDTHS['created'] +
+        COL_WIDTHS['completed'] +
+        15
+    ))
+
+
+    shown = 0
 
     for task in filtered_tasks:
+        if shown >= MAX_VISIBLE_TASKS:
+            note(f"Showing first {MAX_VISIBLE_TASKS} tasks. Use '--all' to view everything.")
+            break
+
         status = "DONE" if task.completed else "TODO"
 
         created = task.created_at or "-"
@@ -119,6 +137,7 @@ def list_tasks(filter_status=None):
             f"{created:<{COL_WIDTHS['created']}} | "
             f"{completed:<{COL_WIDTHS['completed']}}"
         )
+        shown += 1
 
 
 
