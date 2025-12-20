@@ -122,6 +122,7 @@ def list_tasks(filter_status=None):
             note("You haven’t completed any tasks yet.")
         elif filter_status == "todo":
             note("No pending tasks. Everything is completed.")
+            note("You’re clear for now. Take a breath.")
         else:
             note("No tasks to display right now.")
         return
@@ -184,6 +185,25 @@ def view_task(task_id):
     task_not_found(task_id)
 
 
+def search_tasks(keyword):
+    """Search tasks by keyword in title."""
+    tasks = load_tasks()
+
+    matches = [
+        task for task in tasks
+        if keyword.lower() in task.title.lower()
+    ]
+
+    if not matches:
+        note("No matching tasks found.")
+        return
+
+    for task in matches:
+        status = "DONE" if task.completed else "TODO"
+        print(f"[{status}] {task.id}. {task.title} ({task.priority})")
+
+
+
 # =========================================================
 # TASK STATE CHANGES
 # =========================================================
@@ -197,6 +217,7 @@ def complete_task(task_id):
             task.completed_at = datetime.now().strftime("%Y-%m-%d %H:%M")
             save_tasks(tasks)
             success(f"Task {task_id} marked as completed.")
+            note("Nice progress. One step at a time.")
             return
 
     task_not_found(task_id)
@@ -327,6 +348,7 @@ def reset_tasks():
 
     save_tasks([])
     success("All tasks have been cleared.")
+    note("Fresh start. Nothing lost — only space created.")
 
 
 # =========================================================
@@ -347,6 +369,9 @@ def summary():
     print(f"Completed: {completed}")
     print(f"Pending: {pending}")
     print(f"High priority pending: {high_pending}")
+
+    note("Keep going, one step at a time!")
+    note("Consistency matters more than speed.")
 
 
 def stats_tasks():
