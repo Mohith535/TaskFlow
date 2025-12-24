@@ -6,24 +6,32 @@ Calm, Powerful CLI Task Assistant
 """
 
 import sys
+import os
+
+# Fix for Windows console encoding
+if sys.platform == "win32":
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8')
+    os.system('chcp 65001 > nul')  # Set console to UTF-8
+
 from typing import Optional
 
 from task_manager.commands import (
     add_task,
+    change_priority,
     list_tasks,
     complete_task,
     delete_task,
     rename_task,
-    edit_task,
-    view_task,
-    search_tasks,
-    clear_completed_tasks,
-    reset_tasks,
-    summary,
     stats_tasks,
     show_help,
     undo_task,
-    change_priority,
+    edit_task,
+    search_tasks,
+    clear_completed_tasks,
+    summary,
+    reset_tasks,
+    view_task,
     # v2.0 time management commands
     focus_task,
     check_focus,
@@ -54,205 +62,201 @@ def safe_int(value: str) -> Optional[int]:
         return None
 
 
-def parse_args(args: list) -> dict:
-    """Parse command line arguments."""
-    parsed = {
-        'command': None,
-        'id': None,
-        'keyword': None,
-        'priority': None,
-        'tags': [],
-        'minutes': 25,
-        'date': None,
-        'filters': {
-            'status': None,
-            'priority': None,
-            'tag': None,
-            'show_all': False
-        }
-    }
-    
-    if not args:
-        return parsed
-    
-    parsed['command'] = args[0]
-    
-    i = 1
-    while i < len(args):
-        arg = args[i]
-        
-        if arg.startswith('--'):
-            # Handle flags
-            if arg == '--all':
-                parsed['filters']['show_all'] = True
-            elif arg == '--todo':
-                parsed['filters']['status'] = 'todo'
-            elif arg == '--done':
-                parsed['filters']['status'] = 'done'
-            elif arg == '--priority' and i + 1 < len(args):
-                parsed['filters']['priority'] = args[i + 1]
-                i += 1
-            elif arg == '--tag' and i + 1 < len(args):
-                parsed['filters']['tag'] = args[i + 1]
-                i += 1
-        elif parsed['id'] is None and arg.isdigit():
-            parsed['id'] = int(arg)
-        elif parsed['command'] == 'search' and parsed['keyword'] is None:
-            parsed['keyword'] = arg
-        elif parsed['command'] == 'priority' and parsed['priority'] is None:
-            parsed['priority'] = arg
-        elif parsed['command'] == 'tag' and arg != parsed['command']:
-            parsed['tags'].append(arg)
-        elif parsed['command'] == 'focus' and parsed['id'] is not None and arg.isdigit():
-            parsed['minutes'] = int(arg)
-        elif parsed['command'] == 'schedule' and parsed['date'] is None:
-            parsed['date'] = arg
-        
-        i += 1
-    
-    return parsed
-
-
-def handle_search(keyword: str):
-    """Handle search command."""
-    from task_manager.commands import search_tasks
-    if keyword:
-        search_tasks(keyword)
-    else:
-        print("Usage: taskflow search <keyword>")
-
-
-def handle_focus(args: dict):
-    """Handle focus-related commands."""
-    if args['id'] is not None:
-        focus_task(args['id'], args['minutes'])
-    elif args['keyword'] == 'status':
-        check_focus()
-    elif args['keyword'] == 'end':
-        end_focus()
-    else:
-        print("Usage: taskflow focus <id> [minutes]")
-        print("       taskflow focus status")
-        print("       taskflow focus end")
-
-
 def main():
     """Main command router."""
     if len(sys.argv) < 2:
         show_help()
         return
-    
-    args = parse_args(sys.argv[1:])
-    command = args['command']
-    
+
+    command = sys.argv[1]
+
+    # --- SPECIAL HANDLING for focus subcommands ---
+    if command == "focus":
+        if len(sys.argv) == 3:
+            sub_cmd = sys.argv[2]
+            if sub_cmd == "status":
+                check_focus()
+                return
+            elif sub_cmd == "end":
+                end_focus()
+                return
+        # If we get here, it's either "focus <id>" or invalid
+        # Continue to main routing below
+
+    # --- MAIN COMMAND ROUTING ---
     if command == "add":
+        # Ignore any flags/arguments for now, just call add_task()
+        # This prevents "--invalid" from breaking the command
         add_task()
-    
+
     elif command == "list":
-        list_tasks(
-            filter_status=args['filters']['status'],
-            filter_priority=args['filters']['priority'],
-            filter_tag=args['filters']['tag'],
-            show_all=args['filters']['show_all']
-        )
-    
-    elif command == "view":
-        if args['id'] is not None:
-            view_task(args['id'])
+        args = sys.argv[2:]  # all flags after 'list'
+        show_all = "--all" in args
+
+        if "--todo" in args:
+            list_tasks(filter_status="todo", show_all=show_all)
+        elif "--done" in args:
+            list_tasks(filter_status="done", show_all=show_all)
         else:
-            print("Usage: taskflow view <id>")
-    
-    elif command == "edit":
-        if args['id'] is not None:
-            edit_task(args['id'])
-        else:
-            print("Usage: taskflow edit <id>")
-    
-    elif command == "rename":
-        if args['id'] is not None:
-            rename_task(args['id'])
-        else:
-            print("Usage: taskflow rename <id>")
-    
-    elif command == "complete":
-        if args['id'] is not None:
-            complete_task(args['id'])
-        else:
-            print("Usage: taskflow complete <id>")
-    
+            list_tasks(show_all=show_all)
+
     elif command == "undo":
-        if args['id'] is not None:
-            undo_task(args['id'])
+        if len(sys.argv) != 3:
+            print("Usage: python main.py undo <id>")
         else:
-            print("Usage: taskflow undo <id>")
-    
-    elif command == "priority":
-        if args['id'] is not None and args['priority']:
-            change_priority(args['id'], args['priority'])
+            task_id = safe_int(sys.argv[2])
+            if task_id is None:
+                print("Info: Please provide a valid numeric task ID.")
+            else:
+                undo_task(task_id)
+
+    elif command == "edit":
+        if len(sys.argv) != 3:
+            print("Usage: python main.py edit <id>")
         else:
-            print("Usage: taskflow priority <id> <L|M|H>")
-    
+            task_id = safe_int(sys.argv[2])
+            if task_id is None:
+                print("Info: Please provide a valid numeric task ID.")
+            else:
+                edit_task(task_id)
+
+    elif command == "complete":
+        if len(sys.argv) < 3:
+            print("Please provide task ID.")
+            return
+        
+        task_id = safe_int(sys.argv[2])
+        if task_id is None:
+            print("Info: Please provide a valid numeric task ID.")
+        else:
+            complete_task(task_id)
+
     elif command == "delete":
-        if args['id'] is not None:
-            delete_task(args['id'])
+        if len(sys.argv) < 3:
+            print("Please provide task ID.")
+            return
+        
+        task_id = safe_int(sys.argv[2])
+        if task_id is None:
+            print("Info: Please provide a valid numeric task ID.")
         else:
-            print("Usage: taskflow delete <id>")
-    
+            delete_task(task_id)
+
     elif command == "search":
-        if args['keyword']:
-            handle_search(args['keyword'])
+        if len(sys.argv) < 3:
+            print("Usage: python main.py search <keyword>")
         else:
-            print("Usage: taskflow search <keyword>")
-    
-    elif command == "focus":
-        handle_focus(args)
-    
-    elif command == "schedule":
-        if args['id'] is not None and args['date']:
-            schedule_task(args['id'], args['date'])
-        else:
-            print("Usage: taskflow schedule <id> <date>")
-            print("       date format: YYYY-MM-DD, 'today', or 'tomorrow'")
-    
-    elif command == "today":
-        show_today_tasks()
-    
-    elif command == "note":
-        if args['id'] is not None:
-            add_note(args['id'])
-        else:
-            print("Usage: taskflow note <id>")
-    
-    elif command == "tag":
-        if args['id'] is not None and args['tags']:
-            tag_task(args['id'], args['tags'])
-        else:
-            print("Usage: taskflow tag <id> <tag1> [tag2...]")
-    
+            search_tasks(sys.argv[2])
+
     elif command == "clear" and len(sys.argv) > 2 and sys.argv[2] == "completed":
         clear_completed_tasks()
-    
-    elif command == "backup":
-        backup_tasks()
-    
-    elif command == "reset":
-        reset_tasks()
-    
+
     elif command == "summary":
         summary()
-    
+
+    elif command == "reset":
+        reset_tasks()
+
     elif command == "stats":
         stats_tasks()
-    
+
     elif command == "help":
         show_help()
-    
+
+    elif command == "view":
+        if len(sys.argv) < 3:
+            print("Usage: python main.py view <id>")
+        else:
+            task_id = safe_int(sys.argv[2])
+            if task_id is None:
+                print("Info: Please provide a valid numeric task ID.")
+            else:
+                view_task(task_id)
+
+    elif command == "rename":
+        if len(sys.argv) < 3:
+            print("Usage: python main.py rename <id>")
+        else:
+            task_id = safe_int(sys.argv[2])
+            if task_id is None:
+                print("Info: Please provide a valid numeric task ID.")
+            else:
+                rename_task(task_id)
+
+    elif command == "priority":
+        if len(sys.argv) < 4:
+            print("Usage: python main.py priority <id> <low|medium|high>")
+        else:
+            task_id = safe_int(sys.argv[2])
+            if task_id is None:
+                print("Info: Please provide a valid numeric task ID.")
+            else:
+                change_priority(task_id, sys.argv[3])
+
+    elif command == "focus":
+        # Handle "focus <id> [minutes]" - already handled "status" and "end" above
+        if len(sys.argv) < 3:
+            print("Usage: python main.py focus <id> [minutes]")
+            print("       python main.py focus status")
+            print("       python main.py focus end")
+            return
+        
+        task_id = safe_int(sys.argv[2])
+        if task_id is None:
+            print(f"Info: Invalid focus command. Use 'focus <id> [minutes]', 'focus status', or 'focus end'")
+            return
+        
+        minutes = 25  # default
+        if len(sys.argv) >= 4:
+            minutes_arg = safe_int(sys.argv[3])
+            minutes = minutes_arg if minutes_arg is not None else 25
+        
+        focus_task(task_id, minutes)
+
+    elif command == "schedule":
+        if len(sys.argv) < 4:
+            print("Usage: python main.py schedule <id> <date>")
+            print("       date format: YYYY-MM-DD, 'today', or 'tomorrow'")
+        else:
+            task_id = safe_int(sys.argv[2])
+            if task_id is None:
+                print("Info: Please provide a valid numeric task ID.")
+            else:
+                schedule_task(task_id, sys.argv[3])
+
+    elif command == "today":
+        show_today_tasks()
+
+    elif command == "note":
+        if len(sys.argv) < 3:
+            print("Usage: python main.py note <id>")
+        else:
+            task_id = safe_int(sys.argv[2])
+            if task_id is None:
+                print("Info: Please provide a valid numeric task ID.")
+            else:
+                add_note(task_id)
+
+    elif command == "tag":
+        if len(sys.argv) < 4:
+            print("Usage: python main.py tag <id> <tag1> [tag2...]")
+        else:
+            task_id = safe_int(sys.argv[2])
+            if task_id is None:
+                print("Info: Please provide a valid numeric task ID.")
+            else:
+                tags = sys.argv[3:]
+                tag_task(task_id, tags)
+
+    elif command == "backup":
+        backup_tasks()
+
     elif command == "version":
         show_version()
-    
+
     else:
-        print(f"Unknown command: {command}")
-        print("Type 'taskflow help' for available commands")
+        print("Info: Unknown command.")
+        show_help()
 
 
 if __name__ == "__main__":
