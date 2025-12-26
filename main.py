@@ -7,14 +7,13 @@ Calm, Powerful CLI Task Assistant
 
 import sys
 import os
+import argparse
 
 # Fix for Windows console encoding
 if sys.platform == "win32":
     if hasattr(sys.stdout, 'reconfigure'):
         sys.stdout.reconfigure(encoding='utf-8')
     os.system('chcp 65001 > nul')  # Set console to UTF-8
-
-from typing import Optional
 
 from task_manager.commands import (
     add_task,
@@ -54,214 +53,218 @@ def show_version():
     print("Time Management & Focus Features Enabled")
 
 
-def safe_int(value: str) -> Optional[int]:
-    """Safely convert string to integer."""
-    try:
-        return int(value)
-    except ValueError:
-        return None
+def create_parser():
+    """Create argparse parser that matches your command structure."""
+    parser = argparse.ArgumentParser(
+        description=f"{APP_NAME} {APP_VERSION} — {APP_TAGLINE}",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  taskflow add
+  taskflow list --todo --priority high
+  taskflow focus 6 1
+  taskflow schedule 8 today
+  taskflow stats
+        """,
+        add_help=False  # We'll handle help manually
+    )
+    
+    subparsers = parser.add_subparsers(dest='command', help='Available commands')
+    
+    # Add command (no arguments - uses interactive input)
+    subparsers.add_parser('add', help='Add a new task (interactive)')
+    
+    # List command with flags
+    list_parser = subparsers.add_parser('list', help='List tasks with filtering')
+    list_parser.add_argument('--todo', action='store_true', help='Show only pending tasks')
+    list_parser.add_argument('--done', action='store_true', help='Show only completed tasks')
+    list_parser.add_argument('--priority', choices=['low', 'medium', 'high'], 
+                           help='Filter by priority')
+    list_parser.add_argument('--tag', help='Filter by tag')
+    list_parser.add_argument('--all', action='store_true', 
+                           help='Show all tasks (no 10-task limit)')
+    
+    # Task operations with single ID argument
+    id_commands = [
+        ('view', 'View task details'),
+        ('edit', 'Edit a task'),
+        ('rename', 'Rename a task'),
+        ('complete', 'Mark task as completed'),
+        ('undo', 'Move task back to TODO'),
+        ('delete', 'Delete a task'),
+        ('note', 'Add/update notes for a task')
+    ]
+    
+    for cmd, help_text in id_commands:
+        cmd_parser = subparsers.add_parser(cmd, help=help_text)
+        cmd_parser.add_argument('id', type=int, help='Task ID')
+    
+    # Focus command - YOUR SYNTAX: focus <id> [minutes]
+    focus_parser = subparsers.add_parser('focus', help='Focus session commands')
+    focus_group = focus_parser.add_mutually_exclusive_group(required=True)
+    focus_group.add_argument('--id', type=int, help='Task ID to focus on')
+    focus_group.add_argument('--status', action='store_true', help='Check focus status')
+    focus_group.add_argument('--end', action='store_true', help='End focus session')
+    focus_parser.add_argument('--minutes', type=int, default=25, 
+                            help='Focus duration in minutes (default: 25)')
+    
+    # Priority command
+    priority_parser = subparsers.add_parser('priority', help='Change task priority')
+    priority_parser.add_argument('id', type=int, help='Task ID')
+    priority_parser.add_argument('level', choices=['low', 'medium', 'high'], 
+                               help='New priority level')
+    
+    # Schedule command  
+    schedule_parser = subparsers.add_parser('schedule', help='Schedule a task')
+    schedule_parser.add_argument('id', type=int, help='Task ID')
+    schedule_parser.add_argument('date', help='Date (YYYY-MM-DD, "today", or "tomorrow")')
+    
+    # Tag command
+    tag_parser = subparsers.add_parser('tag', help='Add tags to a task')
+    tag_parser.add_argument('id', type=int, help='Task ID')
+    tag_parser.add_argument('tags', nargs='+', help='Tags to add')
+    
+    # Search command
+    search_parser = subparsers.add_parser('search', help='Search tasks by keyword')
+    search_parser.add_argument('keyword', help='Search keyword')
+    
+    # Simple commands without arguments
+    simple_commands = [
+        ('today', "Show today's scheduled tasks"),
+        ('stats', 'Show task statistics'),
+        ('summary', 'Human-readable summary'),
+        ('backup', 'Create manual backup'),
+        ('clear', 'Clear completed tasks'),
+        ('reset', 'Reset all tasks (with confirmation)'),
+        ('version', 'Show version information'),
+        ('help', 'Show help message')
+    ]
+    
+    for cmd, help_text in simple_commands:
+        subparsers.add_parser(cmd, help=help_text)
+    
+    return parser
 
 
 def main():
-    """Main command router."""
-    if len(sys.argv) < 2:
+    """Main command router using argparse."""
+    parser = create_parser()
+    
+    # Show help if no arguments
+    if len(sys.argv) == 1:
         show_help()
         return
-
-    command = sys.argv[1]
-
-    # --- SPECIAL HANDLING for focus subcommands ---
-    if command == "focus":
-        if len(sys.argv) == 3:
-            sub_cmd = sys.argv[2]
-            if sub_cmd == "status":
-                check_focus()
-                return
-            elif sub_cmd == "end":
-                end_focus()
-                return
-        # If we get here, it's either "focus <id>" or invalid
-        # Continue to main routing below
-
-    # --- MAIN COMMAND ROUTING ---
-    if command == "add":
-        # Ignore any flags/arguments for now, just call add_task()
-        # This prevents "--invalid" from breaking the command
-        add_task()
-
-    elif command == "list":
-        args = sys.argv[2:]  # all flags after 'list'
-        show_all = "--all" in args
-
-        if "--todo" in args:
-            list_tasks(filter_status="todo", show_all=show_all)
-        elif "--done" in args:
-            list_tasks(filter_status="done", show_all=show_all)
-        else:
-            list_tasks(show_all=show_all)
-
-    elif command == "undo":
-        if len(sys.argv) != 3:
-            print("Usage: python main.py undo <id>")
-        else:
-            task_id = safe_int(sys.argv[2])
-            if task_id is None:
-                print("Info: Please provide a valid numeric task ID.")
-            else:
-                undo_task(task_id)
-
-    elif command == "edit":
-        if len(sys.argv) != 3:
-            print("Usage: python main.py edit <id>")
-        else:
-            task_id = safe_int(sys.argv[2])
-            if task_id is None:
-                print("Info: Please provide a valid numeric task ID.")
-            else:
-                edit_task(task_id)
-
-    elif command == "complete":
-        if len(sys.argv) < 3:
-            print("Please provide task ID.")
-            return
-        
-        task_id = safe_int(sys.argv[2])
-        if task_id is None:
-            print("Info: Please provide a valid numeric task ID.")
-        else:
-            complete_task(task_id)
-
-    elif command == "delete":
-        if len(sys.argv) < 3:
-            print("Please provide task ID.")
-            return
-        
-        task_id = safe_int(sys.argv[2])
-        if task_id is None:
-            print("Info: Please provide a valid numeric task ID.")
-        else:
-            delete_task(task_id)
-
-    elif command == "search":
-        if len(sys.argv) < 3:
-            print("Usage: python main.py search <keyword>")
-        else:
-            search_tasks(sys.argv[2])
-
-    elif command == "clear" and len(sys.argv) > 2 and sys.argv[2] == "completed":
-        clear_completed_tasks()
-
-    elif command == "summary":
-        summary()
-
-    elif command == "reset":
-        reset_tasks()
-
-    elif command == "stats":
-        stats_tasks()
-
-    elif command == "help":
+    
+    # Special case: help command
+    if sys.argv[1] in ['help', '--help', '-h']:
         show_help()
-
-    elif command == "view":
-        if len(sys.argv) < 3:
-            print("Usage: python main.py view <id>")
-        else:
-            task_id = safe_int(sys.argv[2])
-            if task_id is None:
-                print("Info: Please provide a valid numeric task ID.")
-            else:
-                view_task(task_id)
-
-    elif command == "rename":
-        if len(sys.argv) < 3:
-            print("Usage: python main.py rename <id>")
-        else:
-            task_id = safe_int(sys.argv[2])
-            if task_id is None:
-                print("Info: Please provide a valid numeric task ID.")
-            else:
-                rename_task(task_id)
-
-    elif command == "priority":
-        if len(sys.argv) < 4:
-            print("Usage: python main.py priority <id> <low|medium|high>")
-        else:
-            task_id = safe_int(sys.argv[2])
-            if task_id is None:
-                print("Info: Please provide a valid numeric task ID.")
-            else:
-                change_priority(task_id, sys.argv[3])
-
-    elif command == "focus":
-        # Handle "focus <id> [minutes]" - already handled "status" and "end" above
-        if len(sys.argv) < 3:
-            print("Usage: python main.py focus <id> [minutes]")
-            print("       python main.py focus status")
-            print("       python main.py focus end")
-            return
-        
-        task_id = safe_int(sys.argv[2])
-        if task_id is None:
-            print(f"Info: Invalid focus command. Use 'focus <id> [minutes]', 'focus status', or 'focus end'")
-            return
-        
-        minutes = 25  # default
-        if len(sys.argv) >= 4:
-            minutes_arg = safe_int(sys.argv[3])
-            minutes = minutes_arg if minutes_arg is not None else 25
-        
-        focus_task(task_id, minutes)
-
-    elif command == "schedule":
-        if len(sys.argv) < 4:
-            print("Usage: python main.py schedule <id> <date>")
-            print("       date format: YYYY-MM-DD, 'today', or 'tomorrow'")
-        else:
-            task_id = safe_int(sys.argv[2])
-            if task_id is None:
-                print("Info: Please provide a valid numeric task ID.")
-            else:
-                schedule_task(task_id, sys.argv[3])
-
-    elif command == "today":
-        show_today_tasks()
-
-    elif command == "note":
-        if len(sys.argv) < 3:
-            print("Usage: python main.py note <id>")
-        else:
-            task_id = safe_int(sys.argv[2])
-            if task_id is None:
-                print("Info: Please provide a valid numeric task ID.")
-            else:
-                add_note(task_id)
-
-    elif command == "tag":
-        if len(sys.argv) < 4:
-            print("Usage: python main.py tag <id> <tag1> [tag2...]")
-        else:
-            task_id = safe_int(sys.argv[2])
-            if task_id is None:
-                print("Info: Please provide a valid numeric task ID.")
-            else:
-                tags = sys.argv[3:]
-                tag_task(task_id, tags)
-
-    elif command == "backup":
-        backup_tasks()
-
-    elif command == "version":
-        show_version()
-
-    else:
-        print("Info: Unknown command.")
-        show_help()
-
-
-if __name__ == "__main__":
+        return
+    
     try:
-        main()
+        args = parser.parse_args()
+    except SystemExit:
+        # argparse prints help on error, but we want our help
+        show_help()
+        return
+    
+    # If no command specified, show help
+    if not hasattr(args, 'command') or args.command is None:
+        show_help()
+        return
+    
+    # Route commands
+    try:
+        if args.command == 'add':
+            add_task()
+        
+        elif args.command == 'list':
+            # Determine filter status
+            filter_status = None
+            if args.todo:
+                filter_status = 'todo'
+            elif args.done:
+                filter_status = 'done'
+            
+            list_tasks(
+                filter_status=filter_status,
+                filter_priority=args.priority,
+                filter_tag=args.tag,
+                show_all=args.all
+            )
+        
+        elif args.command == 'view':
+            view_task(args.id)
+        
+        elif args.command == 'edit':
+            edit_task(args.id)
+        
+        elif args.command == 'rename':
+            rename_task(args.id)
+        
+        elif args.command == 'complete':
+            complete_task(args.id)
+        
+        elif args.command == 'undo':
+            undo_task(args.id)
+        
+        elif args.command == 'delete':
+            delete_task(args.id)
+        
+        elif args.command == 'note':
+            add_note(args.id)
+        
+        elif args.command == 'focus':
+            if args.status:
+                check_focus()
+            elif args.end:
+                end_focus()
+            elif args.id:
+                focus_task(args.id, args.minutes)
+            else:
+                print("Use: taskflow focus --id 6 [--minutes 25]")
+                print("     taskflow focus --status")
+                print("     taskflow focus --end")
+        
+        elif args.command == 'priority':
+            change_priority(args.id, args.level)
+        
+        elif args.command == 'schedule':
+            schedule_task(args.id, args.date)
+        
+        elif args.command == 'today':
+            show_today_tasks()
+        
+        elif args.command == 'tag':
+            tag_task(args.id, args.tags)
+        
+        elif args.command == 'search':
+            search_tasks(args.keyword)
+        
+        elif args.command == 'clear':
+            clear_completed_tasks()
+        
+        elif args.command == 'backup':
+            backup_tasks()
+        
+        elif args.command == 'reset':
+            reset_tasks()
+        
+        elif args.command == 'summary':
+            summary()
+        
+        elif args.command == 'stats':
+            stats_tasks()
+        
+        elif args.command == 'help':
+            show_help()
+        
+        elif args.command == 'version':
+            show_version()
+        
+        else:
+            print(f"Unknown command: {args.command}")
+            show_help()
+    
     except KeyboardInterrupt:
         print("\n\nTaskFlow session ended gracefully.")
         print("Remember: Progress, not perfection. 💫")
@@ -270,3 +273,7 @@ if __name__ == "__main__":
         print(f"\nAn unexpected error occurred: {e}")
         print("Please report this issue if it persists.")
         sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

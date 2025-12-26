@@ -10,6 +10,8 @@ from datetime import datetime, timedelta
 import time
 import sys
 from typing import Optional, List
+import json
+from pathlib import Path
 
 
 # =========================================================
@@ -68,15 +70,15 @@ class Messenger:
     
     @staticmethod
     def focus_start(task_title: str, minutes: int):
-        print(f"\nStarting focus session for {minutes} minutes")
-        print(f"Task: {task_title}")
-        print("Focus until:", (datetime.now() + timedelta(minutes=minutes)).strftime("%H:%M"))
+        print(f"\n🔥 Starting focus session for {minutes} minutes")
+        print(f"📝 Task: {task_title}")
+        print("⏰ Focus until:", (datetime.now() + timedelta(minutes=minutes)).strftime("%H:%M"))
     
     @staticmethod
-    def focus_complete(task_title: str):
-        print(f"\nFocus session completed!")
-        print(f"Great work on: {task_title}")
-        print("Take a short break before continuing.")
+    def focus_complete(task_title: str, minutes: int = 25):
+        print(f"\n✅ {minutes}min session completed!")
+        print(f"✨ Great work on: {task_title}")
+        print("💫 Take a short break before continuing.")
 
 
 # =========================================================
@@ -117,12 +119,11 @@ def confirm_action(message: str) -> bool:
 
 class TimeTracker:
     """Track time spent on tasks."""
-    
     def __init__(self):
         self.active_session = None
         self.start_time = None
-    
-    def start_focus(self, task_id: int, task_title: str, minutes: int = FOCUS_SESSION_MINUTES):
+
+    def start_focus(self, task_id: int, task_title: str, minutes: int = 25):
         """Start a focus session for a task."""
         self.active_session = {
             'task_id': task_id,
@@ -133,8 +134,126 @@ class TimeTracker:
         self.start_time = time.time()
         Messenger.focus_start(task_title, minutes)
         return self.active_session
+
+    def check_focus() -> None:
+        """Check current focus session status."""
+        status = time_tracker.check_focus()
+        
+        if not status:
+            Messenger.note("No active focus session.")
+            return
+        
+        if status['status'] == 'active':
+            print(f"\n🔥 Focus session active")
+            print(f"⏱️  Elapsed: {status['elapsed_minutes']}m {status.get('remaining_seconds', 0)}s")
+            print(f"⏱️  Remaining: {status['remaining_minutes']}m {status.get('remaining_seconds', 0)}s")
+            print(f"📝 Task: {time_tracker.active_session['task_title']}")
+        else:
+            Messenger.success("Focus session completed!")
+
+    def end_focus(self):
+        """End current focus session."""
+        if self.active_session:
+            # Add focus time to task
+            try:
+                tasks = storage.load_tasks()
+                for task in tasks:
+                    if task.id == self.active_session['task_id']:
+                        task.add_focus_minutes(self.active_session['minutes'])
+                        storage.save_tasks(tasks)
+                        break
+            except Exception:
+                pass  # Don't crash if can't save focus time
+            
+            # FIXED: Use actual minutes from session
+            actual_minutes = self.active_session['minutes']
+            Messenger.focus_complete(self.active_session['task_title'], actual_minutes)
+            self.active_session = None
+            self.start_time = None
+        
+        # Clear saved state
+        self._save_state({'active_session': None, 'start_time': None})
+
+class TimeTracker:
+    """Track time spent on tasks."""
     
-    def check_focus(self) -> Optional[dict]:
+    def __init__(self):
+        self.active_session = None
+        self.start_time = None
+        self._load_state()
+    
+    def _load_state(self):
+        """Load saved focus state from disk."""
+        try:
+            state_file = Path(".taskflow/focus_state.json")
+            if state_file.exists():
+                with open(state_file, 'r') as f:
+                    state = json.load(f)
+                    
+                    # Check if we have an active session
+                    if state.get('active_session'):
+                        # Convert string time back to datetime
+                        start_time_str = state['active_session']['start_time']
+                        start_time = datetime.fromisoformat(start_time_str)
+                        minutes = state['active_session']['minutes']
+                        
+                        # Calculate elapsed time
+                        elapsed = (datetime.now() - start_time).total_seconds()
+                        remaining = (minutes * 60) - elapsed
+                        
+                        if remaining > 0:
+                            # Session still active - restore it
+                            self.active_session = state['active_session']
+                            self.start_time = time.time() - elapsed
+                            # REMOVED the print statement here to avoid spam
+                        else:
+                            # Session expired - auto-end it
+                            print(f"⏰ Previous focus session expired.")
+                            self._save_state({'active_session': None, 'start_time': None})
+                    else:
+                        # No active session - ensure clean state
+                        self.active_session = None
+                        self.start_time = None
+        except (json.JSONDecodeError, FileNotFoundError, KeyError, ValueError):
+            # If any error, start fresh
+            self.active_session = None
+            self.start_time = None
+    
+    def _save_state(self, state=None):
+        """Save focus state to disk."""
+        try:
+            state_file = Path(".taskflow/focus_state.json")
+            state_file.parent.mkdir(parents=True, exist_ok=True)
+            
+            if state is None:
+                state = {
+                    'active_session': self.active_session,
+                    'start_time': self.start_time,
+                    'saved_at': datetime.now().isoformat()
+                }
+            
+            with open(state_file, 'w') as f:
+                json.dump(state, f)
+        except Exception:
+            pass  # Silent fail for focus state
+    
+    def start_focus(self, task_id: int, task_title: str, minutes: int = 25):
+        """Start a focus session for a task."""
+        self.active_session = {
+            'task_id': task_id,
+            'task_title': task_title,
+            'minutes': minutes,
+            'start_time': datetime.now().isoformat()
+        }
+        self.start_time = time.time()
+        
+        # Save immediately
+        self._save_state()
+        
+        Messenger.focus_start(task_title, minutes)
+        return self.active_session
+    
+    def check_focus(self):
         """Check current focus session status."""
         if not self.active_session:
             return None
@@ -143,6 +262,7 @@ class TimeTracker:
         remaining = (self.active_session['minutes'] * 60) - elapsed
         
         if remaining <= 0:
+            # Session completed naturally
             session = self.active_session.copy()
             self.end_focus()
             return {'status': 'completed', 'session': session}
@@ -150,19 +270,45 @@ class TimeTracker:
         return {
             'status': 'active',
             'elapsed_minutes': int(elapsed / 60),
-            'remaining_minutes': int(remaining / 60)
+            'remaining_minutes': int(remaining / 60),
+            'remaining_seconds': int(remaining % 60)
         }
     
     def end_focus(self):
         """End current focus session."""
-        if self.active_session:
-            Messenger.focus_complete(self.active_session['task_title'])
-            self.active_session = None
-            self.start_time = None
+        if not self.active_session:
+            Messenger.note("No active focus session to end.")
+            return
+        
+        try:
+            # Add focus time to task
+            tasks = storage.load_tasks()
+            session_minutes = self.active_session['minutes']
+            task_title = self.active_session['task_title']
+            
+            for task in tasks:
+                if task.id == self.active_session['task_id']:
+                    task.add_focus_minutes(session_minutes)
+                    storage.save_tasks(tasks)
+                    break
+        except Exception:
+            pass  # Don't crash if can't save focus time
+        
+        # Show completion message
+        Messenger.focus_complete(task_title, session_minutes)
+        
+        # Clear session
+        self.active_session = None
+        self.start_time = None
+        
+        # Clear saved state
+        self._save_state({'active_session': None, 'start_time': None})
+        print("🧹 Focus session cleared from memory.")
 
 
-# Global time tracker instance
+# Global instance
 time_tracker = TimeTracker()
+
 
 
 # =========================================================
@@ -328,14 +474,27 @@ def rename_task(task_id: int) -> bool:
 
 
 def stats_tasks() -> None:
-    """Show task statistics."""
+    """Show detailed statistics with focus minutes."""
     tasks = storage.load_tasks()
     manager = TaskManager(tasks)
     stats = manager.get_stats()
     
-    print(f"\nTotal     : {stats['total']}")
-    print(f"Completed : {stats['completed']}")
-    print(f"Pending   : {stats['pending']}")
+    print(f"\n{'='*40}")
+    print("TASK STATISTICS")
+    print(f"{'='*40}")
+    print(f"Total tasks    : {stats['total']}")
+    print(f"Completed      : {stats['completed']}")
+    print(f"Pending        : {stats['pending']}")
+    
+    if stats['total'] > 0:
+        print(f"Completion rate: {stats['completion_rate']:.1f}%")
+        print(f"Total focus time: {stats['total_focus_minutes']} minutes")  # NEW
+        print(f"\nPriority Distribution:")
+        print(f"  High   : {stats['priorities']['High']:3d} ({stats['priorities']['High']/stats['total']*100:.1f}%)")
+        print(f"  Medium : {stats['priorities']['Medium']:3d} ({stats['priorities']['Medium']/stats['total']*100:.1f}%)")
+        print(f"  Low    : {stats['priorities']['Low']:3d} ({stats['priorities']['Low']/stats['total']*100:.1f}%)")
+    
+    print(f"{'='*40}")
 
 
 def show_help() -> None:
@@ -345,7 +504,7 @@ TaskFlow v2.0 — Calm, Powerful CLI Task Assistant
 {'='*50}
 
 CORE TASK MANAGEMENT:
-  add                     Add a new task
+  add                     Add a new task (interactive)
   list                    List all tasks
   list --todo             List pending tasks
   list --done             List completed tasks
@@ -357,31 +516,31 @@ CORE TASK MANAGEMENT:
   delete <id>             Delete a task
 
 TIME & FOCUS MANAGEMENT (v2.0):
-  focus <id> [minutes]    Start focus session (default: 25 min)
-  focus status            Check focus session
-  focus end               End current focus
-  schedule <id> <date>    Schedule task (YYYY-MM-DD/today/tomorrow)
-  today                   Show today's scheduled tasks
+  focus --id <id> [--minutes N]  Start focus session (default: 25 min)
+  focus --status            Check focus session
+  focus --end               End current focus
+  schedule <id> <date>      Schedule task (YYYY-MM-DD/today/tomorrow)
+  today                     Show today's scheduled tasks
 
 ENHANCED FEATURES:
-  note <id>               Add/update notes
-  tag <id> <tag1> [tag2]  Add tags to task
-  priority <id> <L/M/H>   Change priority
-  search <keyword>        Search tasks
-  summary                 Human-readable summary
-  stats                   Detailed statistics
+  note <id>                 Add/update notes
+  tag <id> <tag1> [tag2]    Add tags to task
+  priority <id> <level>     Change priority (low/medium/high)
+  search <keyword>          Search tasks
+  summary                   Human-readable summary
+  stats                     Detailed statistics
 
 SAFETY & MAINTENANCE:
-  clear completed         Clear all completed tasks
-  backup                  Create manual backup
-  reset                   Reset all tasks (with confirmation)
-  help                    Show this help
-  version                 Show version
+  clear                     Clear completed tasks
+  backup                    Create manual backup
+  reset                     Reset all tasks (with confirmation)
+  help                      Show this help
+  version                   Show version
 
 EXAMPLES:
-  taskflow add "Write report"
+  taskflow add
   taskflow list --todo --priority high
-  taskflow focus 15 30      # Focus on task 15 for 30 min
+  taskflow focus --id 15 --minutes 30
   taskflow schedule 8 today
   taskflow tag 3 work project-x
 
@@ -501,6 +660,7 @@ def summary() -> None:
     print(f"You have {stats['total']} total task(s)")
     print(f"Completed: {stats['completed']}")
     print(f"Pending: {stats['pending']}")
+    print(f"Total focus time: {stats['total_focus_minutes']} minutes")  # NEW
     
     if stats['total'] > 0:
         high_pending = sum(1 for t in tasks if not t.completed and t.priority == "High")
@@ -533,7 +693,7 @@ def reset_tasks() -> bool:
 
 
 def view_task(task_id: int) -> None:
-    """View task details with notes and tags."""
+    """View task details with notes, tags, AND focus minutes."""
     tasks = storage.load_tasks()
     
     for task in tasks:
@@ -548,6 +708,7 @@ def view_task(task_id: int) -> None:
             print(f"Completed : {task.completed_at or 'Not yet'}")
             print(f"Tags      : {', '.join(task.tags) if task.tags else 'None'}")
             print(f"Notes     : {task.notes or 'No notes yet'}")
+            print(f"Focus spent: {task.focus_minutes_spent} minutes")  # NEW LINE
             print(f"{'='*40}")
             return
     
@@ -574,7 +735,7 @@ def change_priority(task_id: int, level: str) -> bool:
 # TIME MANAGEMENT COMMANDS (NEW for v2.0)
 # =========================================================
 
-def focus_task(task_id: int, minutes: int = FOCUS_SESSION_MINUTES) -> bool:
+def focus_task(task_id: int, minutes: int = 25) -> bool:
     """Start a focus session on a specific task."""
     tasks = storage.load_tasks()
     
@@ -583,6 +744,10 @@ def focus_task(task_id: int, minutes: int = FOCUS_SESSION_MINUTES) -> bool:
             if task.completed:
                 Messenger.note("This task is already completed.")
                 return False
+            
+            # Record focus minutes when session starts
+            task.add_focus_minutes(minutes)
+            storage.save_tasks(tasks)
             
             time_tracker.start_focus(task_id, task.title, minutes)
             return True
@@ -645,7 +810,7 @@ def schedule_task(task_id: int, date_str: str) -> bool:
 
 
 def show_today_tasks() -> None:
-    """Show tasks scheduled for today."""
+    """Show today's scheduled tasks."""
     today = datetime.now().strftime("%Y-%m-%d")
     tasks = storage.load_tasks()
     
@@ -655,11 +820,11 @@ def show_today_tasks() -> None:
             today_tasks.append(task)
     
     if today_tasks:
-        print(f"\nTasks scheduled for today ({today}):")
+        print(f"\n📅 Today's Tasks ({datetime.now().strftime('%A, %b %d')}):")
         for task in today_tasks:
             print(f"  {task}")
     else:
-        Messenger.note(f"No tasks scheduled for today ({today}).")
+        Messenger.note(f"No tasks scheduled for today ({datetime.now().strftime('%A, %b %d')}).")
 
 
 # =========================================================
