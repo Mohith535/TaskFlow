@@ -74,8 +74,14 @@ Examples:
     # Add command (no arguments - uses interactive input)
     subparsers.add_parser('add', help='Add a new task (interactive)')
     
-    # List command with flags
+    # List command with flags   
     list_parser = subparsers.add_parser('list', help='List tasks with filtering')
+    list_parser.add_argument(
+        "--sort",
+        choices=["priority", "created", "due"],
+        help="Sort tasks by priority, creation time, or due date"
+    )
+
     list_parser.add_argument('--todo', action='store_true', help='Show only pending tasks')
     list_parser.add_argument('--done', action='store_true', help='Show only completed tasks')
     list_parser.add_argument('--priority', choices=['low', 'medium', 'high'], 
@@ -189,7 +195,8 @@ def main():
                 filter_status=filter_status,
                 filter_priority=args.priority,
                 filter_tag=args.tag,
-                show_all=args.all
+                show_all=args.all,
+                sort_by=args.sort
             )
         
         elif args.command == 'view':

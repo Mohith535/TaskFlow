@@ -352,7 +352,8 @@ def add_task() -> bool:
 def list_tasks(filter_status: Optional[str] = None, 
                filter_priority: Optional[str] = None,
                filter_tag: Optional[str] = None,
-               show_all: bool = False) -> None:
+               show_all: bool = False,
+               sort_by: Optional[str] = None) -> None:
     """List tasks with advanced filtering."""
     tasks = storage.load_tasks()
     
@@ -378,6 +379,29 @@ def list_tasks(filter_status: Optional[str] = None,
             continue
         
         filtered_tasks.append(task)
+
+    # Apply sorting if requested
+    if sort_by == "priority":
+        priority_order = {"high": 0, "medium": 1, "low": 2}
+        filtered_tasks.sort(
+            key=lambda t: priority_order.get(
+                (t.priority or "").lower(), 1
+            )
+        )
+
+    elif sort_by == "created":
+        filtered_tasks.sort(
+            key=lambda t: t.created_at or ""
+        )
+
+    elif sort_by == "due":
+        filtered_tasks.sort(
+            key=lambda t: t.due_date or "9999-12-31"
+        )
+
+    if sort_by:
+        Messenger.note(f"Sorted by {sort_by}.")
+
     
     if not filtered_tasks:
         if filter_status == "done":

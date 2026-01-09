@@ -24,6 +24,14 @@ class TaskStorage:
         self.backup_dir = self.data_dir / "backups"
         
         self._ensure_directories()
+
+        # Migrate old local .taskflow directory if it exists
+        old_dir = Path(".taskflow")
+        if old_dir.exists() and not self.data_dir.exists():
+            try:
+                old_dir.rename(self.data_dir)
+            except Exception:
+                pass
     
     def _ensure_directories(self):
         """Ensure required directories exist."""
