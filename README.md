@@ -1,22 +1,26 @@
 # TaskFlow
 
-TaskFlow is a simple, terminal-based task manager built with Python.
-It helps you manage tasks efficiently using clear and minimal command-line commands.
+TaskFlow is a calm, privacy-first command-line task assistant built with Python.
 
-This project focuses on clarity, discipline, and extensibility, serving as a strong foundation for future productivity tools.
+It helps you manage tasks with clarity and minimal cognitive load, using clean and intentional CLI commands.
+Designed to feel supportive rather than demanding.
+
 
 ---
 
 ## Features
 
-- Add new tasks
-- List all tasks
-- Mark tasks as completed
-- Delete tasks
-- View task statistics
-- Built-in help command
-- Persistent storage using JSON
-- Clean and modular project structure
+- Add, edit, rename, and delete tasks
+- List tasks with filters (todo, done, priority)
+- Mark tasks as completed or undo completion
+- Task priorities (low / medium / high)
+- Focus sessions with time tracking
+- Task scheduling (today, tomorrow, date-based)
+- Notes and tags for tasks
+- Human-readable summaries and statistics
+- Built-in help with calm, non-intrusive messaging
+- Safe local persistence with automatic backups
+
 
 ---
 
@@ -24,7 +28,7 @@ This project focuses on clarity, discipline, and extensibility, serving as a str
 
 - Language: Python
 - Interface: Command Line (CLI)
-- Storage: JSON file (auto-created on first use)
+- Storage: Local JSON (stored safely in user home directory)
 
 ---
 
@@ -32,13 +36,17 @@ This project focuses on clarity, discipline, and extensibility, serving as a str
 
 TaskFlow/
 │
+├── taskflow/
+│   ├── __init__.py
+│   └── cli.py          # CLI entrypoint
+│
 ├── task_manager/
 │   ├── __init__.py
 │   ├── models.py
 │   ├── storage.py
 │   └── commands.py
 │
-├── main.py
+├── setup.py
 ├── README.md
 └── .gitignore
 
@@ -46,38 +54,50 @@ TaskFlow/
 
 ## Getting Started
 
-### 1. Clone the repository
+## Installation
 
-git clone https://github.com/Mohith535/TaskFlow.git  
-cd TaskFlow
+Install TaskFlow directly from GitHub:
 
-### 2. (Optional but recommended) Create a virtual environment
+pip install --upgrade git+https://github.com/Mohith535/TaskFlow.git
 
-python -m venv venv  
-source venv/bin/activate   (On Windows: venv\Scripts\activate)
-
-### 3. Run TaskFlow
-
-python main.py
 
 ---
 
-## Available Commands
 
-python main.py add  
-python main.py list  
-python main.py complete <id>  
-python main.py delete <id>  
-python main.py stats  
-python main.py help  
+## Usage
+
+Once installed, TaskFlow is available as a global command:
+
+taskflow add
+taskflow list
+taskflow list --todo
+taskflow complete <id>
+taskflow focus --id <id>
+taskflow stats
+taskflow help 
 
 The tasks.json file is created automatically on first use and is intentionally ignored from version control to keep user data private.
 
 ---
 
+## Data & Privacy
+
+TaskFlow stores all user data locally in:
+
+~/.taskflow
+
+- No cloud sync
+- No telemetry
+- No tracking
+- No background services
+
+All data stays on your machine.
+
+---
+
 ## Design Philosophy
 
-TaskFlow is intentionally kept minimal and focused.
+TaskFlow is intentionally calm, minimal, and focused.
 It is designed as a core task management module, which can later integrate into higher-level productivity systems.
 
 Future roadmap includes time-based focus tools and integration into a broader assistant system.
@@ -94,3 +114,4 @@ This project is licensed under the MIT License.
 
 K Mohith Kannan  
 GitHub: https://github.com/Mohith535
+
