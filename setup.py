@@ -1,8 +1,9 @@
 from setuptools import setup, find_packages
+import os
 
 setup(
     name="taskflow-cli",
-    version="2.1.0",
+    version="2.3.0",
     description="A calm, powerful CLI task management assistant with time management features",
     author="K Mohith Kannan",
     author_email="your-email@example.com",
@@ -10,7 +11,7 @@ setup(
     packages=find_packages(),
     entry_points={
         'console_scripts': [
-            'taskflow=task_manager.main:main',  # FIXED THIS LINE
+            'taskflow=taskflow.cli:main',
         ],
     },
     install_requires=[],

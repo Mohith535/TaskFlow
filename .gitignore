@@ -2,5 +2,6 @@ venv/
 __pycache__/
 *.pyc
 tasks.json
-upgradtion and other ideas.txt
 .taskflow/
+taskflow_cli.egg-info/
+upgradtion and other ideas.txt

@@ -17,8 +17,9 @@ from task_manager.models import Task
 class TaskStorage:
     """Manages task data persistence with backup capabilities."""
     
-    def __init__(self, data_dir: str = ".taskflow"):
-        self.data_dir = Path(data_dir)
+    def __init__(self):
+        # Global user-level storage directory
+        self.data_dir = Path.home() / ".taskflow"
         self.tasks_file = self.data_dir / "tasks.json"
         self.backup_dir = self.data_dir / "backups"
         
