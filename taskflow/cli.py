@@ -44,7 +44,7 @@ from task_manager.commands import (
 )
 
 APP_NAME = "TaskFlow"
-APP_VERSION = "v2.0"
+APP_VERSION = "v2.5.0"
 APP_TAGLINE = "Calm, Powerful CLI Task Assistant"
 
 
