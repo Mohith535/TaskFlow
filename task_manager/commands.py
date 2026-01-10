@@ -440,6 +440,13 @@ def list_tasks(filter_status: Optional[str] = None,
     
     print(f"\nTotal: {len(filtered_tasks)} task(s)")
 
+    # Gentle UX hint for sorting (only when useful)
+    if not sort_by and len(filtered_tasks) > 5:
+        Messenger.note(
+            "Tip: Use --sort priority or --sort due to organize tasks."
+        )
+
+
 
 def complete_task(task_id: int) -> bool:
     """Mark a task as completed."""
