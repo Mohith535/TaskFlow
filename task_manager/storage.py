@@ -19,7 +19,7 @@ class TaskStorage:
     
     def __init__(self):
         # Global user-level storage directory
-        self.data_dir = Path.home() / ".taskflow"
+        self.data_dir = Path.home() / ".taskflow"   
         self.tasks_file = self.data_dir / "tasks.json"
         self.backup_dir = self.data_dir / "backups"
         
