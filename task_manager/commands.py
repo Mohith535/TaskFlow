@@ -761,6 +761,17 @@ def change_priority(task_id: int, level: str) -> bool:
     Messenger.task_not_found(task_id)
     return False
 
+def list_ids() -> None:
+    """Display only task IDs (power-user helper)."""
+    tasks = storage.load_tasks()
+
+    if not tasks:
+        Messenger.empty_list()
+        return
+
+    print(" ".join(str(task.id) for task in tasks))
+
+
 
 # =========================================================
 # TIME MANAGEMENT COMMANDS (NEW for v2.0)

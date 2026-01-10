@@ -18,6 +18,7 @@ if sys.platform == "win32":
 from task_manager.commands import (
     add_task,
     change_priority,
+    list_ids,
     list_tasks,
     complete_task,
     delete_task,
@@ -133,6 +134,13 @@ Examples:
     # Search command
     search_parser = subparsers.add_parser('search', help='Search tasks by keyword')
     search_parser.add_argument('keyword', help='Search keyword')
+
+    #id command
+    subparsers.add_parser(
+        "ids",
+        help="Show only task IDs"
+    )
+
     
     # Simple commands without arguments
     simple_commands = [
@@ -267,6 +275,10 @@ def main():
         
         elif args.command == 'version':
             show_version()
+
+        elif args.command == "ids":
+            list_ids()
+
         
         else:
             print(f"Unknown command: {args.command}")
