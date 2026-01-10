@@ -3,7 +3,7 @@ import os
 
 setup(
     name="taskflow-cli",
-    version="2.3.0",
+    version="2.5.0",
     description="A calm, powerful CLI task management assistant with time management features",
     author="K Mohith Kannan",
     author_email="your-email@example.com",
