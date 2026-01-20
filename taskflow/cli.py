@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-TaskFlow CLI v2.1
+TaskFlow CLI v2.5
 -----------------
-Calm, Powerful CLI Task Assistant
+Calm, Powerful CLI Task Assistant with Focus Blocking
 """
 
 import sys
@@ -40,18 +40,22 @@ from task_manager.commands import (
     show_today_tasks,
     add_note,
     tag_task,
-    backup_tasks
+    backup_tasks,
+    # v2.5 focus blocking commands (new!)
+    focus_blocking_status,
+    test_blocking,
+    emergency_cleanup
 )
 
 APP_NAME = "TaskFlow"
 APP_VERSION = "v2.5.0"
-APP_TAGLINE = "Calm, Powerful CLI Task Assistant"
+APP_TAGLINE = "Calm, Powerful CLI Task Assistant with Focus Blocking"
 
 
 def show_version():
     """Show version information."""
     print(f"{APP_NAME} {APP_VERSION} — {APP_TAGLINE}")
-    print("Time Management & Focus Features Enabled")
+    print("Time Management & Focus Blocking Features Enabled")
 
 
 def create_parser():
@@ -63,9 +67,11 @@ def create_parser():
 Examples:
   taskflow add
   taskflow list --todo --priority high
-  taskflow focus 6 1
+  taskflow focus --id 6 --minutes 60 --block-sites facebook.com youtube.com
   taskflow schedule 8 today
   taskflow stats
+  taskflow focus-blocking
+  taskflow test-blocking --mode gentle
         """,
         add_help=False  # We'll handle help manually
     )
@@ -106,14 +112,21 @@ Examples:
         cmd_parser = subparsers.add_parser(cmd, help=help_text)
         cmd_parser.add_argument('id', type=int, help='Task ID')
     
-    # Focus command - YOUR SYNTAX: focus <id> [minutes]
-    focus_parser = subparsers.add_parser('focus', help='Focus session commands')
+    # Focus command - UPDATED with blocking options
+    focus_parser = subparsers.add_parser('focus', help='Focus session with distraction blocking')
     focus_group = focus_parser.add_mutually_exclusive_group(required=True)
     focus_group.add_argument('--id', type=int, help='Task ID to focus on')
     focus_group.add_argument('--status', action='store_true', help='Check focus status')
     focus_group.add_argument('--end', action='store_true', help='End focus session')
     focus_parser.add_argument('--minutes', type=int, default=25, 
                             help='Focus duration in minutes (default: 25)')
+    # NEW: Blocking arguments
+    focus_parser.add_argument('--block-sites', nargs='+', 
+                            help='Websites to block/avoid (e.g., facebook.com youtube.com)')
+    focus_parser.add_argument('--block-apps', nargs='+', 
+                            help='Applications to avoid (e.g., discord spotify)')
+    focus_parser.add_argument('--mode', choices=['gentle', 'strict'], default='gentle',
+                            help='Blocking mode: gentle (reminders) or strict (actual blocking)')
     
     # Priority command
     priority_parser = subparsers.add_parser('priority', help='Change task priority')
@@ -135,12 +148,23 @@ Examples:
     search_parser = subparsers.add_parser('search', help='Search tasks by keyword')
     search_parser.add_argument('keyword', help='Search keyword')
 
-    #id command
-    subparsers.add_parser(
-        "ids",
-        help="Show only task IDs"
-    )
-
+    # id command
+    subparsers.add_parser("ids", help="Show only task IDs")
+    
+    # NEW: Focus blocking commands
+    # Focus blocking status
+    blocking_parser = subparsers.add_parser('focus-blocking', 
+                                          help='Check blocking system status and what is currently blocked')
+    
+    # Test blocking system
+    test_parser = subparsers.add_parser('test-blocking', 
+                                      help='Test the blocking system without starting a focus session')
+    test_parser.add_argument('--mode', choices=['gentle', 'strict'], default='gentle',
+                           help='Test mode: gentle (reminders) or strict (actual blocking)')
+    
+    # Emergency cleanup
+    subparsers.add_parser('cleanup', 
+                         help='Emergency cleanup if blocking gets stuck or system crashes')
     
     # Simple commands without arguments
     simple_commands = [
@@ -234,11 +258,22 @@ def main():
             elif args.end:
                 end_focus()
             elif args.id:
-                focus_task(args.id, args.minutes)
+                # UPDATED: Pass all blocking arguments
+                focus_task(
+                    task_id=args.id,
+                    minutes=args.minutes,
+                    block_sites=args.block_sites,
+                    block_apps=args.block_apps,
+                    mode=args.mode
+                )
             else:
                 print("Use: taskflow focus --id 6 [--minutes 25]")
                 print("     taskflow focus --status")
                 print("     taskflow focus --end")
+                print("\nBlocking options:")
+                print("  --block-sites facebook.com youtube.com")
+                print("  --block-apps discord spotify")
+                print("  --mode gentle/strict")
         
         elif args.command == 'priority':
             change_priority(args.id, args.level)
@@ -278,7 +313,16 @@ def main():
 
         elif args.command == "ids":
             list_ids()
-
+        
+        # NEW: Focus blocking commands
+        elif args.command == 'focus-blocking':
+            focus_blocking_status()
+        
+        elif args.command == 'test-blocking':
+            test_blocking(args.mode)
+        
+        elif args.command == 'cleanup':
+            emergency_cleanup()
         
         else:
             print(f"Unknown command: {args.command}")

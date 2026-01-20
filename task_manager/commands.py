@@ -12,6 +12,11 @@ import sys
 from typing import Optional, List
 import json
 from pathlib import Path
+import threading
+import time
+from datetime import datetime
+from .system_detector import SystemDetector
+from .blockers import GentleBlocker  # For fallback
 
 
 # =========================================================
@@ -79,6 +84,154 @@ class Messenger:
         print(f"\n✅ {minutes}min session completed!")
         print(f"✨ Great work on: {task_title}")
         print("💫 Take a short break before continuing.")
+
+
+# ============================================================================
+# FOCUS MANAGER CLASS - Add this after imports but before existing functions
+# ============================================================================
+
+class FocusManager:
+    """Manages focus sessions with distraction blocking."""
+    
+    def __init__(self):
+        self.blocker = None
+        self.focus_mode = "gentle"  # gentle, strict, or none
+        self.active_focus_task = None
+        self.blocked_at_start = None
+        self.focus_start_time = None
+        
+    def init_blocker(self, mode="gentle"):
+        """Initialize the appropriate blocker."""
+        self.focus_mode = mode
+        
+        if mode == "none":
+            self.blocker = None
+            return True
+        
+        try:
+            if mode == "strict":
+                self.blocker = SystemDetector.get_distraction_blocker(force_gentle=False)
+            else:  # gentle
+                self.blocker = SystemDetector.get_distraction_blocker(force_gentle=True)
+            
+            return True
+        except Exception as e:
+            print(f"⚠️  Could not initialize blocker: {e}")
+            self.blocker = GentleBlocker()  # Fallback
+            return False
+    
+    def start_focus_session(self, task_id, task_title, minutes=25, 
+                           sites=None, apps=None, mode="gentle"):
+        """Start a focus session with optional blocking."""
+        
+        # Initialize blocker
+        if not self.init_blocker(mode):
+            print("⚠️  Starting focus without blocking features.")
+            mode = "none"
+        
+        # Record what we're blocking
+        self.blocked_at_start = {
+            "sites": sites or [],
+            "apps": apps or []
+        }
+        self.active_focus_task = task_id
+        self.focus_start_time = datetime.now()
+        
+        # Start focus timer (your existing function)
+        if not time_tracker.start_focus(task_id, task_title, minutes):
+            return False
+        
+        # Start blocking if requested
+        if self.blocker and (sites or apps):
+            print(f"\n🎯 Starting Focus Mode: {mode.upper()}")
+            print(f"   Task: {task_title}")
+            print(f"   Duration: {minutes} minutes")
+            
+            if sites:
+                print(f"   Avoiding websites: {', '.join(sites[:3])}")
+                if len(sites) > 3:
+                    print(f"   ... and {len(sites) - 3} more")
+            
+            if apps:
+                print(f"   Avoiding apps: {', '.join(apps[:3])}")
+                if len(apps) > 3:
+                    print(f"   ... and {len(apps) - 3} more")
+            
+            # Actually block
+            gentle_mode = (mode == "gentle")
+            self.blocker.start_focus(sites, apps, gentle_mode=gentle_mode)
+            
+            if mode == "strict" and not SystemDetector.is_admin():
+                print("\n⚠️  Note: For strict blocking, run TaskFlow as Administrator")
+                print("   Currently running in gentle reminder mode")
+        
+        return True
+    
+    def end_focus_session(self):
+        """End the current focus session and restore everything."""
+        
+        # End focus timer
+        success = time_tracker.end_focus()
+        
+        # End blocking
+        if self.blocker and self.blocker.is_active:
+            self.blocker.end_focus()
+        
+        # Clear state
+        self.active_focus_task = None
+        self.blocked_at_start = None
+        
+        # Show summary
+        if success and self.focus_start_time:
+            duration = datetime.now() - self.focus_start_time
+            minutes = int(duration.total_seconds() / 60)
+            print(f"\n✅ Focus session completed: {minutes} minutes of focused work!")
+        
+        self.focus_start_time = None
+        return success
+    
+    def get_focus_status(self):
+        """Get detailed focus status including blocking."""
+        focus_status = time_tracker.check_focus()
+        
+        if not focus_status:
+            return {
+                "focus_active": False,
+                "blocking_active": False,
+                "message": "No active focus session"
+            }
+        
+        result = {
+            "focus_active": True,
+            "task_id": focus_status.get("task_id"),
+            "task_title": focus_status.get("task_title"),
+            "minutes_left": focus_status.get("minutes_left"),
+            "end_time": focus_status.get("end_time"),
+            "blocking_active": False,
+            "blocking_mode": None,
+            "blocked_items": {}
+        }
+        
+        # Add blocking info if available
+        if self.blocker and self.blocker.is_active:
+            block_status = self.blocker.get_status()
+            result.update({
+                "blocking_active": True,
+                "blocking_mode": "strict" if not block_status.get("gentle_mode") else "gentle",
+                "blocked_items": {
+                    "sites": block_status.get("blocked_sites", []),
+                    "apps": block_status.get("blocked_apps", [])
+                },
+                "blocked_since": block_status.get("since")
+            })
+        
+        return result
+    
+    def is_focus_active(self):
+        """Check if any focus session is active."""
+        return time_tracker.check_focus() is not None
+
+focus_manager = FocusManager()
 
 
 # =========================================================
@@ -531,7 +684,7 @@ def stats_tasks() -> None:
 def show_help() -> None:
     """Show comprehensive help."""
     print(f"""
-TaskFlow v2.0 — Calm, Powerful CLI Task Assistant
+TaskFlow v2.5.0 — Calm, Powerful CLI Task Assistant
 {'='*50}
 
 CORE TASK MANAGEMENT:
@@ -777,8 +930,18 @@ def list_ids() -> None:
 # TIME MANAGEMENT COMMANDS (NEW for v2.0)
 # =========================================================
 
-def focus_task(task_id: int, minutes: int = 25) -> bool:
-    """Start a focus session on a specific task."""
+def focus_task(task_id: int, minutes: int = 25, 
+               block_sites: list = None, block_apps: list = None,
+               mode: str = "gentle"):
+    """Start focus on a task with optional distraction blocking.
+    
+    Args:
+        task_id: ID of task to focus on
+        minutes: Focus duration in minutes
+        block_sites: List of websites to block/avoid
+        block_apps: List of applications to block/avoid
+        mode: "gentle" (reminders) or "strict" (actual blocking)
+    """
     tasks = storage.load_tasks()
     
     for task in tasks:
@@ -787,36 +950,221 @@ def focus_task(task_id: int, minutes: int = 25) -> bool:
                 Messenger.note("This task is already completed.")
                 return False
             
-            # Record focus minutes when session starts
-            task.add_focus_minutes(minutes)
-            storage.save_tasks(tasks)
+            # Check if already in focus
+            if focus_manager.is_focus_active():
+                Messenger.note("A focus session is already active. End it first.")
+                return False
             
-            time_tracker.start_focus(task_id, task.title, minutes)
-            return True
+            # Start focus with blocking
+            success = focus_manager.start_focus_session(
+                task_id, task.title, minutes, 
+                block_sites, block_apps, mode
+            )
+            
+            if success:
+                print(f"\n🎯 Now focusing on: {task.title}")
+                if block_sites or block_apps:
+                    print("   Distraction blocking activated!")
+                return True
+            return False
     
     Messenger.task_not_found(task_id)
     return False
 
-
-def check_focus() -> None:
-    """Check current focus session status."""
-    status = time_tracker.check_focus()
+def check_focus():
+    """Check current focus status with blocking info."""
+    status = focus_manager.get_focus_status()
     
-    if not status:
+    if not status["focus_active"]:
         Messenger.note("No active focus session.")
+        
+        # Check if blocking is still active (shouldn't happen, but safety)
+        if focus_manager.blocker and focus_manager.blocker.is_active:
+            print("⚠️  Warning: Blocking is still active but no focus session!")
+            print("   Use 'taskflow focus-end' to clean up.")
         return
     
-    if status['status'] == 'active':
-        print(f"\nFocus session active")
-        print(f"Elapsed: {status['elapsed_minutes']} minutes")
-        print(f"Remaining: {status['remaining_minutes']} minutes")
-    else:
-        Messenger.success("Focus session completed!")
+    # Show focus info
+    print(f"\n🎯 Currently focusing on:")
+    print(f"   Task: {status['task_title']} (ID: {status['task_id']})")
+    print(f"   Time left: {status['minutes_left']} minutes")
+    print(f"   Ends at: {status['end_time'].strftime('%H:%M')}")
+    
+    # Show blocking info if active
+    if status["blocking_active"]:
+        mode_display = "🚫 STRICT" if status["blocking_mode"] == "strict" else "🔔 GENTLE"
+        print(f"\n🛡️  Blocking: {mode_display} MODE")
+        
+        if status["blocked_items"]["sites"]:
+            sites = status["blocked_items"]["sites"][:3]
+            more = len(status["blocked_items"]["sites"]) - 3
+            site_text = ', '.join(sites)
+            if more > 0:
+                site_text += f" (+{more} more)"
+            print(f"   Websites: {site_text}")
+        
+        if status["blocked_items"]["apps"]:
+            apps = status["blocked_items"]["apps"][:3]
+            more = len(status["blocked_items"]["apps"]) - 3
+            app_text = ', '.join(apps)
+            if more > 0:
+                app_text += f" (+{more} more)"
+            print(f"   Applications: {app_text}")
+        
+        if status["blocking_mode"] == "gentle":
+            print("   Mode: Gentle reminders only")
+        else:
+            print("   Mode: Full blocking active")
+
+def end_focus():
+    """End the current focus session."""
+    if not focus_manager.is_focus_active():
+        Messenger.note("No active focus session to end.")
+        return False
+    
+    return focus_manager.end_focus_session()
 
 
-def end_focus() -> None:
-    """End current focus session."""
-    time_tracker.end_focus()
+def focus_blocking_status():
+    """Show detailed blocking status."""
+    if not focus_manager.blocker:
+        focus_manager.init_blocker("gentle")
+    
+    if focus_manager.blocker:
+        status = focus_manager.blocker.get_status()
+        
+        print("\n🛡️  BLOCKING SYSTEM STATUS")
+        print("=" * 40)
+        
+        # System info
+        sys_info = SystemDetector.get_system_info()
+        print(f"Platform: {sys_info['os'].upper()}")
+        print(f"Admin rights: {'✅ Yes' if sys_info['admin'] else '❌ No'}")
+        print(f"Python: {sys_info['python_version']}")
+        
+        # Blocker status
+        print(f"\nBlocker: {type(focus_manager.blocker).__name__}")
+        print(f"Active: {'✅ Yes' if status['active'] else '❌ No'}")
+        
+        if status['active']:
+            print(f"Started: {status['since'].strftime('%H:%M:%S')}")
+            print(f"Mode: {'Gentle reminders' if status.get('gentle_mode') else 'Full blocking'}")
+            
+            if status['blocked_sites']:
+                print(f"\nBlocked Websites ({len(status['blocked_sites'])}):")
+                for i, site in enumerate(status['blocked_sites'][:5], 1):
+                    print(f"  {i}. {site}")
+                if len(status['blocked_sites']) > 5:
+                    print(f"  ... and {len(status['blocked_sites']) - 5} more")
+            
+            if status['blocked_apps']:
+                print(f"\nBlocked Applications ({len(status['blocked_apps'])}):")
+                for i, app in enumerate(status['blocked_apps'][:5], 1):
+                    print(f"  {i}. {app}")
+                if len(status['blocked_apps']) > 5:
+                    print(f"  ... and {len(status['blocked_apps']) - 5} more")
+        else:
+            print("\nNo blocking active. Start a focus session with --block-sites or --block-apps")
+    
+    print("\n" + "=" * 40)
+
+def test_blocking(mode="gentle"):
+    """Test the blocking system."""
+    print(f"\n🧪 TESTING BLOCKING SYSTEM ({mode.upper()} MODE)")
+    print("=" * 50)
+    
+    # Initialize blocker
+    focus_manager.init_blocker(mode)
+    
+    if not focus_manager.blocker:
+        print("❌ Failed to initialize blocker")
+        return False
+    
+    # Test sites and apps
+    test_sites = ["facebook.com", "youtube.com", "twitter.com"]
+    test_apps = ["discord", "spotify"]
+    
+    print(f"\nTest Configuration:")
+    print(f"  Mode: {mode}")
+    print(f"  Test websites: {', '.join(test_sites)}")
+    print(f"  Test apps: {', '.join(test_apps)}")
+    
+    # Start blocking
+    print(f"\n📢 Starting blocking test...")
+    focus_manager.blocker.start_focus(
+        sites=test_sites, 
+        apps=test_apps, 
+        gentle_mode=(mode == "gentle")
+    )
+    
+    # Show status
+    status = focus_manager.blocker.get_status()
+    print(f"✅ Blocking active: {status['active']}")
+    print(f"   Mode: {'Gentle' if status.get('gentle_mode') else 'Strict'}")
+    
+    if mode == "strict" and not SystemDetector.is_admin():
+        print("\n⚠️  Note: Strict mode requires administrator privileges.")
+        print("   Run 'taskflow' as Administrator for full blocking.")
+    
+    # Wait a bit (for demonstration)
+    print("\n⏳ Blocking test in progress for 10 seconds...")
+    print("   (Press Ctrl+C to cancel)")
+    
+    try:
+        for i in range(10, 0, -1):
+            print(f"   {i}...", end='\r')
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print("\n\n⏹️  Test cancelled by user")
+    
+    # End blocking
+    print("\n🛑 Ending blocking test...")
+    focus_manager.blocker.end_focus()
+    
+    print("✅ Test completed successfully!")
+    print("\n" + "=" * 50)
+    return True
+
+# ============================================================================
+# EMERGENCY CLEANUP COMMAND
+# ============================================================================
+
+def emergency_cleanup():
+    """Emergency cleanup if blocking gets stuck."""
+    print("\n🚨 EMERGENCY CLEANUP")
+    print("=" * 40)
+    
+    # End any active focus
+    if focus_manager.is_focus_active():
+        print("Ending active focus session...")
+        time_tracker.end_focus()
+    
+    # Clean up blocker
+    if focus_manager.blocker and focus_manager.blocker.is_active:
+        print("Cleaning up blocker...")
+        focus_manager.blocker.end_focus()
+    
+    # Reset focus manager
+    focus_manager.active_focus_task = None
+    focus_manager.blocked_at_start = None
+    focus_manager.focus_start_time = None
+    
+    print("\n✅ System cleaned up.")
+    print("   All blocking should be removed.")
+    print("   You may need to restart your browser for website changes.")
+    
+    # Additional Windows-specific cleanup
+    if SystemDetector.get_os() == "windows" and SystemDetector.is_admin():
+        try:
+            import subprocess
+            print("\n🔄 Flushing DNS cache...")
+            subprocess.run(["ipconfig", "/flushdns"], capture_output=True)
+            print("✅ DNS cache flushed.")
+        except:
+            pass
+    
+    print("\n" + "=" * 40)
+    return True
 
 
 def schedule_task(task_id: int, date_str: str) -> bool:
