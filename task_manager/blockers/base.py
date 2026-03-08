@@ -2,18 +2,32 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 import time
 import threading
+import logging
+import os
 
+# Set up logging for background blocker activity
+os.makedirs(".taskflow", exist_ok=True)
+logging.basicConfig(
+    filename='.taskflow/taskflow.log', 
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
 class BaseBlocker(ABC):
     """Base class for all distraction blockers."""
     
+    def log_action(self, action, details):
+        """Log blocker actions for debugging."""
+        logging.info(f"{action} - {details}")
+        
     def __init__(self):
         self.blocked_sites = []
         self.blocked_apps = []
         self.is_active = False
+        self.is_gentle_mode = True  # Track if we're in gentle mode
         self.start_time = None
-        self.reminder_thread = None
         self.stop_reminders = False
+        self.reminder_thread = None
     
     @abstractmethod
     def block_websites(self, sites):
@@ -81,9 +95,11 @@ class BaseBlocker(ABC):
         """Start focus session with blocking."""
         self.start_time = datetime.now()
         self.is_active = True
+        self.is_gentle_mode = gentle_mode  # FIXED: Track the mode explicitly
         
         if sites:
             self.blocked_sites = sites
+            self.log_action("START_FOCUS", f"Sites: {sites}")
             if gentle_mode:
                 print(f"🔔 Gentle reminder: Try to avoid {', '.join(sites[:3])}")
             else:
@@ -91,6 +107,7 @@ class BaseBlocker(ABC):
         
         if apps:
             self.blocked_apps = apps
+            self.log_action("START_FOCUS", f"Apps: {apps}")
             if gentle_mode:
                 print(f"📱 Gentle reminder: Try to avoid {', '.join(apps[:3])}")
             else:
@@ -104,20 +121,18 @@ class BaseBlocker(ABC):
         """End focus session and restore everything."""
         self.stop_gentle_reminders()
         
-        if not self.gentle_mode_active():
+        # FIXED: Use explicit is_gentle_mode flag, not inverted logic
+        # Only unblock if we actually blocked (strict mode)
+        if not self.is_gentle_mode:
             self.unblock_websites()
             self.unblock_applications()
         
+        self.log_action("END_FOCUS", "Removed restrictions")
         self.is_active = False
         self.blocked_sites = []
         self.blocked_apps = []
         
         print("✅ Focus blocking ended. All restrictions removed.")
-    
-    def gentle_mode_active(self):
-        """Check if we're in gentle mode (no actual blocking)."""
-        # If we never actually blocked anything, we're in gentle mode
-        return len(self.blocked_sites) > 0 or len(self.blocked_apps) > 0
     
     def get_status(self):
         """Get current blocking status."""
@@ -126,7 +141,7 @@ class BaseBlocker(ABC):
             "since": self.start_time,
             "blocked_sites": self.blocked_sites,
             "blocked_apps": self.blocked_apps,
-            "gentle_mode": self.gentle_mode_active(),
+            "gentle_mode": self.is_gentle_mode,
             "total_blocked": len(self.blocked_sites) + len(self.blocked_apps)
         }
     

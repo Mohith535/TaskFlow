@@ -185,7 +185,26 @@ Examples:
 
 
 def main():
-    """Main command router using argparse."""
+    """Main command router using argparse with startup cleanup."""
+    
+    # Add this at the VERY beginning of main() to cleanup orphaned blocks
+    try:
+        from task_manager.system_detector import SystemDetector
+        from task_manager.blockers.windows import WindowsBlocker
+        from task_manager.commands import time_tracker
+        
+        # If on Windows and admin, check for orphaned blocks IF no active session
+        if SystemDetector.get_os() == "windows" and SystemDetector.is_admin():
+            if not time_tracker.active_session:
+                checker = WindowsBlocker()
+                # This will silently clean up if there are orphaned blocks
+                with open(checker.hosts_path, 'r') as f:
+                    if "# TaskFlow Focus Mode" in f.read():
+                        print("🔍 Checking for orphaned focus blocks...")
+                        checker.unblock_websites()
+    except Exception as e:
+        pass  # Don't crash on startup
+        
     parser = create_parser()
     
     # Show help if no arguments
@@ -331,7 +350,7 @@ def main():
     except KeyboardInterrupt:
         print("\n\nTaskFlow session ended gracefully.")
         print("Remember: Progress, not perfection. 💫")
-        sys.exit(0)
+        sys.exit(0) 
     except Exception as e:
         print(f"\nAn unexpected error occurred: {e}")
         print("Please report this issue if it persists.")

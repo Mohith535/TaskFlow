@@ -104,20 +104,28 @@ class FocusManager:
         """Initialize the appropriate blocker."""
         self.focus_mode = mode
         
-        if mode == "none":
-            self.blocker = None
-            return True
-        
         try:
+            from .system_detector import SystemDetector
+            
             if mode == "strict":
+                if SystemDetector.get_os() == "windows" and not SystemDetector.is_admin():
+                    print("\n❌ ACCESS DENIED: Strict blocking requires Administrator privileges.")
+                    print("   To fix this:")
+                    print("   1. Close this terminal")
+                    print("   2. Right-click Command Prompt (or PowerShell)")
+                    print("   3. Select 'Run as administrator'")
+                    print("   4. Run the focus command again")
+                    return False
+                
                 self.blocker = SystemDetector.get_distraction_blocker(force_gentle=False)
-            else:  # gentle
+            else:
                 self.blocker = SystemDetector.get_distraction_blocker(force_gentle=True)
             
             return True
         except Exception as e:
             print(f"⚠️  Could not initialize blocker: {e}")
-            self.blocker = GentleBlocker()  # Fallback
+            import traceback
+            traceback.print_exc()
             return False
     
     def start_focus_session(self, task_id, task_title, minutes=25, 
@@ -167,15 +175,26 @@ class FocusManager:
         
         return True
     
+
     def end_focus_session(self):
         """End the current focus session and restore everything."""
         
-        # End focus timer
+        # End focus timer first
         success = time_tracker.end_focus()
         
-        # End blocking
-        if self.blocker and self.blocker.is_active:
-            self.blocker.end_focus()
+        # End blocking - IMPORTANT: Always call end_focus on blocker
+        if self.blocker:
+            # Check if blocker has end_focus method
+            if hasattr(self.blocker, 'end_focus'):
+                self.blocker.end_focus()
+            else:
+                # Fallback: manually unblock
+                if hasattr(self.blocker, 'unblock_websites'):
+                    self.blocker.unblock_websites()
+                if hasattr(self.blocker, 'unblock_applications'):
+                    self.blocker.unblock_applications()
+                # Mark as inactive
+                self.blocker.is_active = False
         
         # Clear state
         self.active_focus_task = None
@@ -272,67 +291,11 @@ def confirm_action(message: str) -> bool:
 
 class TimeTracker:
     """Track time spent on tasks."""
-    def __init__(self):
-        self.active_session = None
-        self.start_time = None
-
-    def start_focus(self, task_id: int, task_title: str, minutes: int = 25):
-        """Start a focus session for a task."""
-        self.active_session = {
-            'task_id': task_id,
-            'task_title': task_title,
-            'minutes': minutes,
-            'start_time': datetime.now()
-        }
-        self.start_time = time.time()
-        Messenger.focus_start(task_title, minutes)
-        return self.active_session
-
-    def check_focus() -> None:
-        """Check current focus session status."""
-        status = time_tracker.check_focus()
-        
-        if not status:
-            Messenger.note("No active focus session.")
-            return
-        
-        if status['status'] == 'active':
-            print(f"\n🔥 Focus session active")
-            print(f"⏱️  Elapsed: {status['elapsed_minutes']}m {status.get('remaining_seconds', 0)}s")
-            print(f"⏱️  Remaining: {status['remaining_minutes']}m {status.get('remaining_seconds', 0)}s")
-            print(f"📝 Task: {time_tracker.active_session['task_title']}")
-        else:
-            Messenger.success("Focus session completed!")
-
-    def end_focus(self):
-        """End current focus session."""
-        if self.active_session:
-            # Add focus time to task
-            try:
-                tasks = storage.load_tasks()
-                for task in tasks:
-                    if task.id == self.active_session['task_id']:
-                        task.add_focus_minutes(self.active_session['minutes'])
-                        storage.save_tasks(tasks)
-                        break
-            except Exception:
-                pass  # Don't crash if can't save focus time
-            
-            # FIXED: Use actual minutes from session
-            actual_minutes = self.active_session['minutes']
-            Messenger.focus_complete(self.active_session['task_title'], actual_minutes)
-            self.active_session = None
-            self.start_time = None
-        
-        # Clear saved state
-        self._save_state({'active_session': None, 'start_time': None})
-
-class TimeTracker:
-    """Track time spent on tasks."""
     
     def __init__(self):
         self.active_session = None
         self.start_time = None
+        self.on_session_expired = None
         self._load_state()
     
     def _load_state(self):
@@ -363,6 +326,8 @@ class TimeTracker:
                             # Session expired - auto-end it
                             print(f"⏰ Previous focus session expired.")
                             self._save_state({'active_session': None, 'start_time': None})
+                            if hasattr(self, 'on_session_expired') and self.on_session_expired:
+                                self.on_session_expired()  # Let FocusManager handle it
                     else:
                         # No active session - ensure clean state
                         self.active_session = None
@@ -415,10 +380,15 @@ class TimeTracker:
         remaining = (self.active_session['minutes'] * 60) - elapsed
         
         if remaining <= 0:
-            # Session completed naturally
             session = self.active_session.copy()
-            self.end_focus()
+            if hasattr(self, 'on_session_expired') and self.on_session_expired:
+                self.on_session_expired()
+            else:
+                self._save_state({'active_session': None, 'start_time': None})
+                self.active_session = None
+                self.start_time = None
             return {'status': 'completed', 'session': session}
+
         
         return {
             'status': 'active',
@@ -461,6 +431,14 @@ class TimeTracker:
 
 # Global instance
 time_tracker = TimeTracker()
+time_tracker.on_session_expired = focus_manager.end_focus_session
+# If there was an active session that we loaded and it was already expired,
+# _load_state within __init__ wouldn't have called the callback since it wasn't bound.
+# We do a quick check here.
+if not time_tracker.active_session:
+    # Just in case there is some orphaned block system state, let FocusManager ensure everything is clean
+    if focus_manager.blocker and focus_manager.blocker.is_active:
+        focus_manager.end_focus_session()
 
 
 
@@ -965,6 +943,32 @@ def focus_task(task_id: int, minutes: int = 25,
                 print(f"\n🎯 Now focusing on: {task.title}")
                 if block_sites or block_apps:
                     print("   Distraction blocking activated!")
+                    
+                    # Spawn background unblocker
+                    try:
+                        import subprocess
+                        import os
+                        
+                        # Find the background script
+                        current_dir = os.path.dirname(os.path.abspath(__file__))
+                        cli_dir = os.path.dirname(current_dir)
+                        bg_script = os.path.join(cli_dir, "taskflow", "taskflow_bg_unblocker.py")
+                        
+                        if os.path.exists(bg_script):
+                            # Start detached process depending on OS
+                            creationflags = 0
+                            if sys.platform == "win32":
+                                creationflags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW
+                                
+                            subprocess.Popen(
+                                [sys.executable, bg_script, str(minutes)],
+                                creationflags=creationflags,
+                                close_fds=True,
+                                cwd=cli_dir
+                            )
+                    except Exception as e:
+                        print(f"   ⚠️  Background auto-unblocker failed to start: {e}")
+                        
                 return True
             return False
     
@@ -1130,41 +1134,198 @@ def test_blocking(mode="gentle"):
 # ============================================================================
 
 def emergency_cleanup():
-    """Emergency cleanup if blocking gets stuck."""
-    print("\n🚨 EMERGENCY CLEANUP")
-    print("=" * 40)
+    """Emergency cleanup if blocking gets stuck - Windows specific."""
+    print("\n" + "🚨" * 10)
+    print("🚨 EMERGENCY CLEANUP - WINDOWS")
+    print("🚨" * 10)
     
-    # End any active focus
-    if focus_manager.is_focus_active():
-        print("Ending active focus session...")
-        time_tracker.end_focus()
+    print("\n📋 This will:")
+    print("   1. Remove ALL TaskFlow blocking from hosts file")
+    print("   2. Flush DNS cache")
+    print("   3. Reset focus system")
+    print("   4. Suggest browser restart")
     
-    # Clean up blocker
-    if focus_manager.blocker and focus_manager.blocker.is_active:
-        print("Cleaning up blocker...")
-        focus_manager.blocker.end_focus()
+    # Check if admin
+    from .system_detector import SystemDetector
+    is_admin = SystemDetector.is_admin()
     
-    # Reset focus manager
-    focus_manager.active_focus_task = None
-    focus_manager.blocked_at_start = None
-    focus_manager.focus_start_time = None
+    if not is_admin:
+        print("\n⚠️  WARNING: Not running as Administrator!")
+        print("   Some cleanup may not work properly.")
+        print("   Run Command Prompt as Admin for full cleanup.")
     
-    print("\n✅ System cleaned up.")
-    print("   All blocking should be removed.")
-    print("   You may need to restart your browser for website changes.")
-    
-    # Additional Windows-specific cleanup
-    if SystemDetector.get_os() == "windows" and SystemDetector.is_admin():
+    try:
+        # 1. END ANY ACTIVE FOCUS SESSION
+        print("\n1. Ending focus sessions...")
+        if focus_manager.is_focus_active():
+            print("   Ending active focus...")
+            time_tracker.end_focus()
+        
+        # 2. CLEAN HOSTS FILE
+        print("\n2. Cleaning hosts file...")
+        hosts_path = r"C:\Windows\System32\drivers\etc\hosts"
+        
+        try:
+            # Read current hosts file
+            with open(hosts_path, 'r') as f:
+                lines = f.readlines()
+            
+            # Filter out TaskFlow lines
+            original_count = len(lines)
+            cleaned_lines = []
+            in_taskflow_block = False
+            removed_count = 0
+            
+            for line in lines:
+                # Start of TaskFlow block
+                if "# TaskFlow" in line and ("Focus Mode" in line or "Blocked Sites" in line):
+                    in_taskflow_block = True
+                    print(f"   Found TaskFlow block: {line.strip()}")
+                    removed_count += 1
+                    continue
+                
+                # Inside TaskFlow block
+                if in_taskflow_block:
+                    # Check if this is a blocking line
+                    if "127.0.0.1" in line and any(site in line for site in [
+                        "youtube.com", "facebook.com", "twitter.com", 
+                        "instagram.com", "reddit.com", "netflix.com",
+                        "tiktok.com", "discord.com", "whatsapp.com"
+                    ]):
+                        print(f"   Removing: {line.strip()}")
+                        removed_count += 1
+                        continue
+                    
+                    # End of block (empty line or new section)
+                    if line.strip() == "" or (line.strip().startswith("#") and "TaskFlow" not in line):
+                        in_taskflow_block = False
+                        # Skip empty line after block
+                        if line.strip() == "":
+                            continue
+                
+                # Keep this line
+                cleaned_lines.append(line)
+            
+            # Write cleaned file if we found TaskFlow entries
+            if removed_count > 0:
+                with open(hosts_path, 'w') as f:
+                    f.writelines(cleaned_lines)
+                print(f"   ✅ Removed {removed_count} TaskFlow entries")
+            else:
+                print("   ✅ No TaskFlow entries found")
+        
+        except PermissionError:
+            print("   ❌ Permission denied! Need Administrator rights.")
+            print("   Run: taskflow cleanup (as Administrator)")
+        except Exception as e:
+            print(f"   ⚠️  Could not clean hosts file: {e}")
+        
+        # 3. FLUSH DNS CACHE
+        print("\n3. Flushing DNS cache...")
         try:
             import subprocess
-            print("\n🔄 Flushing DNS cache...")
-            subprocess.run(["ipconfig", "/flushdns"], capture_output=True)
-            print("✅ DNS cache flushed.")
+            result = subprocess.run(
+                ["ipconfig", "/flushdns"],
+                capture_output=True,
+                text=True,
+                shell=True
+            )
+            
+            if result.returncode == 0:
+                print("   ✅ DNS cache flushed successfully")
+            else:
+                print(f"   ⚠️  DNS flush returned: {result.returncode}")
+                if result.stderr:
+                    print(f"   Error: {result.stderr[:100]}")
+        
+        except Exception as e:
+            print(f"   ⚠️  Could not flush DNS: {e}")
+        
+        # 4. RESET FOCUS MANAGER
+        print("\n4. Resetting focus system...")
+        try:
+            # Force end any blocker
+            if focus_manager.blocker:
+                focus_manager.blocker.is_active = False
+                focus_manager.blocker.blocked_sites = []
+                focus_manager.blocker.blocked_apps = []
+                print("   ✅ Blocker reset")
+            
+            # Reset focus manager
+            focus_manager.active_focus_task = None
+            focus_manager.blocked_at_start = None
+            focus_manager.focus_start_time = None
+            print("   ✅ Focus manager reset")
+        
+        except Exception as e:
+            print(f"   ⚠️  Could not reset focus: {e}")
+        
+        # 5. CHECK FOR COMMON BLOCKED SITES
+        print("\n5. Checking common blocked sites...")
+        common_sites = [
+            "youtube.com",
+            "www.youtube.com", 
+            "facebook.com",
+            "www.facebook.com",
+            "twitter.com",
+            "www.twitter.com",
+            "instagram.com",
+            "www.instagram.com",
+            "reddit.com",
+            "www.reddit.com"
+        ]
+        
+        try:
+            with open(hosts_path, 'r') as f:
+                content = f.read()
+            
+            still_blocked = []
+            for site in common_sites:
+                if site in content and "127.0.0.1" in content:
+                    still_blocked.append(site)
+            
+            if still_blocked:
+                print(f"   ⚠️  Still blocked: {', '.join(still_blocked[:3])}")
+                if len(still_blocked) > 3:
+                    print(f"   ... and {len(still_blocked) - 3} more")
+                print("   Manual fix required (edit hosts file)")
+            else:
+                print("   ✅ No common sites blocked")
+        
         except:
-            pass
-    
-    print("\n" + "=" * 40)
-    return True
+            print("   ⚠️  Could not check blocked sites")
+        
+        # FINAL INSTRUCTIONS
+        print("\n" + "✅" * 10)
+        print("✅ CLEANUP COMPLETE")
+        print("✅" * 10)
+        
+        print("\n🎯 NEXT STEPS:")
+        print("   1. RESTART YOUR BROWSER COMPLETELY")
+        print("      (Close ALL browser windows, not just tabs)")
+        print("   2. Test previously blocked sites")
+        print("   3. If still blocked, run this as Administrator")
+        
+        if not is_admin:
+            print("\n⚠️  IMPORTANT: Run as Administrator for full cleanup!")
+            print("   Right-click Command Prompt → 'Run as administrator'")
+        
+        return True
+        
+    except Exception as e:
+        print(f"\n❌ EMERGENCY CLEANUP FAILED: {e}")
+        print("\n🔧 MANUAL CLEANUP REQUIRED:")
+        print("   1. Run Command Prompt as Administrator")
+        print("   2. Type: notepad C:\\Windows\\System32\\drivers\\etc\\hosts")
+        print("   3. Delete ALL lines containing:")
+        print("      - 'TaskFlow'")
+        print("      - 'youtube.com'")
+        print("      - 'facebook.com'")
+        print("      - Other blocked sites")
+        print("   4. Save file")
+        print("   5. Type: ipconfig /flushdns")
+        print("   6. Restart browser completely")
+        return False
 
 
 def schedule_task(task_id: int, date_str: str) -> bool:

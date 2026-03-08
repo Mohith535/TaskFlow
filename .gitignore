@@ -5,3 +5,12 @@ tasks.json
 .taskflow/
 taskflow_cli.egg-info/
 upgradtion and other ideas.txt
+
+# Temporary test files
+debug_focus.py
+fix_hosts.py
+manual_test.py
+quick_fix.py
+test_focus.py
+test_unblock.py
+trace_blocking.py
