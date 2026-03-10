@@ -17,6 +17,7 @@ import time
 from datetime import datetime
 from .system_detector import SystemDetector
 from .blockers import GentleBlocker  # For fallback
+from .blockers.blocklist import blocklist_manager
 
 
 # =========================================================
@@ -932,6 +933,36 @@ def focus_task(task_id: int, minutes: int = 25,
             if focus_manager.is_focus_active():
                 Messenger.note("A focus session is already active. End it first.")
                 return False
+                
+            # --- BLOCKLIST INTEGRATION ---
+            if (mode in ["strict", "gentle"]) and not block_sites:
+                saved_sites = blocklist_manager.load_sites()
+                if saved_sites:
+                    print("\n🛡️  Stored Blocklist:")
+                    for i, site in enumerate(saved_sites, 1):
+                        print(f"  {i}. {site}")
+                    print("\nSelect websites to block (e.g., '1 2 5', 'all', or press Enter to skip):")
+                    choice = get_valid_input("Selection: ").strip().lower()
+                    if choice == 'all':
+                        block_sites = saved_sites
+                    elif choice:
+                        selected_indices = []
+                        for part in choice.split():
+                            if part.isdigit():
+                                idx = int(part)
+                                if 1 <= idx <= len(saved_sites):
+                                    selected_indices.append(idx - 1)
+                        if selected_indices:
+                            block_sites = [saved_sites[i] for i in selected_indices]
+            
+            if block_sites:
+                saved_sites = blocklist_manager.load_sites()
+                new_sites = [s for s in block_sites if s not in saved_sites]
+                if new_sites:
+                    if confirm_action(f"\nSave {len(new_sites)} new site(s) to your persistent blocklist?"):
+                        blocklist_manager.add_sites(new_sites)
+                        print("   ✅ Saved to blocklist.")
+            # -----------------------------
             
             # Start focus with blocking
             success = focus_manager.start_focus_session(
@@ -1428,6 +1459,39 @@ def backup_tasks() -> bool:
 # =========================================================
 # UTILITY FUNCTIONS
 # =========================================================
+
+def manage_blocklist(action: str, sites: list = None, indices: list = None):
+    """Manage the persistent blocklist."""
+    if action == "list":
+        saved = blocklist_manager.load_sites()
+        if not saved:
+            Messenger.note("Your blocklist is empty.")
+            return
+        print("\n🛡️  Persistent Blocklist:")
+        for i, site in enumerate(saved, 1):
+            print(f"  [{i}] {site}")
+        print(f"\nTotal: {len(saved)} websites")
+        print(f"💡 Hint: You can manually edit this at {blocklist_manager.blocklist_file}")
+    
+    elif action == "add" and sites:
+        added = blocklist_manager.add_sites(sites)
+        Messenger.success(f"Added {len(sites)} site(s). Total in blocklist: {len(added)}")
+        
+    elif action == "remove" and indices:
+        remaining = blocklist_manager.remove_sites(indices)
+        Messenger.success(f"Removed {len(indices)} site(s). Remaining: {len(remaining)}")
+        
+    elif action == "edit":
+        import subprocess
+        import sys
+        path = blocklist_manager.blocklist_file
+        print(f"Opening blocklist file: {path}")
+        if sys.platform == "win32":
+            subprocess.run(["notepad", str(path)])
+        elif sys.platform == "darwin":
+            subprocess.run(["open", "-e", str(path)])
+        else:
+            subprocess.run(["nano", str(path)])
 
 def normalize_priority(priority: str) -> str:
     """Normalize priority input to Low / Medium / High."""

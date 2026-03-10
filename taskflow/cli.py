@@ -44,11 +44,12 @@ from task_manager.commands import (
     # v2.5 focus blocking commands (new!)
     focus_blocking_status,
     test_blocking,
-    emergency_cleanup
+    emergency_cleanup,
+    manage_blocklist
 )
 
 APP_NAME = "TaskFlow"
-APP_VERSION = "v3.0.0"
+APP_VERSION = "v3.1.0"
 APP_TAGLINE = "Calm, Powerful CLI Task Assistant with Focus Blocking"
 
 
@@ -161,6 +162,13 @@ Examples:
                                       help='Test the blocking system without starting a focus session')
     test_parser.add_argument('--mode', choices=['gentle', 'strict'], default='gentle',
                            help='Test mode: gentle (reminders) or strict (actual blocking)')
+    
+    # Blocklist
+    blocklist_parser = subparsers.add_parser('blocklist', help='Manage persistent list of blocked websites')
+    blocklist_parser.add_argument('--add', nargs='+', help='Websites to add to blocklist')
+    blocklist_parser.add_argument('--remove', nargs='+', type=int, help='Indices of websites to remove')
+    blocklist_parser.add_argument('--list', action='store_true', help='List all blocked websites')
+    blocklist_parser.add_argument('--edit', action='store_true', help='Open blocklist in text editor')
     
     # Emergency cleanup
     subparsers.add_parser('cleanup', 
@@ -334,6 +342,16 @@ def main():
             list_ids()
         
         # NEW: Focus blocking commands
+        elif args.command == 'blocklist':
+            if args.add:
+                manage_blocklist("add", sites=args.add)
+            elif args.remove:
+                manage_blocklist("remove", indices=args.remove)
+            elif args.edit:
+                manage_blocklist("edit")
+            else:
+                manage_blocklist("list")
+
         elif args.command == 'focus-blocking':
             focus_blocking_status()
         
