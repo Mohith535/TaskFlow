@@ -21,7 +21,8 @@ def main():
     cli_path = os.path.join(app_dir, "cli.py")
     
     # Run unblock script, routing output to null so it's fully silent
-    os.system(f'python "{cli_path}" focus --end > NUL 2>&1')
+    # Added --force flag to bypass any "Mindful Exit" interactive prompts
+    os.system(f'python "{cli_path}" focus --end --force > NUL 2>&1')
 
 if __name__ == "__main__":
     main()

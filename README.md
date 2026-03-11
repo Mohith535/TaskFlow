@@ -1,4 +1,4 @@
-# 🌊 TaskFlow v3.1.0
+# 🌊 TaskFlow v3.2.0
 
 **TaskFlow** is a calm, privacy-first command-line task assistant built with Python. 
 
@@ -16,9 +16,10 @@ It helps you manage tasks with clarity and minimal cognitive load, using clean a
 - **Add notes & tags** for contextual organization.
 - **Stats & Summaries:** Human-readable overviews of your productivity.
 
-### 🎯 v3.1.0 Focus Engine & Distraction Blocking
+### 🎯 v3.2.0 Focus Engine & Distraction Blocking
 - **Focus Sessions:** Start timed work sessions tied directly to specific tasks.
 - **Persistent Blocklist Engine:** Save your most distracting websites (`taskflow blocklist --add`) and interactively select them when starting a session, so you never have to type them twice. You can even rapidly edit it in your default text editor (`taskflow blocklist --edit`).
+- **Mindful Exit:** Bypasses impulsive distractions by gracefully prompting the user to confirm if they're taking a purposeful break before unblocking their session early.
 - **Gentle Mode:** Reminders via console notifications when you're trying to avoid distracting apps and sites.
 - **Strict Mode (Windows Admin):** Deep system-level intervention that modifies the Windows `hosts` file to forcefully block websites and uses `taskkill` to close distracting applications.
 - **Aggressive Connection Termination:** Automatically force-closes browsers at the start of Strict Mode to sever hidden persistent DNS connections (QUIC/WebSockets).
@@ -112,7 +113,7 @@ TaskFlow is designed with extreme privacy in mind. It stores all user data local
 
 TaskFlow is intentionally calm, minimal, and focused. It is designed as a core task management module, which can later integrate into higher-level productivity systems.
 
-The v3.1.0 updates bring a robust, fault-tolerant focus engine to the completely offline, terminal-first environment. 
+The v3.2.0 updates bring a robust, fault-tolerant focus engine to the completely offline, terminal-first environment. 
 
 ---
 

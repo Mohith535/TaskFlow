@@ -49,7 +49,7 @@ from task_manager.commands import (
 )
 
 APP_NAME = "TaskFlow"
-APP_VERSION = "v3.1.0"
+APP_VERSION = "v3.2.0"
 APP_TAGLINE = "Calm, Powerful CLI Task Assistant with Focus Blocking"
 
 
@@ -128,6 +128,7 @@ Examples:
                             help='Applications to avoid (e.g., discord spotify)')
     focus_parser.add_argument('--mode', choices=['gentle', 'strict'], default='gentle',
                             help='Blocking mode: gentle (reminders) or strict (actual blocking)')
+    focus_parser.add_argument('--force', action='store_true', help='Force operation without interactive prompts')
     
     # Priority command
     priority_parser = subparsers.add_parser('priority', help='Change task priority')
@@ -283,7 +284,7 @@ def main():
             if args.status:
                 check_focus()
             elif args.end:
-                end_focus()
+                end_focus(force=args.force)
             elif args.id:
                 # UPDATED: Pass all blocking arguments
                 focus_task(

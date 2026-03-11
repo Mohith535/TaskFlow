@@ -1051,11 +1051,34 @@ def check_focus():
         else:
             print("   Mode: Full blocking active")
 
-def end_focus():
+def end_focus(force=False):
     """End the current focus session."""
     if not focus_manager.is_focus_active():
         Messenger.note("No active focus session to end.")
         return False
+        
+    status = time_tracker.check_focus()
+    # Check if we are ending prematurely
+    if status and status.get('status') == 'active' and not force:
+        minutes_left = status.get('remaining_minutes', 0)
+        session_data = status.get('session') or time_tracker.active_session or {}
+        task_title = session_data.get('task_title', 'Task')
+        
+        print(f"\n🌱 Pausing focus.")
+        print(f"You still have {minutes_left} minutes left on: '{task_title}'")
+        print("\nAre you taking a purposeful break?")
+        print("(Type 'resume' to keep working, or 'stop' to end the session early)")
+        
+        while True:
+            choice = get_valid_input("\nChoice: ").strip().lower()
+            if choice == "resume":
+                print("\n🎯 Resuming focus. You've got this!")
+                return False
+            elif choice == "stop":
+                print("\n🛑 Session ended early.")
+                break
+            else:
+                print("Please type 'resume' or 'stop'.")
     
     return focus_manager.end_focus_session()
 
