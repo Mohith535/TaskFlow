@@ -214,21 +214,32 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         }
         .filter-chip.active { background: var(--blue-dark); color: #fff; border-color: var(--blue-dark); box-shadow: 0 4px 12px rgba(31,111,235,0.3); }
 
-        .task-list { display: flex; flex-direction: column; gap: 12px; }
+        .task-list { display: flex; flex-direction: column; gap: 12px; position: relative; }
         .task-card {
-            background: rgba(22, 27, 34, 0.4); border: 1px solid rgba(255,255,255,0.03);
-            border-left: 2px solid var(--border-neutral); border-radius: 12px;
-            padding: 20px 24px; cursor: pointer; position: relative; overflow: hidden;
-            transition: all 400ms cubic-bezier(0.16, 1, 0.3, 1);
+            background: rgba(13, 17, 23, 0.8); border: 1px solid rgba(88, 166, 255, 0.1);
+            border-left: 2px solid var(--border-neutral); border-radius: 8px;
+            padding: 16px 20px; cursor: pointer; position: relative; overflow: hidden;
+            transition: transform 600ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 400ms;
+            opacity: 0; transform: scaleY(0); transform-origin: top;
+            backdrop-filter: blur(10px);
         }
+        .task-card.visible { opacity: 1; transform: scaleY(1); }
         .task-card:hover { 
-            background: rgba(30, 35, 42, 0.6); transform: translateY(-2px);
-            border-color: rgba(88, 166, 255, 0.2); box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+            background: rgba(22, 27, 34, 0.9); border-color: var(--blue);
+            box-shadow: inset 0 0 10px rgba(88,166,255,0.1), 0 0 20px rgba(0,0,0,0.4);
+            transform: scale(1.005);
         }
-        .card-glow {
-            position: absolute; inset: 0; pointer-events: none; opacity: 0;
-            transition: opacity 400ms ease;
-            background: radial-gradient(circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(88, 166, 255, 0.08), transparent 70%);
+
+        /* ─── INTEGRITY METER ───────────────────── */
+        #integrity-hud {
+            margin-bottom: 24px; padding: 12px; background: rgba(255,255,255,0.02);
+            border: 1px solid rgba(255,255,255,0.05); border-radius: 8px;
+        }
+        .integrity-bar-bg { height: 4px; background: rgba(255,255,255,0.05); border-radius: 2px; overflow: hidden; }
+        .integrity-bar-fill { 
+            height: 100%; width: 0%; background: linear-gradient(90deg, var(--blue), #a5d6ff);
+            transition: width 1s cubic-bezier(0.16, 1, 0.3, 1);
+            box-shadow: 0 0 10px var(--blue);
         }
         .task-card:hover .card-glow { opacity: 1; }
 
@@ -297,18 +308,30 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         }
         #toast.show { opacity: 1; transform: translateY(0); }
 
-        /* ─── SCAN ANIMATION ────────────────────── */
-        @keyframes scanSweep {
-            0% { top: -100%; }
-            100% { top: 100%; }
+        /* ─── ENERGY FILAMENT (ICONIC) ────────── */
+        @keyframes filamentZip {
+            0% { top: -10%; opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { top: 110%; opacity: 0; }
         }
-        .scan-overlay {
-            position: absolute; inset: 0; z-index: 100; pointer-events: none;
-            background: linear-gradient(transparent, rgba(88,166,255,0.05), transparent);
-            height: 100px; animation: scanSweep 2s linear infinite;
-            display: none;
+        .filament-line {
+            position: absolute; left: 0; right: 0; height: 1px; z-index: 100;
+            background: #fff; box-shadow: 0 0 15px #fff, 0 0 5px var(--blue);
+            pointer-events: none; display: none;
         }
-        .task-list.scanning .scan-overlay { display: block; }
+        .task-list.initializing .filament-line { display: block; animation: filamentZip 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+        /* ─── SIGNAL PULSE ──────────────────────── */
+        @keyframes signalPulse {
+            0% { box-shadow: 0 0 0 0 rgba(88,166,255,0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(88,166,255,0); }
+            100% { box-shadow: 0 0 0 0 rgba(88,166,255,0); }
+        }
+        .filter-chip.active { 
+            background: var(--blue-dark); color: #fff; border-color: var(--blue-dark); 
+            animation: signalPulse 2s infinite;
+        }
 
         @keyframes glowPulse { 0%, 100% { opacity: 0.5; filter: blur(2px); } 50% { opacity: 1; filter: blur(0px); } }
     </style>
@@ -385,18 +408,26 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         <!-- VIEW: MISSIONS (QUEUE) -->
         <div id="view-tasks" class="view-content hidden">
             <div style="margin-top:20px;">
+                <div id="integrity-hud">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <div class="section-label" style="font-size:9px; letter-spacing:2px;">SYSTEM INTEGRITY</div>
+                        <div style="font-size:10px; color:var(--blue);" id="integrity-percent">0%</div>
+                    </div>
+                    <div class="integrity-bar-bg"><div id="integrity-fill" class="integrity-bar-fill"></div></div>
+                </div>
+
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
                     <div class="section-label">MISSION QUEUE</div>
                     <div style="font-size:11px; color:var(--text-disabled);" id="header-task-count">0 ACTIVE</div>
                 </div>
                 
-                <div class="mission-panel" style="padding:16px; margin-bottom:16px; background:rgba(255,255,255,0.02);">
+                <div class="mission-panel" style="padding:16px; margin-bottom:16px; border-radius:8px;">
                     <div class="section-label" style="font-size:9px; margin-bottom:12px;">PRIORITY SIGNALS</div>
                     <div class="filter-hud" style="margin:0;">
-                        <div class="filter-chip active" onclick="filterTasks('all')">ALL</div>
-                        <div class="filter-chip" onclick="filterTasks('high')">HIGH-THREAT</div>
-                        <div class="filter-chip" onclick="filterTasks('medium')">STABLE</div>
-                        <div class="filter-chip" onclick="filterTasks('low')">ROUTINE</div>
+                        <div class="filter-chip active" onclick="filterTasks('all', this)">ALL</div>
+                        <div class="filter-chip" onclick="filterTasks('high', this)">HIGH-THREAT</div>
+                        <div class="filter-chip" onclick="filterTasks('medium', this)">STABLE</div>
+                        <div class="filter-chip" onclick="filterTasks('low', this)">ROUTINE</div>
                     </div>
 
                     <div class="section-label" style="font-size:9px; margin:20px 0 12px;">SIGNAL DISCOVERY (TAGS)</div>
@@ -405,9 +436,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     </div>
                 </div>
 
-                <div id="task-list-container" class="task-list" style="position:relative;">
-                    <div class="scan-overlay"></div>
-                    <!-- Kinetic Content -->
+                <div id="task-list-container" class="task-list">
+                    <div class="filament-line"></div>
+                    <!-- Quantum Content -->
                 </div>
             </div>
         </div>
@@ -571,17 +602,20 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             return true;
         });
 
-        // Update Tag Signals
-        renderTagSignals();
+        // Quantum Initialization Protocol
+        const total = allTasks.length;
+        const done = allTasks.filter(t => t.completed).length; // Though we usually load active, calculate if possible
+        const percent = total > 0 ? Math.round((done / total) * 100) : 0;
+        document.getElementById('integrity-fill').style.width = `${percent}%`;
+        document.getElementById('integrity-percent').textContent = `${percent}%`;
 
-        // Scan Animation
-        container.classList.add('scanning');
-        setTimeout(() => container.classList.remove('scanning'), 1000);
+        renderTagSignals();
+        container.classList.add('initializing');
+        setTimeout(() => container.classList.remove('initializing'), 800);
 
         document.getElementById('header-task-count').textContent = `${filtered.length} ACTIVE`;
-        container.innerHTML = filtered.map(t => `
+        container.innerHTML = `<div class="filament-line"></div>` + filtered.map(t => `
             <div class="task-card priority-${t.priority}" data-id="${t.id}" onclick="openModal(${t.id}, this)">
-                <div class="card-glow"></div>
                 <div class="card-top">
                     <div class="cb" onclick="event.stopPropagation(); completeTask(${t.id}, this)"></div>
                     <div class="task-title">${t.title}</div>
@@ -591,7 +625,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             </div>
         `).join('');
 
-        container.querySelectorAll('.task-card').forEach(card => {
+        // Synchronized Aperture Deployment
+        container.querySelectorAll('.task-card').forEach((card, i) => {
+            const delay = (i / filtered.length) * 600; // Map to the 800ms filament duration
+            setTimeout(() => card.classList.add('visible'), delay);
+
             card.addEventListener('mousemove', e => {
                 const r = card.getBoundingClientRect();
                 card.style.setProperty('--mouse-x', `${e.clientX - r.left}px`);
@@ -606,7 +644,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     card.style.transition = 'none';
                     card.style.transform = `translate(${dx}px, ${dy}px)`;
                     requestAnimationFrame(() => {
-                        card.style.transition = 'transform 600ms cubic-bezier(0.16, 1, 0.3, 1), opacity 400ms';
+                        card.style.transition = 'transform 800ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 400ms';
                         card.style.transform = '';
                     });
                 }
