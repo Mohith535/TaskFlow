@@ -480,6 +480,29 @@ def add_task() -> bool:
         Messenger.careful(f"Could not add task: {e}")
         return False
 
+def open_web_ui():
+    """Launch the TaskFlow Developer Dashboard via local HTTP server."""
+    import webbrowser
+    import time
+    from task_manager import server
+    
+    port = 18082
+    print(f"\n🚀 Starting TaskFlow Web UI on port {port}...")
+    srv = server.start_server(port)
+    
+    url = f"http://localhost:{port}"
+    print(f"   Opening dashboard: {url}")
+    print("   Press Ctrl+C to stop the server.\n")
+    
+    webbrowser.open(url)
+    
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print("\nStopping Web UI server...")
+        srv.shutdown()
+
 
 def list_tasks(filter_status: Optional[str] = None, 
                filter_priority: Optional[str] = None,

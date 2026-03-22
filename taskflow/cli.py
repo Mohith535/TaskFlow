@@ -45,7 +45,8 @@ from task_manager.commands import (
     focus_blocking_status,
     test_blocking,
     emergency_cleanup,
-    manage_blocklist
+    manage_blocklist,
+    open_web_ui
 )
 
 APP_NAME = "TaskFlow"
@@ -184,7 +185,8 @@ Examples:
         ('clear', 'Clear completed tasks'),
         ('reset', 'Reset all tasks (with confirmation)'),
         ('version', 'Show version information'),
-        ('help', 'Show help message')
+        ('help', 'Show help message'),
+        ('ui', 'Launch the Developer Web Dashboard')
     ]
     
     for cmd, help_text in simple_commands:
@@ -338,6 +340,9 @@ def main():
         
         elif args.command == 'version':
             show_version()
+            
+        elif args.command == 'ui':
+            open_web_ui()
 
         elif args.command == "ids":
             list_ids()
