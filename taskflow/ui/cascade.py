@@ -77,7 +77,7 @@ class MomentumApp(App):
         height: 3;
         content-align: center middle;
         color: #94a3b8;
-        italic: True;
+        text-style: italic;
     }
     """
     
