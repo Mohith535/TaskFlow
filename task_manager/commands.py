@@ -481,27 +481,47 @@ def add_task() -> bool:
         return False
 
 def open_web_ui():
-    """Launch the TaskFlow Developer Dashboard via local HTTP server."""
-    import webbrowser
+    """Launch the System Control Web Dashboard (Quantum Resolve)."""
+    import subprocess
     import time
-    from task_manager import server
+    import webbrowser
+    import socket
+    from pathlib import Path
     
-    port = 18082
-    print(f"\n🚀 Starting TaskFlow Web UI on port {port}...")
-    srv = server.start_server(port)
+    port = 18083
+    url = f"http://127.0.0.1:{port}"
     
-    url = f"http://localhost:{port}"
-    print(f"   Opening dashboard: {url}")
-    print("   Press Ctrl+C to stop the server.\n")
+    # Check if port is taken
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    is_taken = sock.connect_ex(('127.0.0.1', port)) == 0
+    sock.close()
     
-    webbrowser.open(url)
+    if is_taken:
+        print(f"📡 Mission Control already active at {url}")
+        webbrowser.open(url)
+        return
+
+    print("🚀 Initializing Quantum Resolve HUD...")
+    # Get server path
+    server_path = Path(__file__).parent / "server.py"
     
     try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        print("\nStopping Web UI server...")
-        srv.shutdown()
+        # Launch server as detached background process
+        if sys.platform == "win32":
+            subprocess.Popen([sys.executable, str(server_path)], 
+                             creationflags=subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        else:
+            subprocess.Popen([sys.executable, str(server_path)],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                             start_new_session=True)
+        
+        # Success delay
+        time.sleep(1.5)
+        webbrowser.open(url)
+        print(f"✅ Mission Dashboard live at {url}")
+    except Exception as e:
+        print(f"❌ Failed to reach Mission Control: {e}")
 
 
 def list_tasks(filter_status: Optional[str] = None, 

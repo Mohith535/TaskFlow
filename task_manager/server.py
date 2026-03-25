@@ -30,7 +30,8 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
             self.send_header('Pragma', 'no-cache')
             self.send_header('Expires', '0')
             self.end_headers()
-            self.wfile.write(HTML_TEMPLATE.encode('utf-8'))
+            self.wfile.write(HTML_TEMPLATE.encode('utf-8', errors='replace'))
+
 
         elif path == "/api/tasks":
             tasks = storage.load_tasks()
@@ -222,7 +223,7 @@ if __name__ == "__main__":
     import time
     import sys
     
-    port = 18082
+    port = 18083
     print(f"\nStarting TaskFlow Web UI Server on port {port}...")
     srv = start_server(port)
     

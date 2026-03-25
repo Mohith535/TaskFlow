@@ -246,7 +246,18 @@ def main():
             add_task()
         
         elif args.command == 'list':
-            # Determine filter status
+            # Redirect to Momentum TUI if possible and no complex filters are applied
+            use_tui = not (args.priority or args.tag or args.sort or args.done)
+            
+            if use_tui:
+                try:
+                    from taskflow.ui.cascade import run_momentum
+                    run_momentum()
+                    return
+                except ImportError:
+                    pass # Fallback to standard CLI
+            
+            # Standard CLI List
             filter_status = None
             if args.todo:
                 filter_status = 'todo'

@@ -7,6 +7,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400&family=Inter:ital,opsz,wght@0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
         /* ─── RESET ─────────────────────────────── */
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -205,43 +206,76 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         .btn-deploy.active { background: var(--blue-dark); color: #fff; border-color: var(--blue-dark); }
         .btn-deploy.active:hover { box-shadow: 0 8px 24px rgba(31,111,235,0.4); transform: translateY(-1px); }
 
-        /* ─── MISSION QUEUE (FLIP & KINETIC) ────── */
-        .filter-hud { display: flex; gap: 12px; margin: 24px 0 16px; }
+        /* ─── MISSION QUEUE ────────────────────── */
+        .filter-hud { display: flex; gap: 12px; margin: 24px 0 16px; flex-wrap: wrap; }
         .filter-chip {
-            padding: 6px 14px; border-radius: 20px; font-size: 11px; font-weight: 700;
+            padding: 6px 16px; border-radius: 20px; font-size: 11px; font-weight: 700;
             background: var(--bg-surface); border: 1px solid var(--border-neutral);
-            color: var(--text-disabled); cursor: pointer; transition: all 200ms;
+            color: var(--text-disabled); cursor: pointer; transition: all 250ms cubic-bezier(0.16, 1, 0.3, 1);
         }
-        .filter-chip.active { background: var(--blue-dark); color: #fff; border-color: var(--blue-dark); box-shadow: 0 4px 12px rgba(31,111,235,0.3); }
+        .filter-chip:hover { border-color: var(--blue); color: var(--blue); transform: translateY(-1px); }
+        .filter-chip.active { background: var(--blue-dark); color: #fff; border-color: var(--blue-dark); box-shadow: 0 4px 16px rgba(31,111,235,0.4); }
 
-        .task-list { display: flex; flex-direction: column; gap: 12px; position: relative; }
+        /* ─── TASK CARDS: MOMENTUM CASCADE ─────── */
+        .task-list { display: flex; flex-direction: column; gap: 10px; position: relative; overflow: hidden; }
+
+        @keyframes cascadeIn {
+            0%   { opacity: 0; transform: translateY(18px); }
+            60%  { opacity: 1; transform: translateY(-3px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes successRipple {
+            0%   { box-shadow: 0 0 0 0 rgba(63,185,80,0.5); background: rgba(63,185,80,0.12); }
+            60%  { box-shadow: 0 0 0 12px rgba(63,185,80,0); }
+            100% { box-shadow: none; background: rgba(13,17,23,0.8); }
+        }
+
         .task-card {
-            background: rgba(13, 17, 23, 0.8); border: 1px solid rgba(88, 166, 255, 0.1);
-            border-left: 2px solid var(--border-neutral); border-radius: 8px;
-            padding: 16px 20px; cursor: pointer; position: relative; overflow: hidden;
-            transition: transform 600ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 400ms;
-            opacity: 0; transform: scaleY(0); transform-origin: top;
+            background: rgba(13, 17, 23, 0.8);
+            border: 1px solid rgba(88, 166, 255, 0.08);
+            border-left: 3px solid var(--border-neutral);
+            border-radius: 10px; padding: 16px 20px; cursor: pointer;
+            position: relative; overflow: hidden;
+            opacity: 0; /* starts invisible, cascade adds animation */
             backdrop-filter: blur(10px);
+            transition: border-color 250ms ease, box-shadow 250ms ease, transform 250ms ease;
         }
-        .task-card.visible { opacity: 1; transform: scaleY(1); }
-        .task-card:hover { 
-            background: rgba(22, 27, 34, 0.9); border-color: var(--blue);
-            box-shadow: inset 0 0 10px rgba(88,166,255,0.1), 0 0 20px rgba(0,0,0,0.4);
-            transform: scale(1.005);
+        .task-card.cascade-visible {
+            animation: cascadeIn 0.45s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        }
+        .task-card.priority-high  { border-left-color: var(--red); }
+        .task-card.priority-medium { border-left-color: var(--amber); }
+        .task-card.priority-low   { border-left-color: var(--blue); }
+        .task-card:hover {
+            background: rgba(22, 27, 34, 0.95);
+            border-color: rgba(88,166,255,0.3);
+            box-shadow: 0 0 0 1px rgba(88,166,255,0.1), 0 8px 32px rgba(0,0,0,0.5);
+            transform: translateY(-2px);
+        }
+        .task-card.completing {
+            animation: successRipple 0.6s ease forwards;
+            pointer-events: none;
         }
 
-        /* ─── INTEGRITY METER ───────────────────── */
+        /* ─── INTEGRITY / COMPLETION HORIZON ───── */
         #integrity-hud {
-            margin-bottom: 24px; padding: 12px; background: rgba(255,255,255,0.02);
-            border: 1px solid rgba(255,255,255,0.05); border-radius: 8px;
+            margin-bottom: 20px; padding: 14px 16px;
+            background: rgba(255,255,255,0.02);
+            border: 1px solid rgba(255,255,255,0.06); border-radius: 10px;
         }
-        .integrity-bar-bg { height: 4px; background: rgba(255,255,255,0.05); border-radius: 2px; overflow: hidden; }
-        .integrity-bar-fill { 
-            height: 100%; width: 0%; background: linear-gradient(90deg, var(--blue), #a5d6ff);
-            transition: width 1s cubic-bezier(0.16, 1, 0.3, 1);
-            box-shadow: 0 0 10px var(--blue);
+        .integrity-label-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .integrity-bar-bg { height: 5px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; }
+        .integrity-bar-fill {
+            height: 100%; width: 0%;
+            background: linear-gradient(90deg, #3fb950, #58a6ff);
+            transition: width 1.2s cubic-bezier(0.16, 1, 0.3, 1);
+            box-shadow: 0 0 8px rgba(63,185,80,0.5);
         }
-        .task-card:hover .card-glow { opacity: 1; }
+        #integrity-victory {
+            margin-top: 8px; font-size: 11px; font-style: italic;
+            color: var(--text-muted); min-height: 16px;
+            transition: opacity 400ms;
+        }
 
         .card-top { display: flex; align-items: center; gap: 12px; }
         .cb { 
@@ -308,35 +342,17 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         }
         #toast.show { opacity: 1; transform: translateY(0); }
 
-        /* ─── ENERGY FILAMENT (ICONIC) ────────── */
-        @keyframes filamentZip {
-            0% { top: -10%; opacity: 0; }
-            10% { opacity: 1; }
-            90% { opacity: 1; }
-            100% { top: 110%; opacity: 0; }
+        /* ─── AMBIENT PULSES ─────────────────── */
+        @keyframes glowPulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+        @keyframes chipPulse {
+            0%, 100% { box-shadow: 0 4px 16px rgba(31,111,235,0.2); }
+            50%  { box-shadow: 0 4px 24px rgba(31,111,235,0.5); }
         }
-        .filament-line {
-            position: absolute; left: 0; right: 0; height: 1px; z-index: 100;
-            background: #fff; box-shadow: 0 0 15px #fff, 0 0 5px var(--blue);
-            pointer-events: none; display: none;
-        }
-        .task-list.initializing .filament-line { display: block; animation: filamentZip 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-
-        /* ─── SIGNAL PULSE ──────────────────────── */
-        @keyframes signalPulse {
-            0% { box-shadow: 0 0 0 0 rgba(88,166,255,0.4); }
-            70% { box-shadow: 0 0 0 10px rgba(88,166,255,0); }
-            100% { box-shadow: 0 0 0 0 rgba(88,166,255,0); }
-        }
-        .filter-chip.active { 
-            background: var(--blue-dark); color: #fff; border-color: var(--blue-dark); 
-            animation: signalPulse 2s infinite;
-        }
-
-        @keyframes glowPulse { 0%, 100% { opacity: 0.5; filter: blur(2px); } 50% { opacity: 1; filter: blur(0px); } }
+        .filter-chip.active { animation: chipPulse 2.5s ease infinite; }
     </style>
 </head>
 <body class="state-idle">
+    <div id="threejs-canvas" style="position: fixed; inset: 0; z-index: -2; pointer-events: none; opacity: 1;"></div>
     <div id="bg-parallax"></div>
     <div id="bg-grid"></div>
     <div id="hud-scanlines"></div>
@@ -409,11 +425,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         <div id="view-tasks" class="view-content hidden">
             <div style="margin-top:20px;">
                 <div id="integrity-hud">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                        <div class="section-label" style="font-size:9px; letter-spacing:2px;">SYSTEM INTEGRITY</div>
-                        <div style="font-size:10px; color:var(--blue);" id="integrity-percent">0%</div>
+                    <div class="integrity-label-row">
+                        <div class="section-label" style="font-size:9px; letter-spacing:2px;">COMPLETION HORIZON</div>
+                        <div style="font-size:10px; color:var(--green);" id="integrity-percent">0%</div>
                     </div>
                     <div class="integrity-bar-bg"><div id="integrity-fill" class="integrity-bar-fill"></div></div>
+                    <div id="integrity-victory"></div>
                 </div>
 
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
@@ -516,6 +533,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             item.classList.toggle('active', item.id === `nav-${viewId}`);
         });
 
+        if (typeof startSimulation === 'function') {
+            if (viewId === 'dashboard') startSimulation('execution');
+            if (viewId === 'tasks') startSimulation('missions');
+        }
+
         if (viewId === 'tasks') {
             loadTasks();
             setSystemState('idle');
@@ -531,6 +553,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             else if (item.id === 'nav-focus') {
                 switchView('dashboard');
                 setSystemState('deep-work');
+                if (typeof startSimulation === 'function') startSimulation('focus');
             } else if (item.id === 'nav-ai') {
                 showToast("Synthesizing Intelligence... (Integration pending)", "var(--ai-purple)");
             } else if (item.id === 'nav-stats') {
@@ -559,134 +582,128 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         });
     });
 
-    btnDeploy.addEventListener('click', async () => {
-        const title = missionTitle.value.trim();
-        if (!title) return;
-        setSystemState('thinking');
-        const res = await fetch('/api/tasks', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ title, priority: selectedPriority, tags: [] })
+    if (btnDeploy) {
+        btnDeploy.addEventListener('click', async () => {
+            const title = missionTitle.value.trim();
+            if (!title) return;
+            setSystemState('thinking');
+            const res = await fetch('/api/tasks', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ title, priority: selectedPriority, tags: [] })
+            });
+            if (res.ok) {
+                missionTitle.value = '';
+                btnDeploy.disabled = true;
+                btnDeploy.classList.remove('active');
+                showToast('Mission deployed.', 'var(--green)');
+                await loadTasks();
+                setSystemState('idle');
+            }
         });
-        if (res.ok) {
-            missionTitle.value = '';
-            btnDeploy.disabled = true;
-            btnDeploy.classList.remove('active');
-            await loadTasks();
-            setSystemState('idle');
-        }
-    });
+    }
 
-    // ── KINETIC TASK ENGINE (FLIP) ────────────────────────────────────────
+    // ── MOMENTUM CASCADE ENGINE ───────────────────────────────────────────
     async function loadTasks() {
-        const res = await fetch('/api/tasks');
-        const data = await res.json();
-        allTasks = data.tasks || [];
+        const [tasksRes, statsRes] = await Promise.all([
+            fetch('/api/tasks'),
+            fetch('/api/stats')
+        ]);
+        const tasksData = await tasksRes.json();
+        const statsData = await statsRes.json();
+        allTasks = tasksData.tasks || [];
+        updateIntegrityMeter(statsData);
         renderTaskList();
+    }
+
+    function updateIntegrityMeter(stats) {
+        const total = stats.total || 0;
+        const done  = stats.completed || 0;
+        const pct   = stats.completion_rate || 0;
+
+        const fill    = document.getElementById('integrity-fill');
+        const pctEl   = document.getElementById('integrity-percent');
+        const victory = document.getElementById('integrity-victory');
+
+        if (fill)  fill.style.width = `${pct}%`;
+        if (pctEl) pctEl.textContent = `${Math.round(pct)}%  (${done}/${total})`;
+        if (victory) {
+            let msg = '';
+            if (total === 0)     msg = 'Fresh start. Add your first win.';
+            else if (done === 0) msg = 'Momentum building. Pick one.';
+            else if (pct < 50)   msg = 'Flow state activated.';
+            else if (pct < 100)  msg = "Mastery mode. Unstoppable.";
+
+            else                 msg = 'All tasks cleared! Celebrate.';
+            victory.style.opacity = '0';
+            setTimeout(() => { victory.textContent = msg; victory.style.opacity = '1'; }, 300);
+        }
     }
 
     function renderTaskList(tagFilter = null) {
         const container = document.getElementById('task-list-container');
         if (!container) return;
-        
-        const firstPositions = new Map();
-        container.querySelectorAll('.task-card').forEach(c => firstPositions.set(c.dataset.id, c.getBoundingClientRect()));
 
         const filtered = allTasks.filter(t => {
             const p = (t.priority || 'medium').toLowerCase();
             if (tagFilter) return (t.tags || []).includes(tagFilter);
-            if (currentFilter === 'all') return true;
-            if (currentFilter === 'high') return p === 'high';
+            if (currentFilter === 'all')    return true;
+            if (currentFilter === 'high')   return p === 'high';
             if (currentFilter === 'medium') return p === 'medium';
-            if (currentFilter === 'low') return p === 'low';
+            if (currentFilter === 'low')    return p === 'low';
             return true;
         });
 
-        // Quantum Initialization Protocol
-        const total = allTasks.length;
-        const done = allTasks.filter(t => t.completed).length; // Though we usually load active, calculate if possible
-        const percent = total > 0 ? Math.round((done / total) * 100) : 0;
-        document.getElementById('integrity-fill').style.width = `${percent}%`;
-        document.getElementById('integrity-percent').textContent = `${percent}%`;
-
         renderTagSignals();
-        container.classList.add('initializing');
-        setTimeout(() => container.classList.remove('initializing'), 800);
-
         document.getElementById('header-task-count').textContent = `${filtered.length} ACTIVE`;
-        container.innerHTML = `<div class="filament-line"></div>` + filtered.map(t => `
-            <div class="task-card priority-${t.priority}" data-id="${t.id}" onclick="openModal(${t.id}, this)">
+
+        container.innerHTML = filtered.map((t, i) => `
+            <div class="task-card priority-${(t.priority||'medium').toLowerCase()}" data-id="${t.id}"
+                 onclick="openModal(${t.id}, this)">
                 <div class="card-top">
                     <div class="cb" onclick="event.stopPropagation(); completeTask(${t.id}, this)"></div>
                     <div class="task-title">${t.title}</div>
-                    <span class="badge ${t.priority}">${t.priority}</span>
-                    ${(t.tags || []).map(tg => `<span class="badge tag" onclick="event.stopPropagation(); filterByTag('${tg}')">${tg}</span>`).join('')}
+                    <span class="badge ${(t.priority||'medium').toLowerCase()}">${(t.priority||'medium').toUpperCase()}</span>
+                    ${(t.tags||[]).map(tg =>
+                        `<span class="badge tag" onclick="event.stopPropagation(); filterByTag('${tg}')">#${tg}</span>`
+                    ).join('')}
                 </div>
             </div>
         `).join('');
 
-        // Synchronized Aperture Deployment
+        // GENTLE CASCADE: stagger each card sliding up
         container.querySelectorAll('.task-card').forEach((card, i) => {
-            const delay = (i / filtered.length) * 600; // Map to the 800ms filament duration
-            setTimeout(() => card.classList.add('visible'), delay);
-
-            card.addEventListener('mousemove', e => {
-                const r = card.getBoundingClientRect();
-                card.style.setProperty('--mouse-x', `${e.clientX - r.left}px`);
-                card.style.setProperty('--mouse-y', `${e.clientY - r.top}px`);
+            card.style.animationDelay = `${i * 80}ms`;
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => card.classList.add('cascade-visible'));
             });
-
-            const first = firstPositions.get(card.dataset.id);
-            if (first) {
-                const last = card.getBoundingClientRect();
-                const dx = first.left - last.left, dy = first.top - last.top;
-                if (dx || dy) {
-                    card.style.transition = 'none';
-                    card.style.transform = `translate(${dx}px, ${dy}px)`;
-                    requestAnimationFrame(() => {
-                        card.style.transition = 'transform 800ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 400ms';
-                        card.style.transform = '';
-                    });
-                }
-            }
         });
     }
 
     function filterTasks(crit, element) {
         currentFilter = crit;
         document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
-        if (element) {
-            element.classList.add('active');
-        } else {
-            // Find the chip with matching text if no element provided (initial load)
-            const chips = document.querySelectorAll('.filter-chip');
-            chips.forEach(c => {
-                if (c.textContent.toLowerCase().includes(crit)) c.classList.add('active');
-            });
-        }
+        if (element) element.classList.add('active');
         renderTaskList();
     }
-    
-    function filterByTag(tag, element) {
+
+    function filterByTag(tag) {
         currentFilter = 'tagged';
         document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
-        if (element) element.classList.add('active');
         renderTaskList(tag);
     }
 
     function renderTagSignals() {
         const discovery = document.getElementById('tag-signal-discovery');
         if (!discovery) return;
-        
         const uniqueTags = [...new Set(allTasks.flatMap(t => t.tags || []))];
         if (uniqueTags.length === 0) {
             discovery.innerHTML = `<div style="font-size:10px; color:var(--text-disabled); font-style:italic;">No signals discovered.</div>`;
             return;
         }
-
-        discovery.innerHTML = uniqueTags.map(tg => `
-            <div class="filter-chip" onclick="filterByTag('${tg}', this)">#${tg.toUpperCase()}</div>
-        `).join('');
+        discovery.innerHTML = uniqueTags.map(tg =>
+            `<div class="filter-chip" onclick="filterByTag('${tg}', this)">#${tg.toUpperCase()}</div>`
+        ).join('');
     }
 
     // ── MODAL SYSTEM ──────────────────────────────────────────────────────
@@ -698,16 +715,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         const mc = document.getElementById('mission-brief-modal');
         mc.style.setProperty('--origin-x', `${r.left + r.width/2}px`);
         mc.style.setProperty('--origin-y', `${r.top + r.height/2}px`);
-        
         document.getElementById('modal-content').innerHTML = `
             <div class="section-label" style="margin-bottom:8px;">MISSION BRIEFING</div>
-            <h2 style="font-size:32px; font-weight:700; color:var(--text-hero); margin-bottom:24px;">${task.title}</h2>
-            <div style="display:flex; gap:12px; margin-bottom:40px;">
-                <span class="badge ${task.priority}">${task.priority.toUpperCase()} PROTOCOL</span>
-                ${(task.tags || []).map(tg => `<span class="badge tag">${tg}</span>`).join('')}
+            <h2 style="font-size:28px; font-weight:700; color:var(--text-hero); margin-bottom:20px;">${task.title}</h2>
+            <div style="display:flex; gap:12px; margin-bottom:32px;">
+                <span class="badge ${(task.priority||'medium').toLowerCase()}">${(task.priority||'MEDIUM').toUpperCase()} PROTOCOL</span>
+                ${(task.tags||[]).map(tg => `<span class="badge tag">${tg}</span>`).join('')}
             </div>
-            <div style="background:rgba(255,255,255,0.02); padding:40px; border-radius:20px; border:1px solid var(--border-neutral); text-align:center;">
-                <div style="font-size:48px; font-family:var(--font-mono); margin-bottom:24px; color:var(--text-hero);">25:00</div>
+            <div style="background:rgba(255,255,255,0.02); padding:32px; border-radius:16px; border:1px solid var(--border-neutral); text-align:center;">
+                <div style="font-size:48px; font-family:var(--font-mono); margin-bottom:20px; color:var(--text-hero);">25:00</div>
                 <button class="btn-execute" style="width:100%;" onclick="startFocus()">START FOCUS PROTOCOL</button>
             </div>
         `;
@@ -717,13 +733,174 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     document.getElementById('btn-modal-close').onclick = closeModal;
     function startFocus() { closeModal(); setSystemState('deep-work'); }
 
-    window.completeTask = async (id, el) => {
-        el.classList.add('checked');
+    // SUCCESS RIPPLE on completion
+    window.completeTask = async (id, cbEl) => {
+        cbEl.classList.add('checked');
+        const card = cbEl.closest('.task-card');
+        if (card) card.classList.add('completing');
         await fetch(`/api/tasks/${id}/complete`, {method: 'POST'});
-        setTimeout(loadTasks, 600);
+        setTimeout(loadTasks, 750);
     };
 
-    window.onload = loadTasks;
+    window.onload = () => {
+        initThreeJS();
+        loadTasks();
+    };
+
+    // ── 3D PARTICLE SIMULATION (THREE.JS) ─────────────────────────────
+    let scene, camera, renderer;
+    let currentParticles = null;
+    let animationId = null;
+    let activeSimType = null;
+    let clock = null;
+
+    function initThreeJS() {
+        const container = document.getElementById('threejs-canvas');
+        if (!container || typeof THREE === 'undefined') return;
+
+        scene = new THREE.Scene();
+        camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 5;
+
+        renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, powerPreference: "high-performance" });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        container.appendChild(renderer.domElement);
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        clock = new THREE.Clock();
+        startSimulation('execution'); // Default on load
+    }
+
+    function cleanupParticles() {
+        if (currentParticles) {
+            scene.remove(currentParticles);
+            if (currentParticles.geometry) currentParticles.geometry.dispose();
+            if (currentParticles.material) {
+                if (currentParticles.material.map) currentParticles.material.map.dispose();
+                currentParticles.material.dispose();
+            }
+            currentParticles = null;
+        }
+        if (animationId) {
+            cancelAnimationFrame(animationId);
+            animationId = null;
+        }
+    }
+
+    function startSimulation(type) {
+        if (activeSimType === type || typeof THREE === 'undefined') return;
+        cleanupParticles();
+        activeSimType = type;
+
+        if (type === 'execution') currentParticles = createNeuralMesh();
+        else if (type === 'missions') currentParticles = createEmbers();
+        else if (type === 'focus') currentParticles = createFlowState();
+
+        if (currentParticles) {
+            scene.add(currentParticles);
+            animateSimulation(type);
+        }
+    }
+
+    // Concept 1: "The Neural Mesh" (Execution tab)
+    function createNeuralMesh() {
+        const particleCount = 200;
+        const geometry = new THREE.BufferGeometry();
+        const positions = new Float32Array(particleCount * 3);
+        for (let i = 0; i < particleCount; i++) {
+            positions[i * 3] = (Math.random() - 0.5) * 10;
+            positions[i * 3 + 1] = (Math.random() - 0.5) * 10;
+            positions[i * 3 + 2] = (Math.random() - 0.5) * 10;
+        }
+        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        const material = new THREE.PointsMaterial({
+            color: 0x3b82f6, size: 0.05, transparent: true, opacity: 0.8
+        });
+        return new THREE.Points(geometry, material);
+    }
+
+    // Concept 2: "Deep Work Embers" (Missions tab)
+    function createEmbers() {
+        const canvas = document.createElement('canvas');
+        canvas.width = 16; canvas.height = 16;
+        const ctx = canvas.getContext('2d');
+        ctx.beginPath(); ctx.arc(8, 8, 8, 0, Math.PI * 2);
+        ctx.fillStyle = 'white'; ctx.fill();
+        const sprite = new THREE.CanvasTexture(canvas);
+
+        const count = 100;
+        const geo = new THREE.BufferGeometry();
+        const pos = new Float32Array(count * 3);
+        for (let i = 0; i < count; i++) {
+            pos[i*3] = (Math.random() - 0.5) * 15;
+            pos[i*3+1] = (Math.random() - 0.5) * 15;
+            pos[i*3+2] = (Math.random() - 0.5) * 15;
+        }
+        geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        const mat = new THREE.PointsMaterial({
+            size: 0.15, map: sprite, transparent: true, opacity: 0.4,
+            color: 0xeab308, blending: THREE.AdditiveBlending, depthWrite: false
+        });
+        return new THREE.Points(geo, mat);
+    }
+
+    // Concept 3: "The Flow State" (Focus / Deep Work tab)
+    function createFlowState() {
+        const count = 1000;
+        const geo = new THREE.BufferGeometry();
+        const pos = new Float32Array(count * 3);
+        const velocities = new Float32Array(count);
+        for (let i = 0; i < count; i++) {
+            pos[i*3] = (Math.random() - 0.5) * 20;
+            pos[i*3+1] = (Math.random() - 0.5) * 20;
+            pos[i*3+2] = (Math.random() - 0.5) * 20;
+            velocities[i] = 0.01 + Math.random() * 0.03;
+        }
+        geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        const mat = new THREE.PointsMaterial({
+            size: 0.03, color: 0xa855f7, transparent: true, opacity: 0.6
+        });
+        const points = new THREE.Points(geo, mat);
+        points.userData.velocities = velocities;
+        return points;
+    }
+
+    function animateSimulation(type) {
+        if (activeSimType !== type) return;
+        animationId = requestAnimationFrame(() => animateSimulation(type));
+        if (!currentParticles) return;
+
+        if (type === 'execution') {
+            currentParticles.rotation.y += 0.001;
+            currentParticles.rotation.x += 0.0005;
+        } else if (type === 'missions') {
+            const pos = currentParticles.geometry.attributes.position.array;
+            for (let i = 0; i < 100; i++) {
+                pos[i*3 + 1] += 0.005;
+                pos[i*3] += Math.sin(Date.now() * 0.001 + i) * 0.002;
+                if (pos[i*3+1] > 5) pos[i*3+1] = -5;
+            }
+            currentParticles.geometry.attributes.position.needsUpdate = true;
+        } else if (type === 'focus') {
+            const pos = currentParticles.geometry.attributes.position.array;
+            const velocities = currentParticles.userData.velocities;
+            for (let i = 0; i < 1000; i++) {
+                pos[i*3 + 2] += velocities[i];
+                if (pos[i*3 + 2] > 10) pos[i*3 + 2] = -10;
+            }
+            currentParticles.geometry.attributes.position.needsUpdate = true;
+        }
+        renderer.render(scene, camera);
+    }
+
+
+
     </script>
 </body>
 </html>
