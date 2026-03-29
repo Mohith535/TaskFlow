@@ -1,126 +1,124 @@
-# 🌊 TaskFlow v3.2.0
-
-**TaskFlow** is a calm, privacy-first command-line task assistant built with Python. 
-
-It helps you manage tasks with clarity and minimal cognitive load, using clean and intentional CLI commands. Designed to feel supportive rather than demanding, TaskFlow now includes a robust **Distraction Blocking Engine** to help you maintain deep focus.
+# 🌊 TaskFlow v3.5.0 "Momentum"
+> **Momentum Engineering for Calm Productivity. A high-fidelity, privacy-first task ecosystem built for deep work.**
 
 ---
 
-## ✨ Features
-
-### 📋 Core Task Management
-- **Add, edit, rename, and delete tasks** fluidly from your terminal.
-- **List tasks with filters** (`--todo`, `--done`, `--priority`, `--tag`).
-- **Prioritize** your work (Low / Medium / High).
-- **Schedule tasks** using natural language (e.g., `today`, `tomorrow`, `YYYY-MM-DD`).
-- **Add notes & tags** for contextual organization.
-- **Stats & Summaries:** Human-readable overviews of your productivity.
-
-### 🎯 v3.2.0 Focus Engine & Distraction Blocking
-- **Focus Sessions:** Start timed work sessions tied directly to specific tasks.
-- **Persistent Blocklist Engine:** Save your most distracting websites (`taskflow blocklist --add`) and interactively select them when starting a session, so you never have to type them twice. You can even rapidly edit it in your default text editor (`taskflow blocklist --edit`).
-- **Mindful Exit:** Bypasses impulsive distractions by gracefully prompting the user to confirm if they're taking a purposeful break before unblocking their session early.
-- **Gentle Mode:** Reminders via console notifications when you're trying to avoid distracting apps and sites.
-- **Strict Mode (Windows Admin):** Deep system-level intervention that modifies the Windows `hosts` file to forcefully block websites and uses `taskkill` to close distracting applications.
-- **Aggressive Connection Termination:** Automatically force-closes browsers at the start of Strict Mode to sever hidden persistent DNS connections (QUIC/WebSockets).
-- **Background Auto-Unblocker:** A lightweight, detached background worker silently tracks your session and restores your `hosts` file securely when your timer expires, even if you close the terminal.
-- **Self-Healing:** Automatically detects and resolves orphaned system blocks on startup in case of ungraceful exits or PC crashes.
+## 💎 The TaskFlow Philosophy
+TaskFlow is not just a task manager; it is a **Tactical Command Center** for your cognitive load. Designed with a "Premium Emerald" aesthetic and built on a foundation of "Momentum Engineering," it provides a supportive, high-performance environment for effortless mastery.
 
 ---
 
-## 🛠️ Tech Stack & Architecture
+## ✨ Primary Interfaces
 
-- **Language:** Python 3.x
-- **Interface:** Command Line (CLI) via `argparse`
-- **Storage:** Local JSON (stored safely in `~/.taskflow/tasks.json`)
-- **Logging:** Background actions tracked in `~/.taskflow/taskflow.log`
+### 🌌 Momentum Cascade (The TUI)
+A revolutionary Terminal User Interface built with **Textual**. It prioritizes "Psychological Reinforcement" through reactive animations and mechanical precision.
+- **Magnetic Selection**: Interactive mission rows with high-fidelity "lifting" and "glowing" effects.
+- **Domino Rendering**: A structured, sequential task cascade that reduces initial visual overwhelm.
+- **Success Ripples**: Visually satisfying green-wave animations upon mission completion.
+- **Effortless Navigation**: Optimized for keyboard-only interaction with zero-latency response.
 
-### Project Structure
+### 🛰️ Mission Control (The Web HUD)
+A state-of-the-art **Three.js** powered web dashboard for the modern developer.
+- **Glassmorphism Architecture**: A sleek, translucent UI over a procedural ambient space-grid.
+- **Real-Time Telemetry**: Live synchronization of task states and focus progress with millisecond precision.
+- **Tactical HUD**: Integrated focus monitoring with holographic scanlines and automated protocol transitions.
+- **Multi-View System**: Dynamic timeline and mission board views with integrated drag-and-drop orchestration.
 
-```text
-TaskFlow/
-├── taskflow/
-│   ├── __init__.py
-│   ├── cli.py                    # Main CLI router & entrypoint
-│   └── taskflow_bg_unblocker.py  # Detached async focus unblocker
-│
-├── task_manager/
-│   ├── __init__.py
-│   ├── models.py                 # Data structures
-│   ├── storage.py                # Local JSON persistence
-│   ├── system_detector.py        # OS environment routing
-│   ├── commands.py               # Core logic (FocusManager, TimeTracker)
-│   └── blockers/
-│       ├── base.py               # Abstract blocking logic & logging
-│       ├── gentle.py             # Reminder-based cross-platform blocker
-│       └── windows.py            # Aggressive system-level hosts/process blocker
-│
-├── setup.py
-├── README.md
-└── .gitignore
+---
+
+## 🎯 The Deep Focus Engine
+
+TaskFlow features a multi-layered distraction defense system designed to protect your flow state.
+
+### 🛡️ Focus Protocols
+- **Strict Mode (System-Level)**: Force-severs digital distractions by modifying the Windows `hosts` file and terminating unauthorized background processes.
+- **Gentle Mode (Mindful)**: Provides calm, non-interruptive reminders to maintain alignment with your current mission.
+- **Persistence Engine**: A detached background worker silently tracks your session and restores system integrity automatically when the timer expires.
+
+### 🧘 Mindful Bypass Protection
+- **Anti-Impulse Logic**: Prevents accidental or impulsive session breaks by requiring intentional confirmation before early unblocking.
+- **Self-Healing Index**: Automatically detects and repairs orphaned system-level blocks on startup from previous system crashes.
+
+---
+
+## 🛠️ Tactical Command Guide
+
+### 🧱 Core Orchestration
+| Command | Description |
+| :--- | :--- |
+| `taskflow add` | Initiate an interactive mission entry sequence |
+| `taskflow list` | Query the mission board (`--todo`, `--priority`, `--tag`) |
+| `taskflow view <id>`| Access a detailed mission brief and intel |
+| `taskflow complete <id>`| Confirm mission [V] SUCCESS |
+| `taskflow delete <id>` | Purge mission from the local database |
+
+### ⏳ Chrono & Focus
+| Command | Description |
+| :--- | :--- |
+| `taskflow focus` | Activate Focus Flow (`--id`, `--minutes`, `--mode`) |
+| `taskflow schedule` | Assign mission to the timeline (`today`, `tomorrow`, `YYYY-MM-DD`) |
+| `taskflow ui` | Deploy the **Mission Control** Web HUD |
+| `taskflow ui --tui` | (Coming Soon) Launch the **Momentum Cascade** standalone |
+
+### 🧠 Intelligence & Ops
+| Command | Description |
+| :--- | :--- |
+| `taskflow stats` | Deep analytical performance telemetry |
+| `taskflow summary` | Human-readable executive mission overview |
+| `taskflow blocklist`| Manage persistent website distraction targets |
+| `taskflow focus-blocking`| Check current system-level blocking status |
+| `taskflow test-blocking`| Validate blocking system integrity (--mode) |
+| `taskflow backup` | Synchronize mission database with local backup |
+
+---
+
+## 🧬 Technical Architecture
+
+```mermaid
+graph TD
+    CLI[Tactical CLI Router] --> Engine[Deep Focus Core]
+    CLI --> UI_TUI[Momentum Cascade TUI]
+    CLI --> UI_WEB[Mission Control Web HUD]
+    UI_WEB --> API[Server API]
+    API --> Storage[(Local JSON Mainframe)]
+    Engine --> System[Windows / OS Integrity]
+    Storage --> CLI
 ```
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Deployment & Installation
 
-### Installation
-
-Install TaskFlow directly from GitHub:
-
+### Rapid Install
+Clone and install the environment directly from GitHub:
 ```bash
 pip install --upgrade git+https://github.com/Mohith535/TaskFlow.git
 ```
 
-### Basic Usage
-
-Once installed, `taskflow` is available globally in your terminal:
-
+### Protocol Launch
 ```bash
-# Task Management
+# Register a new mission
 taskflow add
-taskflow list --todo --priority high
-taskflow complete 1
 
-# Focus & Blocking (Strict Mode requires running terminal as Administrator)
-taskflow blocklist --add youtube.com twitter.com
+# Start a 25-minute Strict Focus session
 taskflow focus --id 1 --minutes 25 --mode strict
 
-# Maintenance
-taskflow stats
-taskflow summary
-taskflow help
+# Launch the Web HUD
+taskflow ui
 ```
 
 ---
 
-## 🔒 Data & Privacy
+## 🔒 Privacy & Sovereignty
+TaskFlow is a **100% Offline** system. 
+- ❌ **No Cloud Synchronization**
+- ❌ **No External Telemetry**
+- ❌ **No Background Surveillance**
 
-TaskFlow is designed with extreme privacy in mind. It stores all user data locally in:
-
-`~/.taskflow`
-
-- ❌ **No cloud sync**
-- ❌ **No telemetry**
-- ❌ **No tracking**
-- ❌ **No background services** *(Except the temporary auto-unblock worker during active focus sessions)*
-
-**All data stays on your machine.**
+**Your productivity data is your own. It never leaves your machine.**
 
 ---
 
-## 🧘‍♂️ Design Philosophy
-
-TaskFlow is intentionally calm, minimal, and focused. It is designed as a core task management module, which can later integrate into higher-level productivity systems.
-
-The v3.2.0 updates bring a robust, fault-tolerant focus engine to the completely offline, terminal-first environment. 
-
----
-
-## 📄 License
-This project is licensed under the **MIT License**.
-
-## 👨‍💻 Author
-**K Mohith Kannan**  
-GitHub: [@Mohith535](https://github.com/Mohith535)
-
+## 📄 MIT License
+Copyright (c) 2026 **K Mohith Kannan**. 
+Built for those who demand clarity within the terminal.
