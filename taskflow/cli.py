@@ -8,6 +8,36 @@ Calm, Powerful CLI Task Assistant with Focus Blocking
 import sys
 import os
 import argparse
+import difflib
+
+class CustomParser(argparse.ArgumentParser):
+    """Custom parser for cleaner errors and fuzzy suggestions."""
+    def error(self, message):
+        import re
+        wrong_cmd = None
+        if "invalid choice: '" in message:
+            match = re.search(r"invalid choice: '([^']*)'", message)
+            if match:
+                wrong_cmd = match.group(1)
+        
+        print(f"\n❌ Unknown command: '{wrong_cmd or 'unknown'}'")
+        
+        if wrong_cmd:
+            # Extract choices from subparsers if they exist
+            choices = []
+            for action in self._actions:
+                if isinstance(action, argparse._SubParsersAction):
+                    choices.extend(action.choices.keys())
+            
+            suggestions = difflib.get_close_matches(wrong_cmd, choices, n=1, cutoff=0.5)
+            if suggestions:
+                print(f"💡 Did you mean 'taskflow {suggestions[0]}'?\n")
+            else:
+                print(f"💡 Run 'taskflow help' to see all commands.\n")
+        else:
+            print(f"💡 Tip: {message}\n")
+            
+        sys.exit(2)
 
 # Fix for Windows console encoding
 if sys.platform == "win32":
@@ -24,7 +54,6 @@ from task_manager.commands import (
     delete_task,
     rename_task,
     stats_tasks,
-    show_help,
     undo_task,
     edit_task,
     search_tasks,
@@ -46,7 +75,9 @@ from task_manager.commands import (
     test_blocking,
     emergency_cleanup,
     manage_blocklist,
-    open_web_ui
+    manage_blocklist,
+    open_web_ui,
+    kill_web_ui
 )
 
 APP_NAME = "TaskFlow"
@@ -54,6 +85,55 @@ APP_VERSION = "v3.2.0"
 APP_TAGLINE = "Calm, Powerful CLI Task Assistant with Focus Blocking"
 
 
+def show_help() -> None:
+    """Show comprehensive help with premium formatting."""
+    print(f"""
+  TaskFlow v3.2.0 — Calm, Powerful CLI Task Assistant
+  {"─" * 60}
+
+  CORE COMMANDS:
+    add                     Add mission interactively
+    list                    List your mission board (--todo, --done)
+    view <id>               View detailed mission brief
+    edit <id>               Recalibrate mission parameters
+    complete <id>           Mark mission as [V] SUCCESS
+    undo <id>               Re-open mission to [ ] TODO
+    delete <id>             Purge mission from record
+
+  CHRONO & FOCUS (v2.0):
+    focus --id <id>         Initiate Focus Flow (default 25m)
+    focus --status          Check active focus telemetry
+    focus --end             Gracefully terminate focus session
+    schedule <id> <date>    Assign mission to timeline (YYYY-MM-DD/today)
+    today                   Review missions assigned for today
+
+  ENHANCED TELEMETRY:
+    note <id>               Append intelligence to mission
+    tag <id> <tags...>      Categorize mission (multi-tag support)
+    priority <id> <level>   Adjust mission priority (low/medium/high)
+    search <keyword>        Query mission database
+    summary                 Human-readable mission overview
+    stats                   Deep analytical performance metrics
+
+  MAINTENANCE & SAFETY:
+    clear                   Prune completed missions
+    backup                  Create manual mission database backup
+    reset                   Hard reset mission database (Caution!)
+    help                    Display this assistance manual
+    version                 Show system version
+    ui                      Launch the Mission Control Web HUD
+
+  EXAMPLES:
+    taskflow add
+    taskflow focus --id 7 --minutes 45 --mode strict
+    taskflow list --todo --priority high --sort due
+
+  TIPS:
+    • Use '--all' with list to see the full mission board
+    • Mode 'strict' in focus prevents digital distractions
+    • Regular backups ensure mission data integrity
+  {"─" * 60}
+""")
 def show_version():
     """Show version information."""
     print(f"{APP_NAME} {APP_VERSION} — {APP_TAGLINE}")
@@ -62,7 +142,7 @@ def show_version():
 
 def create_parser():
     """Create argparse parser that matches your command structure."""
-    parser = argparse.ArgumentParser(
+    parser = CustomParser(
         description=f"{APP_NAME} {APP_VERSION} — {APP_TAGLINE}",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
@@ -186,11 +266,14 @@ Examples:
         ('reset', 'Reset all tasks (with confirmation)'),
         ('version', 'Show version information'),
         ('help', 'Show help message'),
-        ('ui', 'Launch the Developer Web Dashboard')
+        ('ui', 'Launch the Developer Web Dashboard'),
+        ('ui-kill', 'Kill any running Web UI server')
     ]
     
     for cmd, help_text in simple_commands:
-        subparsers.add_parser(cmd, help=help_text)
+        p = subparsers.add_parser(cmd, help=help_text)
+        if cmd == 'ui':
+            p.add_argument('--restart', '-r', action='store_true', help='Force restart the server')
     
     return parser
 
@@ -230,9 +313,11 @@ def main():
     
     try:
         args = parser.parse_args()
-    except SystemExit:
-        # argparse prints help on error, but we want our help
-        show_help()
+    except SystemExit as e:
+        # If it's a normal exit (e.g. --help), just exit
+        if e.code == 0:
+            sys.exit(0)
+        # CustomParser.error already printed the message and will exit with code 2
         return
     
     # If no command specified, show help
@@ -342,7 +427,10 @@ def main():
             show_version()
             
         elif args.command == 'ui':
-            open_web_ui()
+            open_web_ui(force=args.restart)
+
+        elif args.command == 'ui-kill':
+            kill_web_ui()
 
         elif args.command == "ids":
             list_ids()

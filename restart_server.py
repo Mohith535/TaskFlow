@@ -1,7 +1,7 @@
 """Kill any process on port 18082 and start a fresh server."""
 import subprocess, sys, time
 
-# Find and kill process on port 18082
+# Find and kill process on port 18083
 result = subprocess.run(
     ['netstat', '-ano'],
     capture_output=True, text=True
@@ -9,7 +9,7 @@ result = subprocess.run(
 
 pids_to_kill = set()
 for line in result.stdout.splitlines():
-    if ':18082' in line and 'LISTENING' in line:
+    if ':18083' in line and 'LISTENING' in line:
         parts = line.split()
         if parts:
             pids_to_kill.add(parts[-1])
@@ -17,7 +17,7 @@ for line in result.stdout.splitlines():
 if not pids_to_kill:
     # Try broader search
     for line in result.stdout.splitlines():
-        if ':18082' in line:
+        if ':18083' in line:
             parts = line.split()
             if parts:
                 pids_to_kill.add(parts[-1])
@@ -31,7 +31,7 @@ if pids_to_kill:
             print(f'Could not kill {pid}: {e}')
     time.sleep(1)
 else:
-    print('No process found on port 18082')
+    print('No process found on port 18083')
 
 # Start fresh server
 import os
@@ -47,7 +47,7 @@ time.sleep(2)
 # Verify
 import urllib.request
 try:
-    resp = urllib.request.urlopen('http://127.0.0.1:18082')
+    resp = urllib.request.urlopen('http://127.0.0.1:18083')
     body = resp.read().decode('utf-8', errors='replace')
     if 'cascadeIn' in body:
         print('SUCCESS: New Momentum Cascade server is live!')

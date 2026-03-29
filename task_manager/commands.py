@@ -480,26 +480,85 @@ def add_task() -> bool:
         Messenger.careful(f"Could not add task: {e}")
         return False
 
-def open_web_ui():
+def kill_web_ui():
+    """Find and terminate any existing Web UI server processes on port 18083."""
+    import subprocess
+    import sys
+    import os
+    import signal
+    import re
+
+    port = 18083
+    print(f"📡 Scanning for Mission Control processes on port {port}...")
+    
+    try:
+        if sys.platform == "win32":
+            # Windows: Find PID using netstat
+            cmd = f'netstat -ano | findstr :{port}'
+            output = subprocess.check_output(cmd, shell=True).decode()
+            pids = set()
+            for line in output.strip().split('\n'):
+                if 'LISTENING' in line:
+                    parts = line.split()
+                    if len(parts) >= 5:
+                        pids.add(parts[4])
+            
+            if not pids:
+                print("✅ No active server processes found.")
+                return True
+
+            for pid in pids:
+                print(f"🛑 Terminating PID {pid}...")
+                subprocess.run(['taskkill', '/F', '/PID', pid], capture_output=True)
+            
+        else:
+            # Unix/Mac: Find PID using lsof
+            try:
+                cmd = f'lsof -ti:{port}'
+                pid = subprocess.check_output(cmd, shell=True).decode().strip()
+                if pid:
+                    print(f"🛑 Terminating PID {pid}...")
+                    os.kill(int(pid), signal.SIGKILL)
+                else:
+                    print("✅ No active server processes found.")
+                    return True
+            except subprocess.CalledProcessError:
+                print("✅ No active server processes found.")
+                return True
+
+        print("✨ Mission Control cleared.")
+        return True
+    except Exception as e:
+        print(f"⚠️  Error during cleanup: {e}")
+        return False
+
+
+def open_web_ui(force=False):
     """Launch the System Control Web Dashboard (Quantum Resolve)."""
     import subprocess
     import time
     import webbrowser
     import socket
+    import sys
     from pathlib import Path
-    
+
     port = 18083
     url = f"http://127.0.0.1:{port}"
     
-    # Check if port is taken
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    is_taken = sock.connect_ex(('127.0.0.1', port)) == 0
-    sock.close()
-    
-    if is_taken:
-        print(f"📡 Mission Control already active at {url}")
-        webbrowser.open(url)
-        return
+    if force:
+        kill_web_ui()
+        time.sleep(0.5) # Brief cooldown for port release
+    else:
+        # Check if port is taken
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        is_taken = sock.connect_ex(('127.0.0.1', port)) == 0
+        sock.close()
+        
+        if is_taken:
+            print(f"📡 Mission Control already active at {url}")
+            print("   (Use 'taskflow ui --restart' to force a fresh session)")
+            webbrowser.open(url)
+            return
 
     print("🚀 Initializing Quantum Resolve HUD...")
     # Get server path
@@ -704,57 +763,53 @@ def stats_tasks() -> None:
 
 
 def show_help() -> None:
-    """Show comprehensive help."""
+    """Show comprehensive help with premium formatting."""
     print(f"""
-TaskFlow v2.5.0 — Calm, Powerful CLI Task Assistant
-{'='*50}
+  TaskFlow v3.2.0 — Calm, Powerful CLI Task Assistant
+  {"─" * 60}
 
-CORE TASK MANAGEMENT:
-  add                     Add a new task (interactive)
-  list                    List all tasks
-  list --todo             List pending tasks
-  list --done             List completed tasks
-  view <id>               View task details
-  edit <id>               Edit task (all fields)
-  rename <id>             Rename a task
-  complete <id>           Mark task as completed
-  undo <id>               Move task back to TODO
-  delete <id>             Delete a task
+  CORE COMMANDS:
+    add                     Add mission interactively
+    list                    List your mission board (--todo, --done)
+    view <id>               View detailed mission brief
+    edit <id>               Recalibrate mission parameters
+    complete <id>           Mark mission as [V] SUCCESS
+    undo <id>               Re-open mission to [ ] TODO
+    delete <id>             Purge mission from record
 
-TIME & FOCUS MANAGEMENT (v2.0):
-  focus --id <id> [--minutes N]  Start focus session (default: 25 min)
-  focus --status            Check focus session
-  focus --end               End current focus
-  schedule <id> <date>      Schedule task (YYYY-MM-DD/today/tomorrow)
-  today                     Show today's scheduled tasks
+  CHRONO & FOCUS (v2.0):
+    focus --id <id>         Initiate Focus Flow (default 25m)
+    focus --status          Check active focus telemetry
+    focus --end             Gracefully terminate focus session
+    schedule <id> <date>    Assign mission to timeline (YYYY-MM-DD/today)
+    today                   Review missions assigned for today
 
-ENHANCED FEATURES:
-  note <id>                 Add/update notes
-  tag <id> <tag1> [tag2]    Add tags to task
-  priority <id> <level>     Change priority (low/medium/high)
-  search <keyword>          Search tasks
-  summary                   Human-readable summary
-  stats                     Detailed statistics
+  ENHANCED TELEMETRY:
+    note <id>               Append intelligence to mission
+    tag <id> <tags...>      Categorize mission (multi-tag support)
+    priority <id> <level>   Adjust mission priority (low/medium/high)
+    search <keyword>        Query mission database
+    summary                 Human-readable mission overview
+    stats                   Deep analytical performance metrics
 
-SAFETY & MAINTENANCE:
-  clear                     Clear completed tasks
-  backup                    Create manual backup
-  reset                     Reset all tasks (with confirmation)
-  help                      Show this help
-  version                   Show version
+  MAINTENANCE & SAFETY:
+    clear                   Prune completed missions
+    backup                  Create manual mission database backup
+    reset                   Hard reset mission database (Caution!)
+    help                    Display this assistance manual
+    version                 Show system version
+    ui                      Launch the Mission Control Web HUD
 
-EXAMPLES:
-  taskflow add
-  taskflow list --todo --priority high
-  taskflow focus --id 15 --minutes 30
-  taskflow schedule 8 today
-  taskflow tag 3 work project-x
+  EXAMPLES:
+    taskflow add
+    taskflow focus --id 7 --minutes 45 --mode strict
+    taskflow list --todo --priority high --sort due
 
-TIPS:
-  • Use '--all' with list to see all tasks
-  • Tags help organize related tasks
-  • Schedule tasks for better planning
-  • Regular backups keep your data safe
+  TIPS:
+    • Use '--all' with list to see the full mission board
+    • Mode 'strict' in focus prevents digital distractions
+    • Regular backups ensure mission data integrity
+  {"─" * 60}
 """)
 
 

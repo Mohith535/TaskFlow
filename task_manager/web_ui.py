@@ -42,6 +42,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             --text-body:      #C9D1D9;
             --text-muted:     #8B949E;
             --text-disabled:  #6E7681;
+            
+            --emerald:       #4ade80;
+            --emerald-glow:  rgba(74, 222, 128, 0.15);
 
             --font-mono: 'DM Mono', monospace;
             --font-body: 'Inter', sans-serif;
@@ -145,12 +148,24 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         .nav-item {
             display: flex; align-items: center; gap: 12px; padding: 12px;
             border-radius: 10px; cursor: pointer; color: var(--text-muted);
-            transition: all 200ms ease; margin-bottom: 4px; border: 1px solid transparent;
+            transition: all 400ms cubic-bezier(0.16, 1, 0.3, 1); 
+            margin-bottom: 4px; border: 1px solid transparent;
+            will-change: transform, background, border-color, box-shadow;
         }
-        .nav-item:hover { background: var(--bg-hover); color: var(--text-body); }
+        .nav-item:hover { 
+            background: var(--emerald-glow); 
+            color: var(--text-hero);
+            border-color: var(--emerald);
+            transform: translateY(-1px) translateX(2px);
+            box-shadow: 0 4px 20px rgba(74, 222, 128, 0.15);
+            text-shadow: 0 0 8px rgba(74, 222, 128, 0.3);
+        }
         .nav-item.active { 
-            background: rgba(88,166,255,0.08); color: var(--blue); 
-            border-color: rgba(88,166,255,0.1); font-weight: 600;
+            background: rgba(74, 222, 128, 0.1); 
+            color: var(--emerald); 
+            border-color: rgba(74, 222, 128, 0.2); 
+            font-weight: 600;
+            box-shadow: inset 0 0 10px rgba(74, 222, 128, 0.05);
         }
         .nav-icon { font-size: 16px; width: 20px; text-align: center; }
 
@@ -219,6 +234,47 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         .btn-deploy.active { background: var(--blue-dark); color: #fff; border-color: var(--blue-dark); }
         .btn-deploy.active:hover { box-shadow: 0 8px 24px rgba(31,111,235,0.4); transform: translateY(-1px); }
 
+        /* ─── DEPLOYMENT MODAL (PREMIUM) ───────── */
+        .deploy-modal-overlay {
+            position: fixed; inset: 0; background: rgba(2, 6, 23, 0.85);
+            backdrop-filter: blur(40px); -webkit-backdrop-filter: blur(40px); z-index: 10000;
+            display: none; align-items: center; justify-content: center;
+            opacity: 0; pointer-events: none; transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .deploy-modal-overlay.active { display: flex; opacity: 1; pointer-events: auto; }
+        
+        .deploy-modal {
+            background: linear-gradient(165deg, rgba(22, 27, 34, 0.95), rgba(13, 17, 23, 1));
+            box-sizing: border-box;
+            border: 1px solid rgba(88, 166, 255, 0.25);
+            box-shadow: 0 0 64px rgba(0, 0, 0, 0.9), inset 0 1px 1px rgba(255,255,255,0.1);
+            border-radius: 28px; width: 100%; max-width: 580px; padding: 48px;
+            transform: scale(0.85) translateY(60px) rotateX(-10deg); opacity: 0;
+            transition: all 0.7s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative; overflow: visible;
+        }
+        .deploy-modal::before {
+            content: ''; position: absolute; top: -1px; left: 50%; width: 60%; height: 1px;
+            transform: translateX(-50%);
+            background: linear-gradient(90deg, transparent, rgba(88,166,255,0.6), transparent);
+        }
+        .deploy-modal-overlay.active .deploy-modal {
+            transform: scale(1) translateY(0) rotateX(0deg); opacity: 1;
+        }
+        .close-modal {
+            position: absolute; top: -16px; right: -16px; width: 44px; height: 44px;
+            border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            background: var(--bg-surface); color: var(--text-disabled); border: 1px solid var(--border-neutral);
+            font-size: 24px; cursor: pointer; transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            z-index: 100; box-shadow: 0 8px 16px rgba(0,0,0,0.5);
+        }
+        .close-modal:hover { 
+            background: rgba(248, 81, 73, 1); color: #fff; 
+            transform: rotate(180deg) scale(1.1); border-color: transparent;
+            box-shadow: 0 0 24px rgba(248, 81, 73, 0.6);
+        }
+        .pill-btn:hover { border-color: var(--blue); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+
         /* ─── MISSION QUEUE ────────────────────── */
         .filter-hud { display: flex; gap: 12px; margin: 24px 0 16px; flex-wrap: wrap; }
         .filter-chip {
@@ -230,7 +286,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         .filter-chip.active { background: var(--blue-dark); color: #fff; border-color: var(--blue-dark); box-shadow: 0 4px 16px rgba(31,111,235,0.4); }
 
         /* ─── TASK CARDS: MOMENTUM CASCADE ─────── */
-        .task-list { display: flex; flex-direction: column; gap: 10px; position: relative; overflow: hidden; }
+        .task-list { 
+            display: flex; flex-direction: column; gap: 12px; position: relative; 
+            overflow: visible; padding-right: 0; /* Expanded to fill the container */
+        }
 
         @keyframes cascadeIn {
             0%   { opacity: 0; transform: translateY(18px); }
@@ -242,39 +301,187 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             60%  { box-shadow: 0 0 0 12px rgba(63,185,80,0); }
             100% { box-shadow: none; background: rgba(13,17,23,0.8); }
         }
+        @keyframes focusBtnGlow {
+            0%, 100% { box-shadow: 0 0 8px rgba(88,166,255,0.3), 0 0 20px rgba(88,166,255,0.1); }
+            50%      { box-shadow: 0 0 16px rgba(88,166,255,0.6), 0 0 40px rgba(88,166,255,0.2); }
+        }
+        @keyframes focusBtnRipple {
+            0%   { transform: scale(1); opacity: 0.6; }
+            100% { transform: scale(2.2); opacity: 0; }
+        }
+
+        /* Wrapper enables the play button to overflow outside the card */
+        .task-card-wrap {
+            position: relative;
+            overflow: visible;
+        }
 
         .task-card {
-            background: rgba(13, 17, 23, 0.8);
-            border: 1px solid rgba(88, 166, 255, 0.08);
+            background: linear-gradient(135deg, rgba(13, 17, 23, 0.9), rgba(22, 27, 34, 0.9));
+            border: 1px solid rgba(88, 166, 255, 0.12);
             border-left: 3px solid var(--border-neutral);
-            border-radius: 10px; padding: 16px 20px; cursor: pointer;
+            border-radius: 12px; padding: 18px 22px; cursor: pointer;
             position: relative; overflow: hidden;
-            opacity: 0; /* starts invisible, cascade adds animation */
-            backdrop-filter: blur(10px);
-            transition: border-color 250ms ease, box-shadow 250ms ease, transform 250ms ease;
+            width: 100%;
+            opacity: 0;
+            backdrop-filter: blur(var(--system-blur));
+            transition: all 450ms cubic-bezier(0.16, 1, 0.3, 1);
+            box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+            will-change: transform, opacity, box-shadow;
         }
         .task-card.cascade-visible {
-            animation: cascadeIn 0.45s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+            animation: cascadeIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
         }
         .task-card.priority-high  { border-left-color: var(--red); }
         .task-card.priority-medium { border-left-color: var(--amber); }
         .task-card.priority-low   { border-left-color: var(--blue); }
+
+        /* Hover: Tactical Shift */
+        .task-card-wrap:hover .task-card {
+            background: rgba(22, 27, 34, 0.98);
+            border-color: rgba(74, 222, 128, 0.4); 
+            box-shadow: 0 0 25px rgba(74, 222, 128, 0.15), 0 20px 48px rgba(0,0,0,0.6);
+            transform: translateX(-8px) translateY(-2px) scale(1.002);
+        }
+
+        /* Border Beam (Premium Detail) */
+        .task-card::before {
+            content: ''; position: absolute; inset: 0;
+            border-radius: 12px; padding: 1px;
+            background: linear-gradient(90deg, transparent, var(--emerald), transparent);
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            mask-composite: exclude;
+            opacity: 0; transition: opacity 0.3s;
+            background-size: 200% 100%; animation: borderBeam 3s linear infinite;
+            pointer-events: none;
+        }
+        .task-card-wrap:hover .task-card::before { opacity: 0.8; }
+
+        @keyframes borderBeam { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+        /* Tactical Scanline on Hover */
         .task-card::after {
-            content: '▶ START FOCUS'; position: absolute; right: 20px; top: 50%; transform: translateY(-50%);
-            font-size: 10px; font-weight: 700; color: var(--blue); opacity: 0; transition: opacity 0.2s ease; pointer-events: none;
-            text-shadow: 0 0 10px rgba(88,166,255,0.4);
+            content: ''; position: absolute; inset: 0;
+            background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(74,222,128,0.03) 3px, transparent 4px);
+            opacity: 0; pointer-events: none; transition: opacity 400ms;
+            z-index: 10;
         }
-        .task-card:hover {
-            background: rgba(22, 27, 34, 0.95);
-            border-color: rgba(88,166,255,0.3);
-            box-shadow: 0 0 0 1px rgba(88,166,255,0.1), 0 8px 32px rgba(0,0,0,0.5);
-            transform: translateY(-2px);
+        
+        /* ─── TACTICAL ACTION STRIP (Integrated) ─── */
+        .task-action-strip {
+            position: absolute; right: 0; top: 0; bottom: 0;
+            width: 0; opacity: 0; overflow: hidden;
+            background: linear-gradient(90deg, transparent, rgba(74, 222, 128, 0.1));
+            backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+            display: flex; align-items: center; justify-content: flex-end;
+            gap: 12px; padding: 0;
+            transition: all 400ms cubic-bezier(0.16, 1, 0.3, 1);
+            border-radius: 0 12px 12px 0;
+            z-index: 20;
         }
-        .task-card:hover::after { opacity: 1; }
+        .task-card:hover .task-action-strip {
+            width: 100px; opacity: 1; padding: 0 20px;
+        }
+        
+        .action-icon {
+            width: 32px; height: 32px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            background: rgba(255,255,255,0.03); border: 1px solid rgba(74, 222, 128, 0.2);
+            color: var(--emerald); cursor: pointer; transition: all 200ms;
+        }
+        .action-icon:hover {
+            background: var(--emerald); color: #000;
+            box-shadow: 0 0 20px var(--emerald);
+            transform: scale(1.1);
+        }
+        .action-icon svg { width: 14px; height: 14px; fill: currentColor; }
+        .action-icon.purge:hover {
+            background: var(--red); color: #fff; border-color: var(--red);
+            box-shadow: 0 0 20px var(--red);
+        }
+
+        .task-card-wrap:hover .task-card::after {
+            opacity: 1;
+            animation: holographicSweep 3s linear infinite;
+        }
+
+        @keyframes holographicSweep { 0% { background-position: 0 0; } 100% { background-position: 0 40px; } }
+
         .task-card.completing {
             animation: successRipple 0.6s ease forwards;
             pointer-events: none;
         }
+
+        /* ─── TACTICAL CONTROL NODE (Integrated side dock) ─── */
+        .task-control-node {
+            position: absolute;
+            right: -60px; top: 0; bottom: 0; width: 52px;
+            background: rgba(13, 17, 23, 0.6);
+            backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(88, 166, 255, 0.3);
+            border-left: 1px solid rgba(88, 166, 255, 0.6);
+            border-radius: 0 12px 12px 0;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; z-index: 20; opacity: 0;
+            transform: translateX(-40px);
+            transition: all 450ms cubic-bezier(0.34, 1.56, 0.64, 1);
+            pointer-events: none;
+            overflow: hidden;
+        }
+        /* Dock content / Core */
+        .control-node-core {
+            width: 32px; height: 32px; border-radius: 50%;
+            background: rgba(88, 166, 255, 0.1);
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.3s ease; position: relative;
+            box-shadow: 0 0 15px rgba(88,166,255,0.2);
+        }
+        .control-node-core svg {
+            width: 14px; height: 14px; fill: var(--blue);
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        /* Radar sweep effect inside the node */
+        .task-control-node::before {
+            content: ''; position: absolute; inset: 0;
+            background: linear-gradient(0deg, transparent, rgba(88, 166, 255, 0.1), transparent);
+            height: 200%; top: -100%; transition: none;
+            pointer-events: none;
+        }
+        .task-card-wrap:hover .task-control-node::before {
+            animation: radarSweep 2s linear infinite;
+        }
+        @keyframes radarSweep { 0% { transform: translateY(0); } 100% { transform: translateY(50%); } }
+
+        /* Active State */
+        .task-card-wrap:hover .task-control-node {
+            opacity: 1; pointer-events: auto;
+            transform: translateX(0);
+        }
+        
+        /* Node Hover Detail */
+        .task-control-node:hover .control-node-core {
+            background: var(--blue-dark);
+            transform: scale(1.1);
+            box-shadow: 0 0 30px rgba(31,111,235,0.6);
+        }
+        .task-control-node:hover svg { fill: #fff; transform: scale(1.2); }
+
+        /* Priority-specific Nodes */
+        .task-card-wrap.priority-high .task-control-node { 
+            border-color: rgba(248, 81, 73, 0.4); 
+            border-left-color: rgba(248, 81, 73, 0.6);
+        }
+        .task-card-wrap.priority-high .control-node-core svg { fill: var(--red); }
+        .task-card-wrap.priority-high:hover .task-control-node { box-shadow: 0 0 20px rgba(248,81,73,0.1); }
+        .task-card-wrap.priority-high .task-control-node:hover .control-node-core { background: var(--red); }
+
+        .task-card-wrap.priority-medium .task-control-node { 
+            border-color: rgba(210, 153, 34, 0.4); 
+            border-left-color: rgba(210, 153, 34, 0.6);
+        }
+        .task-card-wrap.priority-medium .control-node-core svg { fill: var(--amber); }
+        .task-card-wrap.priority-medium:hover .task-control-node { box-shadow: 0 0 20px rgba(210,153,34,0.1); }
+        .task-card-wrap.priority-medium .task-control-node:hover .control-node-core { background: var(--amber); }
 
         /* ─── INTEGRITY / COMPLETION HORIZON ───── */
         #integrity-hud {
@@ -306,16 +513,42 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         .cb.checked::after { content: '✓'; color: #fff; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; }
 
         /* ─── TIMELINE VIEW CSS ────────────────── */
-        .timeline-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 12px; margin-top: 24px; }
+        .timeline-grid { 
+            display: flex; gap: 12px; margin-top: 24px; 
+            transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+            width: max-content; min-width: 100%;
+        }
+        .timeline-grid.month-mode { display: grid; grid-template-columns: repeat(7, 1fr); width: 100%; }
+
         .timeline-day {
             background: rgba(22, 27, 34, 0.4); border: 1px solid var(--border-neutral);
             border-radius: 12px; min-height: 400px; display: flex; flex-direction: column;
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1), transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+            flex: 1 1 200px; max-width: 450px;
         }
+        .timeline-grid.month-mode .timeline-day { flex: none; max-width: none; }
+
+        .timeline-day:hover { transform: translateY(-4px); border-color: rgba(88, 166, 255, 0.3); background: rgba(22, 27, 34, 0.6); }
+
         .timeline-day-header {
-            text-align: center; padding: 12px; font-size: 11px; font-weight: 700;
-            color: var(--text-disabled); border-bottom: 1px solid var(--border-neutral);
-            letter-spacing: 1px;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 10px 14px; border-bottom: 1px solid var(--border-neutral);
+            min-height: 42px; width: 100%; box-sizing: border-box;
+            user-select: none; -webkit-user-select: none; pointer-events: none;
         }
+        .day-label { 
+            font-size: 11px; font-weight: 700; color: var(--text-disabled); 
+            letter-spacing: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            min-width: 0; flex: 1; pointer-events: none;
+        }
+        .date-number { 
+            font-size: 14px; color: var(--text-hero); font-weight: 700; 
+            font-family: var(--font-mono); opacity: 1; margin: 0 0 0 8px; position: static;
+            text-shadow: 0 0 10px rgba(88,166,255,0.4); flex-shrink: 0;
+            user-select: none; -webkit-user-select: none; pointer-events: none;
+        }
+
         .timeline-dropzone { flex-grow: 1; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
         .timeline-dropzone.drag-over { background: rgba(88,166,255,0.05); border-radius: 0 0 12px 12px; }
 
@@ -323,17 +556,174 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             background: rgba(13, 17, 23, 0.9); border: 1px solid rgba(88,166,255,0.1);
             border-left: 3px solid var(--blue); padding: 10px; border-radius: 8px;
             font-size: 11px; color: var(--text-body); cursor: grab;
+            transition: transform 0.2s, box-shadow 0.2s;
         }
+        .timeline-task:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
         .timeline-task.priority-high { border-left-color: var(--red); }
         .timeline-task.priority-medium { border-left-color: var(--amber); }
         .timeline-task.dragging { opacity: 0.5; }
+
+        /* Multi-View Components */
+        .timeline-header-wrap { display: flex; justify-content: space-between; align-items: center; position: relative; z-index: 100; }
+        .timeline-selector { position: relative; }
+        .timeline-btn {
+            background: rgba(22, 27, 34, 0.6);
+            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--border-neutral);
+            padding: 8px 16px; border-radius: 20px;
+            color: var(--text-hero); font-size: 12px; font-weight: 600;
+            cursor: pointer; display: flex; align-items: center; gap: 8px;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .timeline-btn:hover { background: var(--bg-hover); border-color: var(--blue); box-shadow: 0 0 15px rgba(88,166,255,0.2); }
+        .timeline-btn:active { transform: scale(0.95); }
+        .timeline-btn::after {
+            content: ''; position: absolute; inset: 0; border-radius: inherit;
+            background: rgba(255,255,255,0.1); opacity: 0; transition: opacity 0.3s;
+        }
+        .timeline-btn:active::after { opacity: 1; transition: 0s; }
+        .timeline-btn .chevron { transition: transform 0.3s; font-size: 10px; opacity: 0.6; }
+
+        .timeline-btn.active .chevron { transform: rotate(180deg); }
+
+        .timeline-dropdown {
+            position: absolute; top: calc(100% + 8px); left: 0; min-width: 160px;
+            background: rgba(22, 27, 34, 0.95); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--border-neutral); border-radius: 12px;
+            padding: 6px; box-shadow: 0 16px 32px rgba(0,0,0,0.5);
+            display: none; flex-direction: column; gap: 2px;
+            opacity: 0; transform: translateY(-10px); transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .timeline-dropdown.show { display: flex; opacity: 1; transform: translateY(0); }
+        .dropdown-item {
+            padding: 8px 12px; border-radius: 8px; font-size: 12px; color: var(--text-muted);
+            cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: space-between;
+        }
+        .dropdown-item:hover { background: rgba(88,166,255,0.1); color: var(--text-hero); }
+        .dropdown-item.active { background: rgba(88,166,255,0.15); color: var(--blue); font-weight: 600; }
+
+        .timeline-nav { display: flex; align-items: center; gap: 16px; opacity: 0; transform: translateX(20px); transition: all 0.5s; }
+        .timeline-nav.show { opacity: 1; transform: translateX(0); }
+        .nav-btn {
+            background: transparent; border: 1px solid var(--border-neutral);
+            color: var(--text-disabled); width: 28px; height: 28px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s;
+        }
+        .nav-btn:hover { border-color: var(--blue); color: var(--blue); background: rgba(88,166,255,0.05); }
+        .current-nav-label { font-size: 14px; font-weight: 600; color: var(--text-hero); font-family: var(--font-mono); min-width: 120px; text-align: center; }
+
+        /* Tactical Scrolling Components */
+        .timeline-viewport {
+            overflow-x: auto; overflow-y: hidden;
+            width: 100%; position: relative; cursor: grab;
+            padding-bottom: 24px;
+            user-select: none; -webkit-user-select: none;
+        }
+        /* Premium Minimalist Scrollbar */
+        .timeline-viewport::-webkit-scrollbar { height: 2px; }
+        .timeline-viewport::-webkit-scrollbar-track { background: transparent; }
+        .timeline-viewport::-webkit-scrollbar-thumb { 
+            background: rgba(88, 166, 255, 0.1); border-radius: 1px;
+            transition: all 0.3s;
+        }
+        .timeline-viewport:hover::-webkit-scrollbar-thumb,
+        .timeline-viewport:active::-webkit-scrollbar-thumb { 
+            background: var(--blue); box-shadow: 0 0 10px var(--blue);
+        }
+        .timeline-viewport:active { cursor: grabbing; }
+        
+        .view-timeline {
+            user-select: none; -webkit-user-select: none; position: relative;
+        }
+
+
+
+
+        .timeline-container { position: relative; width: max-content; min-width: 100%; }
+
+        /* Edge Signal Indicators */
+        .view-timeline { position: relative; }
+        .edge-signal {
+            position: absolute; top: 0; bottom: 0; width: 60px; pointer-events: none;
+            z-index: 10; opacity: 0; transition: opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .edge-signal-left {
+            left: 0;
+            background: linear-gradient(90deg, rgba(88,166,255,0.08) 0%, transparent 100%);
+            box-shadow: inset 10px 0 20px rgba(88,166,255,0.03);
+            border-left: 1px solid rgba(88,166,255,0.1);
+        }
+        .edge-signal-right {
+            /* Adaptive Header System (No Overlap & Non-Selectable) */
+        .day-label { 
+            font-size: 11px; font-weight: 700; color: var(--text-disabled); 
+            letter-spacing: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            min-width: 0; flex: 1; pointer-events: none; user-select: none;
+        }
+        .date-number { 
+            font-size: 14px; color: var(--text-hero); font-weight: 700; 
+            font-family: var(--font-mono); opacity: 1; margin: 0 0 0 8px; position: static;
+            text-shadow: 0 0 10px rgba(88,166,255,0.4); flex-shrink: 0;
+            user-select: none; -webkit-user-select: none; pointer-events: none;
+        }
+
+        /* Month View Grid Modifiers */
+        .timeline-grid.month-mode { display: grid; grid-template-columns: repeat(7, 1fr); width: 100%; gap: 10px; margin-top: 12px; }
+        .timeline-grid.month-mode .timeline-day { min-height: 140px; border-radius: 12px; background: rgba(22, 27, 34, 0.6); flex: none; max-width: none; }
+        .timeline-grid.month-mode .timeline-day-header { display: none; }
+        
+        .timeline-day.today { 
+            border-color: var(--blue); background: rgba(88,166,255,0.05); 
+            box-shadow: inset 0 0 20px rgba(88,166,255,0.1);
+            animation: todayBreath 3s infinite ease-in-out;
+        }
+        .timeline-day.today .date-number { color: var(--blue); }
+        @keyframes todayBreath {
+            0%, 100% { border-color: rgba(88,166,255,0.4); }
+            50% { border-color: rgba(88,166,255,1); box-shadow: inset 0 0 30px rgba(88,166,255,0.2); }
+        }
+        .timeline-day.other-month { opacity: 0.3; filter: grayscale(1); }
+        .timeline-day.weekend-col { background: rgba(255,255,255,0.01); }
+        
+        .timeline-header-row { 
+            display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; 
+            margin-top: 24px; text-align: center; user-select: none; -webkit-user-select: none;
+        }
+        .header-cell { 
+            font-size: 11px; font-weight: 800; color: var(--text-disabled); 
+            letter-spacing: 2px; padding: 10px; background: rgba(255,255,255,0.02);
+            border-bottom: 1px solid var(--border-neutral); transition: all 0.3s;
+        }
+        .header-cell.weekend { color: var(--amber); opacity: 0.7; }
+        .header-cell.active { color: var(--blue); border-bottom-color: var(--blue); }
+
+        @keyframes todayBreath {
+            0%, 100% { border-color: rgba(88,166,255,0.4); }
+            50% { border-color: rgba(88,166,255,1); box-shadow: inset 0 0 30px rgba(88,166,255,0.2); }
+        }
+        .timeline-day.other-month { opacity: 0.15; filter: grayscale(1); }
+        .timeline-day.weekend-col { background: rgba(255,255,255,0.01); }
+            animation: todayBreath 3s infinite ease-in-out;
+        }
+        @keyframes todayBreath {
+            0%, 100% { border-color: rgba(88,166,255,0.4); }
+            50% { border-color: rgba(88,166,255,1); box-shadow: inset 0 0 30px rgba(88,166,255,0.2); }
+        }
+        .timeline-day.other-month { opacity: 0.15; }
+        .timeline-day.weekend-col { background: rgba(255,255,255,0.01); }
+
+        .timeline-day.today { border-color: var(--blue); background: rgba(88,166,255,0.03); }
+        .timeline-day.today .date-number { color: var(--blue); opacity: 1; }
+        .timeline-day.other-month { opacity: 0.3; filter: grayscale(1); }
 
         .unscheduled-pool {
             margin-top: 24px; padding: 24px; background: rgba(22, 27, 34, 0.4);
             border: 1px solid var(--border-subtle); border-radius: 16px; min-height: 120px;
             display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-start; align-content: flex-start;
+            transition: all 0.3s;
         }
         .unscheduled-pool.drag-over { background: rgba(88,166,255,0.05); border-color: var(--blue); }
+
 
         
         .task-title { flex: 1; font-weight: 500; font-size: 15px; color: var(--text-body); }
@@ -516,46 +906,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     <div id="integrity-victory"></div>
                 </div>
 
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                    <div style="display:flex; align-items:center; gap:16px;">
-                        <div class="section-label" style="margin:0;">MISSION QUEUE</div>
-                        <div style="font-size:11px; color:var(--text-disabled);" id="header-task-count">0 ACTIVE</div>
-                    </div>
-                    <button class="btn-execute" onclick="toggleCreateMission()" style="padding: 8px 16px; font-size: 11px;">+ CREATE MISSION</button>
-                </div>
-
-                <div id="create-mission-panel" class="mission-panel hidden" style="margin-bottom:24px;">
-                    <div class="section-label">NEW MISSION DEPLOYMENT</div>
-                    <div class="flex-row">
-                        <div class="mission-field">
-                            <label class="section-label" style="font-size:9px;">OBJECTIVE</label>
-                            <input type="text" id="mission-title" class="input-system" placeholder="Enter tactical objective...">
-                        </div>
-                    </div>
-                    <div class="flex-row" style="margin-top:20px;">
-                        <div class="mission-field">
-                            <label class="section-label" style="font-size:9px;">PRIORITY PROTOCOL</label>
-                            <div class="priority-grid">
-                                <button class="pill-btn" data-priority="low">LOW</button>
-                                <button class="pill-btn selected" data-priority="medium">MEDIUM</button>
-                                <button class="pill-btn" data-priority="high">HIGH</button>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="flex-row" style="margin-top:20px;">
-                        <div class="mission-field">
-                            <label class="section-label" style="font-size:9px;">TAG SIGNALS (COMMA SEPARATED)</label>
-                            <input type="text" id="mission-tags" class="input-system" placeholder="e.g. work, personal, critical">
-                        </div>
-                    </div>
-                    <div style="display:flex; gap:12px; margin-top:20px;">
-                        <button class="btn-deploy" id="btn-deploy" disabled style="margin:0;">DEPLOY</button>
-                        <button class="btn-execute" onclick="toggleCreateMission()" style="margin:0; background:transparent; border-color:var(--border-neutral); color:var(--text-muted); width:auto; padding:0 24px;">CANCEL</button>
-                    </div>
-                </div>
-                
                 <div class="mission-panel" style="padding:16px; margin-bottom:16px; border-radius:8px;">
-                    <div class="section-label" style="font-size:9px; margin-bottom:12px;">PRIORITY SIGNALS</div>
+                    <div class="section-label" style="font-size:9px; margin-bottom:12px;">SIGNAL FILTERS</div>
                     <div class="filter-hud" style="margin:0;">
                         <div class="filter-chip active" onclick="filterTasks('all', this)">ALL</div>
                         <div class="filter-chip" onclick="filterTasks('high', this)">HIGH-THREAT</div>
@@ -569,6 +921,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     </div>
                 </div>
 
+                <div style="display:flex; justify-content:space-between; align-items:center; margin: 32px 0 16px;">
+                    <div class="section-label" style="font-size:10px; margin:0; letter-spacing:3px;">PRIORITY SIGNALS</div>
+                    <div id="header-task-count" style="font-size:10px; color:var(--text-disabled); font-family:var(--font-mono);">0 ACTIVE</div>
+                </div>
                 <div id="task-list-container" class="task-list">
                     <div class="filament-line"></div>
                     <!-- Quantum Content -->
@@ -578,20 +934,58 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
         <!-- VIEW: TIMELINE -->
         <div id="view-timeline" class="view-content hidden">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <div class="section-label" style="margin:0;">TIMELINE PROTOCOL</div>
-                <div style="font-size:12px; color:var(--text-disabled); font-weight:600;" id="timeline-week-label">THIS WEEK</div>
+            <div class="timeline-header-wrap">
+                <div style="display: flex; flex-direction: column;">
+                    <div class="section-label" style="margin:0;">TIMELINE PROTOCOL</div>
+                    <div class="timeline-selector" id="timeline-selector">
+                        <button class="timeline-btn" id="timeline-view-btn">
+                            <span id="current-view-label">THIS WEEK</span>
+                            <span class="chevron">▾</span>
+                        </button>
+                        <div class="timeline-dropdown" id="timeline-dropdown">
+                            <div class="dropdown-item active" data-view="week">This Week</div>
+                            <div class="dropdown-item" data-view="month">This Month</div>
+                            <div class="dropdown-item" data-view="calendar">Full Calendar</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="timeline-nav" id="timeline-nav">
+                    <button class="nav-btn" id="prev-btn">←</button>
+                    <div class="current-nav-label" id="timeline-period-label">March 2026</div>
+                    <button class="nav-btn" id="next-btn">→</button>
+                </div>
             </div>
             
-            <div class="timeline-grid" id="timeline-grid">
-                <!-- Days injected by JS -->
+            <div id="timeline-header-row" class="timeline-header-row" style="display:none;">
+                <div class="header-cell">MON</div>
+                <div class="header-cell">TUE</div>
+                <div class="header-cell">WED</div>
+                <div class="header-cell">THU</div>
+                <div class="header-cell">FRI</div>
+                <div class="header-cell weekend">SAT</div>
+                <div class="header-cell weekend">SUN</div>
             </div>
+
+            <div class="timeline-viewport" id="timeline-viewport">
+
+                <div class="edge-signal edge-signal-left" id="signal-left"></div>
+                <div class="edge-signal edge-signal-right" id="signal-right"></div>
+                
+                <div class="timeline-container">
+                    <div class="timeline-grid" id="timeline-grid">
+                        <!-- Days injected by JS -->
+                    </div>
+                </div>
+            </div>
+
 
             <div class="section-label" style="margin-top:32px;">UNSCHEDULED MISSIONS</div>
             <div class="unscheduled-pool" id="unscheduled-dropzone" data-day="unscheduled" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
                 <!-- Tasks injected by JS -->
             </div>
         </div>
+
 
         <!-- VIEW: INTELLIGENCE -->
         <div id="view-ai" class="view-content hidden">
@@ -670,8 +1064,42 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 <span>RANK: 01</span>
                 <span id="xp-text">40 / 100 XP</span>
             </div>
+            <button class="btn-deploy btn-execute" onclick="toggleCreateMission()" style="margin-top:20px; font-size:12px; font-weight:700; background: linear-gradient(135deg, rgba(88,166,255,0.15), rgba(88,166,255,0.05)); color: var(--blue); border: 1px solid rgba(88,166,255,0.2); width:100%; transition:all 0.3s cubic-bezier(0.16, 1, 0.3, 1); box-shadow: 0 4px 12px rgba(0,0,0,0.2);">+ CREATE MISSION</button>
         </div>
     </aside>
+
+    <div id="deploy-modal-overlay" class="deploy-modal-overlay">
+        <div class="deploy-modal">
+            <div class="close-modal" onclick="toggleCreateMission()">×</div>
+            <div class="section-label" style="margin-bottom:24px;">NEW MISSION DEPLOYMENT</div>
+            <div class="flex-row">
+                <div class="mission-field">
+                    <label class="section-label" style="font-size:9px;">OBJECTIVE</label>
+                    <input type="text" id="mission-title" class="input-system" placeholder="Enter tactical objective..." autocomplete="off">
+                </div>
+            </div>
+            <div class="flex-row" style="margin-top:24px;">
+                <div class="mission-field">
+                    <label class="section-label" style="font-size:9px;">PRIORITY PROTOCOL</label>
+                    <div class="priority-grid">
+                        <button class="pill-btn" data-priority="low">LOW</button>
+                        <button class="pill-btn selected" data-priority="medium">MEDIUM</button>
+                        <button class="pill-btn" data-priority="high">HIGH</button>
+                    </div>
+                </div>
+            </div>
+            <div class="flex-row" style="margin-top:24px;">
+                <div class="mission-field">
+                    <label class="section-label" style="font-size:9px;">TAG SIGNALS (COMMA SEPARATED)</label>
+                    <input type="text" id="mission-tags" class="input-system" placeholder="e.g. work, personal, critical" autocomplete="off">
+                </div>
+            </div>
+            <div style="display:flex; gap:12px; margin-top:32px;">
+                <button class="btn-deploy" id="btn-deploy" disabled style="margin:0;">DEPLOY</button>
+                <button class="btn-execute" onclick="toggleCreateMission()" style="margin:0; background:transparent; border-color:var(--border-neutral); color:var(--text-muted); width:auto; padding:0 24px;">CANCEL</button>
+            </div>
+        </div>
+    </div>
 
     <script>
     let allTasks = [], currentFilter = 'all', currentActiveTaskId = null, selectedPriority = 'medium';
@@ -716,6 +1144,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     const views = document.querySelectorAll('.view-content');
 
     function switchView(viewId) {
+        if (!views || views.length === 0) return;
         views.forEach(v => v.classList.add('hidden'));
         const targetView = document.getElementById(`view-${viewId}`);
         if (targetView) targetView.classList.remove('hidden');
@@ -725,13 +1154,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         });
 
         if (typeof startSimulation === 'function') {
-            if (viewId === 'dashboard') startSimulation('execution');
-            else if (viewId === 'tasks') startSimulation('missions');
-            else if (viewId === 'timeline') startSimulation('focus');
+            try {
+                if (viewId === 'dashboard') startSimulation('execution');
+                else if (viewId === 'tasks') startSimulation('missions');
+                else if (viewId === 'timeline') startSimulation('focus');
+            } catch(e) { console.error("Sim error:", e); }
         }
 
         if (viewId === 'tasks') {
-            loadTasks();
+            loadTasks().catch(console.error);
             setSystemState('idle');
         } else if (viewId === 'dashboard' || viewId === 'timeline') {
             setSystemState('idle');
@@ -740,16 +1171,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     navItems.forEach(item => {
         item.addEventListener('click', () => {
-            if (item.id === 'nav-dashboard') switchView('dashboard');
-            else if (item.id === 'nav-tasks') switchView('tasks');
-            else if (item.id === 'nav-timeline') switchView('timeline');
-            else if (item.id === 'nav-ai') {
-                switchView('ai');
-                loadStats();
-            } else if (item.id === 'nav-stats') {
-                switchView('stats');
-                loadStats();
-            }
+            const vid = item.id.replace('nav-', '');
+            switchView(vid);
+            if (vid === 'ai' || vid === 'stats') loadStats().catch(console.error);
         });
     });
 
@@ -773,11 +1197,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     });
 
     function toggleCreateMission() {
-        const p = document.getElementById('create-mission-panel');
-        if (p.classList.contains('hidden')) {
-            p.classList.remove('hidden');
-        } else {
-            p.classList.add('hidden');
+        const p = document.getElementById('deploy-modal-overlay');
+        p.classList.toggle('active');
+        if (p.classList.contains('active')) {
+            setTimeout(() => document.getElementById('mission-title').focus(), 100);
         }
     }
 
@@ -808,17 +1231,22 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     // ── MOMENTUM CASCADE ENGINE ───────────────────────────────────────────
     async function loadTasks() {
-        const [tasksRes, statsRes] = await Promise.all([
-            fetch('/api/tasks'),
-            fetch('/api/stats')
-        ]);
-        const tasksData = await tasksRes.json();
-        const statsData = await statsRes.json();
-        allTasks = tasksData.tasks || [];
-        updateIntegrityMeter(statsData);
-        updateControlCenter();
-        renderTaskList();
-        renderTimeline();
+        try {
+            const [tasksRes, statsRes] = await Promise.all([
+                fetch('/api/tasks'),
+                fetch('/api/stats')
+            ]);
+            const tasksData = await tasksRes.json();
+            const statsData = await statsRes.json();
+            allTasks = tasksData.tasks || [];
+            updateIntegrityMeter(statsData);
+            updateControlCenter();
+            renderTaskList();
+            renderTimeline();
+        } catch(e) {
+            console.error("Critical: Task Cascade Engine Failed", e);
+            showToast('Cascade Error: ' + e.message, 'var(--red)');
+        }
     }
 
     function updateControlCenter() {
@@ -883,76 +1311,99 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     }
 
     function renderTaskList(tagFilter = null) {
-        const container = document.getElementById('task-list-container');
-        if (!container) return;
-
-        // 1. Record current positions (First)
-        const oldCards = Array.from(container.querySelectorAll('.task-card'));
-        const rects = new Map();
-        oldCards.forEach(card => rects.set(card.dataset.id, card.getBoundingClientRect()));
-
-        const filtered = allTasks.filter(t => {
-            const p = (t.priority || 'medium').toLowerCase();
-            if (tagFilter) return (t.tags || []).includes(tagFilter);
-            if (currentFilter === 'all')    return true;
-            if (currentFilter === 'high')   return p === 'high';
-            if (currentFilter === 'medium') return p === 'medium';
-            if (currentFilter === 'low')    return p === 'low';
-            return true;
-        });
-
-        renderTagSignals();
-        document.getElementById('header-task-count').textContent = `${filtered.length} ACTIVE`;
-
-        // 2. Render new DOM
-        container.innerHTML = filtered.map((t) => `
-            <div class="task-card priority-${(t.priority||'medium').toLowerCase()}" data-id="${t.id}"
-                 onclick="openModal(${t.id}, this)">
-                <div class="card-top">
-                    <div class="cb" onclick="event.stopPropagation(); completeTask(${t.id}, this)"></div>
-                    <div class="task-title">${t.title}</div>
-                    <span class="badge ${(t.priority||'medium').toLowerCase()}">${(t.priority||'medium').toUpperCase()}</span>
-                    ${(t.tags||[]).map(tg =>
-                        `<span class="badge tag" onclick="event.stopPropagation(); filterByTag('${tg}')">#${tg}</span>`
-                    ).join('')}
-                </div>
-            </div>
-        `).join('');
-
-        // 3. FLIP Playback
-        const newCards = Array.from(container.querySelectorAll('.task-card'));
-        newCards.forEach((card, i) => {
-            const id = card.dataset.id;
-            const oldRect = rects.get(id);
-            if (oldRect) {
-                // Existing item -> Invert and Play
-                const newRect = card.getBoundingClientRect();
-                const dy = oldRect.top - newRect.top;
-                card.style.transform = `translateY(${dy}px)`;
-                card.style.transition = 'none';
-                card.classList.add('cascade-visible'); // Ensure opacity is 1
-
-                requestAnimationFrame(() => {
-                    requestAnimationFrame(() => {
-                        card.style.transition = 'transform 0.4s cubic-bezier(0.22, 1, 0.36, 1)';
-                        card.style.transform = 'translateY(0)';
-                    });
-                });
-            } else {
-                // New item -> standard cascade
-                card.style.animationDelay = `${(i % 10) * 50}ms`;
-                requestAnimationFrame(() => {
-                    requestAnimationFrame(() => card.classList.add('cascade-visible'));
-                });
+        try {
+            const container = document.getElementById('task-list-container');
+            if (!container) {
+                console.error("task-list-container not found!");
+                return;
             }
-        });
 
-        // Cleanup inline transitions so hover effect still works
-        setTimeout(() => {
-            container.querySelectorAll('.task-card').forEach(card => {
-                if (card.style.transition) card.style.transition = '';
+            // 1. Record current positions (First)
+            const oldWraps = Array.from(container.querySelectorAll('.task-card-wrap'));
+            const rects = new Map();
+            oldWraps.forEach(wrap => {
+                const card = wrap.querySelector('.task-card');
+                if (card) rects.set(wrap.dataset.id, card.getBoundingClientRect());
             });
-        }, 450);
+
+            const filtered = allTasks.filter(t => {
+                const p = (t.priority || 'medium').toLowerCase();
+                if (tagFilter) return (t.tags || []).includes(tagFilter);
+                if (currentFilter === 'all')    return true;
+                if (currentFilter === 'high')   return p === 'high';
+                if (currentFilter === 'medium') return p === 'medium';
+                if (currentFilter === 'low')    return p === 'low';
+                return true;
+            });
+
+            renderTagSignals();
+            const countEl = document.getElementById('header-task-count');
+            if (countEl) countEl.textContent = `${filtered.length} ACTIVE`;
+
+            showToast("Rendering " + filtered.length + " tasks", "var(--green)");
+
+            // 2. Render new DOM
+            container.innerHTML = filtered.map((t) => `
+                <div class="task-card-wrap priority-${(t.priority||'medium').toLowerCase()}" data-id="${t.id}">
+                    <div class="task-card priority-${(t.priority||'medium').toLowerCase()}" data-id="${t.id}"
+                         onclick="openModal(${t.id}, this)">
+                        <div class="card-top">
+                            <div class="cb" onclick="event.stopPropagation(); completeTask(${t.id}, this)"></div>
+                            <div class="task-title">${t.title}</div>
+                            <span class="badge ${(t.priority||'medium').toLowerCase()}">${(t.priority||'medium').toUpperCase()}</span>
+                            ${(t.tags||[]).map(tg =>
+                                `<span class="badge tag" onclick="event.stopPropagation(); filterByTag('${tg}')">#${tg}</span>`
+                            ).join('')}
+                        </div>
+                    </div>
+                        <div class="task-action-strip">
+                            <div class="action-icon" onclick="event.stopPropagation(); startFocusFromCard(${t.id}, this)" title="Deploy Focus Protocol">
+                                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M8 5v14l11-7z"/></svg>
+                            </div>
+                            <div class="action-icon purge" onclick="event.stopPropagation(); purgeTask(${t.id}, this)" title="Purge Mission Records">
+                                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+
+            // 3. FLIP Playback
+            const newWraps = Array.from(container.querySelectorAll('.task-card-wrap'));
+            newWraps.forEach((wrap, i) => {
+                const card = wrap.querySelector('.task-card');
+                const id = wrap.dataset.id;
+                const oldRect = rects.get(id);
+                if (oldRect) {
+                    const newRect = card.getBoundingClientRect();
+                    const dy = oldRect.top - newRect.top;
+                    card.style.transform = `translateY(${dy}px)`;
+                    card.style.transition = 'none';
+                    card.classList.add('cascade-visible');
+
+                    requestAnimationFrame(() => {
+                        requestAnimationFrame(() => {
+                            card.style.transition = 'transform 0.4s cubic-bezier(0.22, 1, 0.36, 1)';
+                            card.style.transform = 'translateY(0)';
+                        });
+                    });
+                } else {
+                    card.style.animationDelay = `${(i % 10) * 50}ms`;
+                    requestAnimationFrame(() => {
+                        requestAnimationFrame(() => card.classList.add('cascade-visible'));
+                    });
+                }
+            });
+
+            // Cleanup inline transitions so hover effect still works
+            setTimeout(() => {
+                container.querySelectorAll('.task-card').forEach(card => {
+                    if (card.style.transition) card.style.transition = '';
+                });
+            }, 450);
+        } catch(e) {
+            console.error("renderTaskList failed:", e);
+            showToast('TaskList Render Error: ' + e.message, 'var(--red)');
+        }
     }
 
     function filterTasks(crit, element) {
@@ -1018,56 +1469,290 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     }
 
     // ── TIMELINE CALENDAR SYSTEM ──────────────────────────────────────────
-    const DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
-    
-    function renderTimeline() {
-        const grid = document.getElementById('timeline-grid');
-        const pool = document.getElementById('unscheduled-dropzone');
-        if (!grid || !pool) return;
+    const DAYS_SHORT = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+    let timelineState = {
+        view: 'week',
+        currentDate: new Date(),
+        isDropdownOpen: false
+    };
 
-        const mappingStr = localStorage.getItem('task_timeline_mapping') || '{}';
-        const mapping = JSON.parse(mappingStr);
+    function initTimelineControls() {
+        initTimelineScroll();
+        const btn = document.getElementById('timeline-view-btn');
 
-        grid.innerHTML = DAYS.map(day => `
-            <div class="timeline-day">
-                <div class="timeline-day-header">${day}</div>
-                <div class="timeline-dropzone" data-day="${day}" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
-                </div>
-            </div>
-        `).join('');
+        const dropdown = document.getElementById('timeline-dropdown');
+        const nav = document.getElementById('timeline-nav');
+        
+        if (!btn) return;
 
-        pool.innerHTML = '';
+        btn.onclick = (e) => {
+            e.stopPropagation();
+            timelineState.isDropdownOpen = !timelineState.isDropdownOpen;
+            dropdown.classList.toggle('show', timelineState.isDropdownOpen);
+            btn.classList.toggle('active', timelineState.isDropdownOpen);
+        };
 
-        allTasks.forEach(task => {
-            const el = document.createElement('div');
-            el.className = `timeline-task priority-${(task.priority||'medium').toLowerCase()}`;
-            el.draggable = true;
-            el.dataset.id = task.id;
-            el.innerHTML = task.title;
-            
-            el.ondragstart = (e) => {
-                e.dataTransfer.setData('text/plain', task.id);
-                setTimeout(() => el.classList.add('dragging'), 0);
-            };
-            el.ondragend = () => {
-                el.classList.remove('dragging');
-                document.querySelectorAll('.drag-over').forEach(d => d.classList.remove('drag-over'));
-            };
-
-            const day = mapping[task.id];
-            if (day && DAYS.includes(day)) {
-                const zone = grid.querySelector(`.timeline-dropzone[data-day="${day}"]`);
-                if (zone) zone.appendChild(el);
-            } else {
-                pool.appendChild(el);
-            }
+        document.addEventListener('click', () => {
+            timelineState.isDropdownOpen = false;
+            dropdown.classList.remove('show');
+            btn.classList.remove('active');
         });
+
+        document.querySelectorAll('.dropdown-item').forEach(item => {
+            item.onclick = () => {
+                const view = item.dataset.view;
+                setTimelineView(view);
+                document.querySelectorAll('.dropdown-item').forEach(i => i.classList.remove('active'));
+                item.classList.add('active');
+            };
+        });
+
+        document.getElementById('prev-btn').onclick = () => navigateTimeline(-1);
+        document.getElementById('next-btn').onclick = () => navigateTimeline(1);
+    }
+
+    function initTimelineScroll() {
+        const vp = document.getElementById('timeline-viewport');
+        if (!vp) return;
+
+        let isDown = false, startX, scrollLeft;
+        let velX = 0, lastX = 0, momentumID;
+
+        const startMomentum = () => {
+            const glide = () => {
+                vp.scrollLeft += velX;
+                velX *= 0.95; // Friction
+                updateEdgeSignals();
+                if (Math.abs(velX) > 0.5) momentumID = requestAnimationFrame(glide);
+            };
+            momentumID = requestAnimationFrame(glide);
+        };
+
+        vp.onmousedown = (e) => {
+            if (e.target.closest('.timeline-task')) return;
+            isDown = true;
+            cancelAnimationFrame(momentumID);
+            vp.classList.add('grabbing');
+            startX = e.pageX - vp.offsetLeft;
+            scrollLeft = vp.scrollLeft;
+            lastX = e.pageX;
+            velX = 0;
+        };
+
+        vp.onmouseleave = () => { if (isDown) startMomentum(); isDown = false; vp.classList.remove('grabbing'); };
+        vp.onmouseup = () => { if (isDown) startMomentum(); isDown = false; vp.classList.remove('grabbing'); };
+        
+        vp.onmousemove = (e) => {
+            if (!isDown) return;
+            e.preventDefault();
+            const x = e.pageX - vp.offsetLeft;
+            const walk = (x - startX) * 1.5;
+            vp.scrollLeft = scrollLeft - walk;
+            
+            velX = (lastX - e.pageX) * 0.8;
+            lastX = e.pageX;
+            updateEdgeSignals();
+        };
+
+        vp.onscroll = updateEdgeSignals;
+        window.addEventListener('resize', updateEdgeSignals);
+    }
+
+
+    function updateEdgeSignals() {
+        const vp = document.getElementById('timeline-viewport');
+        if (!vp) return;
+        const sigLeft = document.getElementById('signal-left');
+        const sigRight = document.getElementById('signal-right');
+        
+        const sl = vp.scrollLeft;
+        const sw = vp.scrollWidth;
+        const cl = vp.clientWidth;
+
+        if (sigLeft) sigLeft.classList.toggle('active', sl > 10);
+        if (sigRight) sigRight.classList.toggle('active', sl + cl < sw - 10);
+    }
+
+    function handleAutoPan(clientX) {
+        const vp = document.getElementById('timeline-viewport');
+        if (!vp) return;
+        const rect = vp.getBoundingClientRect();
+        const threshold = 100;
+        
+        if (clientX < rect.left + threshold) {
+            vp.scrollBy({ left: -20, behavior: 'auto' });
+        } else if (clientX > rect.right - threshold) {
+            vp.scrollBy({ left: 20, behavior: 'auto' });
+        }
+        updateEdgeSignals();
+    }
+
+    function setTimelineView(view) {
+
+        timelineState.view = view;
+        document.getElementById('current-view-label').textContent = view.toUpperCase().replace('WEEK', 'THIS WEEK').replace('MONTH', 'THIS MONTH').replace('CALENDAR', 'FULL CALENDAR');
+        
+        const nav = document.getElementById('timeline-nav');
+        const grid = document.getElementById('timeline-grid');
+        
+        if (view === 'calendar') nav.classList.add('show');
+        else nav.classList.remove('show');
+
+        if (view === 'month' || view === 'calendar') grid.classList.add('month-mode');
+        else grid.classList.remove('month-mode');
+
+        renderTimeline();
+    }
+
+    function navigateTimeline(dir) {
+        const d = timelineState.currentDate;
+        if (timelineState.view === 'calendar') {
+            d.setMonth(d.getMonth() + dir);
+        } else if (timelineState.view === 'week') {
+            d.setDate(d.getDate() + (dir * 7));
+        }
+        renderTimeline();
+    }
+
+    function getStartOfWeek(d) {
+        const date = new Date(d);
+        const day = date.getDay(); // 0 is Sun, 1 is Mon
+        const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+        return new Date(date.setDate(diff));
+    }
+
+    function formatDateISO(d) {
+        return d.toISOString().split('T')[0];
+    }
+
+    function renderTimeline() {
+        try {
+            const grid = document.getElementById('timeline-grid');
+            const pool = document.getElementById('unscheduled-dropzone');
+            if (!grid || !pool) return;
+
+            const mappingStr = localStorage.getItem('task_timeline_mapping') || '{}';
+            let mapping = JSON.parse(mappingStr);
+
+            // Migration: handle old day name keys
+            const oldDays = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+            let migrated = false;
+            for (let tid in mapping) {
+                if (oldDays.includes(mapping[tid])) {
+                    const dayIdx = oldDays.indexOf(mapping[tid]);
+                    const start = getStartOfWeek(new Date());
+                    start.setDate(start.getDate() + dayIdx);
+                    mapping[tid] = formatDateISO(start);
+                    migrated = true;
+                }
+            }
+            if (migrated) localStorage.setItem('task_timeline_mapping', JSON.stringify(mapping));
+
+            grid.innerHTML = '';
+            const todayStr = formatDateISO(new Date());
+            
+            let dates = [];
+            if (timelineState.view === 'week') {
+                const start = getStartOfWeek(timelineState.currentDate);
+                for (let i = 0; i < 7; i++) {
+                    const d = new Date(start);
+                    d.setDate(start.getDate() + i);
+                    dates.push({ date: d, label: DAYS_SHORT[i] });
+                }
+                document.getElementById('timeline-period-label').textContent = "CURRENT WEEK";
+            } else {
+                // Month / Calendar View
+                const d = timelineState.currentDate;
+                const year = d.getFullYear();
+                const month = d.getMonth();
+                const firstDay = new Date(year, month, 1);
+                const lastDay = new Date(year, month + 1, 0);
+                
+                document.getElementById('timeline-period-label').textContent = firstDay.toLocaleString('default', { month: 'long', year: 'numeric' }).toUpperCase();
+
+                // Pad start
+                let startPad = firstDay.getDay(); // 0 (Sun) to 6 (Sat)
+                startPad = startPad === 0 ? 6 : startPad - 1; // Adjust to Mon start
+                
+                const start = new Date(firstDay);
+                start.setDate(firstDay.getDate() - startPad);
+                
+                // Show 6 weeks fixed for smooth transitions
+                for (let i = 0; i < 42; i++) {
+                    const cur = new Date(start);
+                    cur.setDate(start.getDate() + i);
+                    dates.push({ 
+                        date: cur, 
+                        label: i < 7 ? DAYS_SHORT[i] : '',
+                        isOtherMonth: cur.getMonth() !== month
+                    });
+                }
+            }
+
+            dates.forEach((item, idx) => {
+                const dateStr = formatDateISO(item.date);
+                const isToday = dateStr === todayStr;
+                const isWeekend = (item.date.getDay() === 0 || item.date.getDay() === 6);
+                
+                const dayEl = document.createElement('div');
+                dayEl.className = `timeline-day ${isToday ? 'today' : ''} ${item.isOtherMonth ? 'other-month' : ''} ${isWeekend ? 'weekend-col' : ''}`;
+                dayEl.innerHTML = `
+                    <div class="timeline-day-header">
+                        <span class="day-label">${item.label || ''}</span>
+                        <span class="date-number">${item.date.getDate()}</span>
+                    </div>
+                    <div class="timeline-dropzone" data-date="${dateStr}" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
+                    </div>
+                `;
+                grid.appendChild(dayEl);
+
+            });
+
+
+            pool.innerHTML = '';
+
+            allTasks.forEach(task => {
+                const el = document.createElement('div');
+                el.className = `timeline-task priority-${(task.priority||'medium').toLowerCase()}`;
+                el.draggable = true;
+                el.dataset.id = task.id;
+                
+                // Force dynamic width in week mode
+                const ws = timelineState.view === 'week' ? 'white-space:nowrap;' : '';
+                el.innerHTML = `<div style="overflow:hidden; text-overflow:ellipsis; ${ws}">${task.title}</div>`;
+
+                
+                el.ondragstart = (e) => {
+                    e.dataTransfer.setData('text/plain', task.id);
+                    setTimeout(() => el.classList.add('dragging'), 0);
+                };
+                el.ondragend = () => {
+                    el.classList.remove('dragging');
+                    document.querySelectorAll('.drag-over').forEach(d => d.classList.remove('drag-over'));
+                };
+
+                const dateKey = mapping[task.id];
+                if (dateKey) {
+                    const zone = grid.querySelector(`.timeline-dropzone[data-date="${dateKey}"]`);
+                    if (zone) zone.appendChild(el);
+                    else if (timelineState.view === 'week') pool.appendChild(el); // Fallback for week view if not in range
+                    else pool.appendChild(el);
+                } else {
+                    pool.appendChild(el);
+                }
+            });
+        } catch(e) {
+            console.error("renderTimeline failed:", e);
+            showToast('Timeline Render Error: ' + e.message, 'var(--red)');
+        }
     }
 
     window.handleDragOver = (e) => {
         e.preventDefault();
         e.currentTarget.classList.add('drag-over');
+        handleAutoPan(e.clientX);
     };
+
     window.handleDragLeave = (e) => {
         e.currentTarget.classList.remove('drag-over');
     };
@@ -1078,19 +1763,20 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         
         const taskId = e.dataTransfer.getData('text/plain');
         if (!taskId) return;
-        const day = zone.dataset.day;
+        const dateKey = zone.dataset.date;
 
         const mappingStr = localStorage.getItem('task_timeline_mapping') || '{}';
         const mapping = JSON.parse(mappingStr);
         
-        if (day === 'unscheduled') {
+        if (zone.id === 'unscheduled-dropzone') {
             delete mapping[taskId];
         } else {
-            mapping[taskId] = day;
+            mapping[taskId] = dateKey;
         }
         localStorage.setItem('task_timeline_mapping', JSON.stringify(mapping));
         renderTimeline();
     };
+
 
     function renderTagSignals() {
         const discovery = document.getElementById('tag-signal-discovery');
@@ -1131,6 +1817,27 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     }
     function closeModal() { modal.classList.remove('show'); }
     document.getElementById('btn-modal-close').onclick = closeModal;
+
+    function startFocusFromCard(taskId, btnEl) {
+        // High-fidelity feedback pulse
+        if (btnEl) {
+            const core = btnEl.querySelector('.control-node-core');
+            if (core) {
+                core.style.transform = 'scale(0.8)';
+                core.style.boxShadow = '0 0 40px var(--blue)';
+            }
+            btnEl.style.background = 'rgba(88, 166, 255, 0.2)';
+            setTimeout(() => { 
+                if (core) {
+                    core.style.transform = ''; 
+                    core.style.boxShadow = '';
+                }
+                btnEl.style.background = '';
+            }, 300);
+        }
+        // Deploy focus protocol
+        setTimeout(() => startFocus(taskId), 150);
+    }
 
     function startFocus(taskId) {
         const task = allTasks.find(t => t.id === taskId);
@@ -1173,10 +1880,24 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         setTimeout(loadTasks, 750);
     };
 
+    window.purgeTask = async (id, el) => {
+        if (!confirm("Are you sure you want to purge this mission?")) return;
+        const card = el.closest('.task-card');
+        if (card) {
+            card.style.opacity = '0';
+            card.style.transform = 'translateX(100px)';
+        }
+        await fetch(`/api/tasks/${id}/delete`, {method: 'POST'});
+        showToast("Mission purged from reality.", "var(--red)");
+        setTimeout(loadTasks, 400);
+    };
+
     window.onload = () => {
         initThreeJS();
+        initTimelineControls();
         loadTasks();
     };
+
 
     // ── 3D PARTICLE SIMULATION (THREE.JS) ─────────────────────────────
     let scene, camera, renderer;

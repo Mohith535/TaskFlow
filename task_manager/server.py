@@ -148,6 +148,25 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
                 self.end_headers_json()
                 self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
 
+        elif path.startswith("/api/tasks/") and path.endswith("/delete"):
+            try:
+                task_id = int(path.split("/")[3])
+                tasks = storage.load_tasks()
+                manager = models.TaskManager(tasks)
+                if manager.delete_task(task_id):
+                    storage.save_tasks(manager.tasks)
+                    self.send_response(200)
+                    self.end_headers_json()
+                    self.wfile.write(json.dumps({"success": True}).encode('utf-8'))
+                else:
+                    self.send_response(404)
+                    self.end_headers_json()
+                    self.wfile.write(json.dumps({"error": "Task not found"}).encode('utf-8'))
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers_json()
+                self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
+
         elif path == "/api/blocklist":
             try:
                 from task_manager.blockers.blocklist import blocklist_manager

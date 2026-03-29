@@ -14,3 +14,16 @@ quick_fix.py
 test_focus.py
 test_unblock.py
 trace_blocking.py
+
+# Logs and Backups
+git_log.txt
+previous_web_ui.py
+momentum_demo.py
+fix_webui_emoji.py
+restart_server.py
+
+# Common IDE settings
+.vscode/
+.idea/
+*.log
+.env

@@ -9,3 +9,7 @@ LOW = "#10b981"        # Emerald (Easy Grab)
 BG_SUBTLE = "#0f172a"  # Slate 950
 TEXT_MAIN = "#f8fafc"  # Slate 50
 TEXT_DIM = "#94a3b8"   # Slate 400
+
+# NEW: Hover & Glow Specs
+GLOW_ALPHA = "rgba(74,222,128,0.15)"
+HOVER_BORDER = "#4ade80"
