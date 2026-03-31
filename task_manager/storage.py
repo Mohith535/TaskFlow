@@ -21,6 +21,7 @@ class TaskStorage:
         # Global user-level storage directory
         self.data_dir = Path.home() / ".taskflow"   
         self.tasks_file = self.data_dir / "tasks.json"
+        self.timeline_file = self.data_dir / "timeline.json"
         self.backup_dir = self.data_dir / "backups"
         
         self._ensure_directories()
@@ -184,6 +185,30 @@ class TaskStorage:
         except Exception as e:
             print(f"Error restoring backup: {e}")
             return False
+            
+    # --- Timeline Storage Methods ---
+    def load_timeline(self) -> dict:
+        """Load the timeline mapping dict mapping task ID strings to date strings."""
+        if not self.timeline_file.exists():
+            return {}
+        try:
+            with open(self.timeline_file, 'r') as file:
+                return json.load(file)
+        except Exception as e:
+            print(f"Error loading timeline mapping: {e}")
+            return {}
+            
+    def save_timeline(self, mapping: dict) -> bool:
+        """Save the timeline mapping dict to timeline.json."""
+        try:
+            temp_file = self.timeline_file.with_suffix('.tmp')
+            with open(temp_file, 'w') as file:
+                json.dump(mapping, file, indent=4)
+            temp_file.replace(self.timeline_file)
+            return True
+        except Exception as e:
+            print(f"Error saving timeline mapping: {e}")
+            return False
 
 
 # Global storage instance
@@ -197,3 +222,9 @@ def load_tasks() -> List[Task]:
 
 def save_tasks(tasks: List[Task]) -> bool:
     return storage.save_tasks(tasks)
+
+def load_timeline() -> dict:
+    return storage.load_timeline()
+
+def save_timeline(mapping: dict) -> bool:
+    return storage.save_timeline(mapping)

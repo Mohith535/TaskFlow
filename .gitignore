@@ -14,6 +14,8 @@ quick_fix.py
 test_focus.py
 test_unblock.py
 trace_blocking.py
+verify_fix.py
+test_three.js
 
 # Logs and Backups
 git_log.txt

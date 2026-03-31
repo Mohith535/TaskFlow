@@ -332,6 +332,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         .task-card.priority-high  { border-left-color: var(--red); }
         .task-card.priority-medium { border-left-color: var(--amber); }
         .task-card.priority-low   { border-left-color: var(--blue); }
+        
+        /* Matrix Priorities */
+        .task-card.priority-critical { border-left-color: var(--red); }
+        .task-card.priority-strategic { border-left-color: var(--blue-mid); }
+        .task-card.priority-noise { border-left-color: var(--amber); }
+        .task-card.priority-purge { border-left-color: var(--text-disabled); opacity: 0.6; }
 
         /* Hover: Tactical Shift */
         .task-card-wrap:hover .task-card {
@@ -464,21 +470,29 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         .task-control-node:hover svg { fill: #fff; transform: scale(1.2); }
 
         /* Priority-specific Nodes */
-        .task-card-wrap.priority-high .task-control-node { 
+        .task-card-wrap.priority-high .task-control-node, .task-card-wrap.priority-critical .task-control-node { 
             border-color: rgba(248, 81, 73, 0.4); 
             border-left-color: rgba(248, 81, 73, 0.6);
         }
-        .task-card-wrap.priority-high .control-node-core svg { fill: var(--red); }
-        .task-card-wrap.priority-high:hover .task-control-node { box-shadow: 0 0 20px rgba(248,81,73,0.1); }
-        .task-card-wrap.priority-high .task-control-node:hover .control-node-core { background: var(--red); }
+        .task-card-wrap.priority-high .control-node-core svg, .task-card-wrap.priority-critical .control-node-core svg { fill: var(--red); }
+        .task-card-wrap.priority-high:hover .task-control-node, .task-card-wrap.priority-critical:hover .task-control-node { box-shadow: 0 0 20px rgba(248,81,73,0.1); }
+        .task-card-wrap.priority-high .task-control-node:hover .control-node-core, .task-card-wrap.priority-critical .task-control-node:hover .control-node-core { background: var(--red); }
 
-        .task-card-wrap.priority-medium .task-control-node { 
+        .task-card-wrap.priority-medium .task-control-node, .task-card-wrap.priority-strategic .task-control-node { 
+            border-color: rgba(56, 139, 253, 0.4); 
+            border-left-color: rgba(56, 139, 253, 0.6);
+        }
+        .task-card-wrap.priority-medium .control-node-core svg, .task-card-wrap.priority-strategic .control-node-core svg { fill: var(--blue-mid); }
+        .task-card-wrap.priority-medium:hover .task-control-node, .task-card-wrap.priority-strategic:hover .task-control-node { box-shadow: 0 0 20px rgba(56,139,253,0.1); }
+        .task-card-wrap.priority-medium .task-control-node:hover .control-node-core, .task-card-wrap.priority-strategic .task-control-node:hover .control-node-core { background: var(--blue-mid); }
+        
+        .task-card-wrap.priority-noise .task-control-node { 
             border-color: rgba(210, 153, 34, 0.4); 
             border-left-color: rgba(210, 153, 34, 0.6);
         }
-        .task-card-wrap.priority-medium .control-node-core svg { fill: var(--amber); }
-        .task-card-wrap.priority-medium:hover .task-control-node { box-shadow: 0 0 20px rgba(210,153,34,0.1); }
-        .task-card-wrap.priority-medium .task-control-node:hover .control-node-core { background: var(--amber); }
+        .task-card-wrap.priority-noise .control-node-core svg { fill: var(--amber); }
+        .task-card-wrap.priority-noise:hover .task-control-node { box-shadow: 0 0 20px rgba(210,153,34,0.1); }
+        .task-card-wrap.priority-noise .task-control-node:hover .control-node-core { background: var(--amber); }
 
         /* ─── INTEGRITY / COMPLETION HORIZON ───── */
         #integrity-hud {
@@ -558,7 +572,30 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         .timeline-task:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
         .timeline-task.priority-high { border-left-color: var(--red); }
         .timeline-task.priority-medium { border-left-color: var(--amber); }
+        .timeline-task.priority-critical { border-left-color: var(--red); box-shadow: 0 0 10px rgba(248,81,73,0.2); }
+        .timeline-task.priority-strategic { border-left-color: var(--blue-mid); }
+        .timeline-task.priority-noise { border-left-color: var(--amber); }
+        .timeline-task.priority-purge { border-left-color: var(--text-disabled); opacity: 0.5; }
         .timeline-task.dragging { opacity: 0.5; }
+
+        /* Prime Target */
+        .prime-target-slot {
+            padding: 8px 12px; margin-bottom: 4px;
+            border-bottom: 1px dashed rgba(210, 153, 34, 0.3);
+            background: linear-gradient(180deg, rgba(210,153,34,0.05), transparent);
+            min-height: 40px; display: flex; flex-direction: column; gap: 4px;
+            transition: all 0.3s ease;
+        }
+        .prime-target-slot.drag-over { background: rgba(210, 153, 34, 0.15); }
+        .prime-target-label {
+            font-size: 9px; font-weight: 800; letter-spacing: 1px;
+            color: var(--amber); text-align: center; opacity: 0.7;
+            pointer-events: none; margin-bottom: 2px;
+        }
+        .prime-target-slot .timeline-task {
+            border-color: var(--amber);
+            background: rgba(210, 153, 34, 0.1);
+        }
 
         /* Multi-View Components */
         .timeline-header-wrap { display: flex; justify-content: space-between; align-items: center; position: relative; z-index: 100; }
@@ -1226,15 +1263,34 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         });
     }
 
+    let timelineMapping = {}; // Execution Engine: Backend synced timeline mapping
+
     // ── MOMENTUM CASCADE ENGINE ───────────────────────────────────────────
     async function loadTasks() {
         try {
-            const [tasksRes, statsRes] = await Promise.all([
+            const [tasksRes, statsRes, timelineRes] = await Promise.all([
                 fetch('/api/tasks'),
-                fetch('/api/stats')
+                fetch('/api/stats'),
+                fetch('/api/timeline')
             ]);
             const tasksData = await tasksRes.json();
             const statsData = await statsRes.json();
+            
+            try {
+                const timelineData = await timelineRes.json();
+                const localMappingStr = localStorage.getItem('task_timeline_mapping');
+                if (Object.keys(timelineData).length === 0 && localMappingStr && localMappingStr !== '{}') {
+                    // One-time migration from Local Storage to Server
+                    timelineMapping = JSON.parse(localMappingStr);
+                    fetch('/api/timeline', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ mapping: timelineMapping })
+                    }).catch(e => {}); // Ignore fail
+                } else {
+                    timelineMapping = timelineData;
+                }
+            } catch(e) { console.error("Timeline API fail", e); }
             allTasks = tasksData.tasks || [];
             updateIntegrityMeter(statsData);
             updateControlCenter();
@@ -1628,8 +1684,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             const pool = document.getElementById('unscheduled-dropzone');
             if (!grid || !pool) return;
 
-            const mappingStr = localStorage.getItem('task_timeline_mapping') || '{}';
-            let mapping = JSON.parse(mappingStr);
+            let mapping = timelineMapping || {};
 
             // Migration: handle old day name keys
             const oldDays = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
@@ -1643,7 +1698,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     migrated = true;
                 }
             }
-            if (migrated) localStorage.setItem('task_timeline_mapping', JSON.stringify(mapping));
+            if (migrated) {
+                timelineMapping = mapping;
+                fetch('/api/timeline', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ mapping: timelineMapping }) });
+            }
 
             grid.innerHTML = '';
             const todayStr = formatDateISO(new Date());
@@ -1698,6 +1756,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                         <span class="day-label">${item.label || ''}</span>
                         <span class="date-number">${item.date.getDate()}</span>
                     </div>
+                    ${timelineState.view !== 'month' && timelineState.view !== 'calendar' ? `
+                    <div class="prime-target-slot" data-date="${dateStr}_prime" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
+                        <div class="prime-target-label">[ PRIME TARGET ]</div>
+                    </div>` : ''}
                     <div class="timeline-dropzone" data-date="${dateStr}" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
                     </div>
                 `;
@@ -1730,9 +1792,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
                 const dateKey = mapping[task.id];
                 if (dateKey) {
-                    const zone = grid.querySelector(`.timeline-dropzone[data-date="${dateKey}"]`);
+                    const zone = grid.querySelector(`[data-date="${dateKey}"]`);
                     if (zone) zone.appendChild(el);
-                    else if (timelineState.view === 'week') pool.appendChild(el); // Fallback for week view if not in range
+                    else if (timelineState.view === 'week' || timelineState.view === 'calendar' || timelineState.view === 'month') {
+                        const baseDate = dateKey.replace('_prime', '');
+                        const fallbackZone = grid.querySelector(`.timeline-dropzone[data-date="${baseDate}"]`);
+                        if (fallbackZone) fallbackZone.appendChild(el);
+                        else pool.appendChild(el);
+                    }
                     else pool.appendChild(el);
                 } else {
                     pool.appendChild(el);
@@ -1762,15 +1829,23 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         if (!taskId) return;
         const dateKey = zone.dataset.date;
 
-        const mappingStr = localStorage.getItem('task_timeline_mapping') || '{}';
-        const mapping = JSON.parse(mappingStr);
-        
-        if (zone.id === 'unscheduled-dropzone') {
-            delete mapping[taskId];
-        } else {
-            mapping[taskId] = dateKey;
+        if (zone.classList.contains('prime-target-slot') && zone.querySelectorAll('.timeline-task').length > 0) {
+            showToast("Only ONE Prime Target allowed per day. Re-evaluate.", "var(--amber)");
+            return;
         }
-        localStorage.setItem('task_timeline_mapping', JSON.stringify(mapping));
+
+        if (zone.id === 'unscheduled-dropzone') {
+            delete timelineMapping[taskId];
+        } else {
+            timelineMapping[taskId] = dateKey;
+        }
+        
+        fetch('/api/timeline', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ mapping: timelineMapping })
+        }).catch(e => console.error(e));
+        
         renderTimeline();
     };
 

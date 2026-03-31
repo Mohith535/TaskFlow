@@ -61,6 +61,8 @@ from task_manager.commands import (
     summary,
     reset_tasks,
     view_task,
+    set_prime_target,
+    render_timeline,
     # v2.0 time management commands
     focus_task,
     check_focus,
@@ -100,13 +102,13 @@ def show_help() -> None:
     undo <id>               Re-open mission to [ ] TODO
     delete <id>             Purge mission from record
 
-  CHRONO & FOCUS (v2.0):
+  CHRONO & TIMELINE (v2.0 / Matrix Sync):
     focus --id <id>         Initiate Focus Flow (default 25m)
-    focus --status          Check active focus telemetry
-    focus --end             Gracefully terminate focus session
+    timeline                Render a 7-day tactical terminal view
+    prime <id> [date]       Set mission as [PRIME TARGET] for a day
     schedule <id> <date>    Assign mission to timeline (YYYY-MM-DD/today)
     today                   Review missions assigned for today
-
+    
   ENHANCED TELEMETRY:
     note <id>               Append intelligence to mission
     tag <id> <tags...>      Categorize mission (multi-tag support)
@@ -217,10 +219,17 @@ Examples:
     priority_parser.add_argument('level', choices=['low', 'medium', 'high'], 
                                help='New priority level')
     
-    # Schedule command  
     schedule_parser = subparsers.add_parser('schedule', help='Schedule a task')
     schedule_parser.add_argument('id', type=int, help='Task ID')
     schedule_parser.add_argument('date', help='Date (YYYY-MM-DD, "today", or "tomorrow")')
+    
+    # Timeline
+    subparsers.add_parser('timeline', help='Render a 7-day tactical terminal view')
+    
+    # Prime
+    prime_parser = subparsers.add_parser('prime', help='Set task as PRIME TARGET for a day')
+    prime_parser.add_argument('id', type=int, help='Task ID')
+    prime_parser.add_argument('date', nargs='?', default='today', help='Date (YYYY-MM-DD, "today", or "tomorrow")')
     
     # Tag command
     tag_parser = subparsers.add_parser('tag', help='Add tags to a task')
@@ -395,6 +404,12 @@ def main():
         
         elif args.command == 'schedule':
             schedule_task(args.id, args.date)
+            
+        elif args.command == 'prime':
+            set_prime_target(args.id, args.date)
+            
+        elif args.command == 'timeline':
+            render_timeline()
         
         elif args.command == 'today':
             show_today_tasks()

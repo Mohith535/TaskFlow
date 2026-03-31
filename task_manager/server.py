@@ -62,6 +62,12 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
             self.end_headers_json()
             self.wfile.write(json.dumps({"completion_rate": round(rate, 1), "total": total, "completed": completed}).encode('utf-8'))
             
+        elif path == "/api/timeline":
+            mapping = storage.load_timeline()
+            self.send_response(200)
+            self.end_headers_json()
+            self.wfile.write(json.dumps(mapping).encode('utf-8'))
+            
         elif path == "/api/blocklist":
             try:
                 from task_manager.blockers.blocklist import blocklist_manager
@@ -143,6 +149,20 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
                 self.send_response(201)
                 self.end_headers_json()
                 self.wfile.write(json.dumps({"success": True, "id": new_id}).encode('utf-8'))
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers_json()
+                self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
+            return
+
+        elif path == "/api/timeline" and self.command == 'POST':
+            try:
+                # Expect dict {"mapping": {"1": "2026-03-31_prime"}}
+                mapping = data.get("mapping", {})
+                storage.save_timeline(mapping)
+                self.send_response(200)
+                self.end_headers_json()
+                self.wfile.write(json.dumps({"success": True}).encode('utf-8'))
             except Exception as e:
                 self.send_response(500)
                 self.end_headers_json()

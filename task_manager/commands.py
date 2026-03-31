@@ -1480,54 +1480,136 @@ def emergency_cleanup():
         return False
 
 
+def __parse_date(date_str: str) -> str:
+    if not date_str: return datetime.now().strftime("%Y-%m-%d")
+    date_str = date_str.lower()
+    if date_str == 'today': return datetime.now().strftime("%Y-%m-%d")
+    if date_str == 'tomorrow': return (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+    datetime.strptime(date_str, "%Y-%m-%d") # Validate format
+    return date_str
+
 def schedule_task(task_id: int, date_str: str) -> bool:
-    """Schedule a task for a specific date."""
+    """Schedule a task to the Execution Engine Timeline."""
     tasks = storage.load_tasks()
-    
-    try:
-        # Parse date (accepts YYYY-MM-DD or relative dates)
-        if date_str.lower() in ['today', 'tomorrow']:
-            if date_str.lower() == 'today':
-                scheduled_date = datetime.now().strftime("%Y-%m-%d")
-            else:
-                scheduled_date = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
-        else:
-            # Try to parse as YYYY-MM-DD
-            datetime.strptime(date_str, "%Y-%m-%d")
-            scheduled_date = date_str
-        
-        for task in tasks:
-            if task.id == task_id:
-                # Add schedule note
-                task.notes = f"[Scheduled: {scheduled_date}] " + (task.notes or "")
-                storage.save_tasks(tasks)
-                Messenger.success(f"Task #{task_id} scheduled for {scheduled_date}")
-                return True
-        
+    task_exists = any(t.id == task_id for t in tasks)
+    if not task_exists:
         Messenger.task_not_found(task_id)
         return False
         
+    try:
+        scheduled_date = __parse_date(date_str)
+        mapping = storage.load_timeline()
+        mapping[str(task_id)] = scheduled_date
+        storage.save_timeline(mapping)
+        Messenger.success(f"Task #{task_id} logically deployed to {scheduled_date}")
+        return True
     except ValueError:
         Messenger.careful("Invalid date format. Use YYYY-MM-DD, 'today', or 'tomorrow'.")
         return False
 
+def set_prime_target(task_id: int, date_str: str = 'today') -> bool:
+    """Set a task as the single [PRIME TARGET] for a given date."""
+    if not date_str: date_str = 'today'
+    tasks = storage.load_tasks()
+    task_exists = any(t.id == task_id for t in tasks)
+    if not task_exists:
+        Messenger.task_not_found(task_id)
+        return False
+        
+    try:
+        scheduled_date = __parse_date(date_str)
+        prime_key = f"{scheduled_date}_prime"
+        mapping = storage.load_timeline()
+        
+        # Enforce Prime Target Protocol (One Frog Per Day)
+        for tid, d_key in mapping.items():
+            if d_key == prime_key and str(tid) != str(task_id):
+                Messenger.careful(f"Task #{tid} is ALREADY the Prime Target for {scheduled_date}.")
+                print("Only ONE Prime Target allowed per day. Please reconsider.")
+                return False
+                
+        mapping[str(task_id)] = prime_key
+        storage.save_timeline(mapping)
+        Messenger.success(f"🎯 Task #{task_id} is now your [PRIME TARGET] for {scheduled_date}")
+        return True
+    except ValueError:
+        Messenger.careful("Invalid date format. Use YYYY-MM-DD, 'today', or 'tomorrow'.")
+        return False
+
+def render_timeline() -> None:
+    """Render a 7-day tactical terminal timeline."""
+    tasks = storage.load_tasks()
+    mapping = storage.load_timeline()
+    
+    # Create quick lookup map for tasks
+    task_dict = {str(t.id): t for t in tasks}
+    
+    # Calculate next 7 days
+    start_date = datetime.now()
+    dates = [(start_date + timedelta(days=i)) for i in range(7)]
+    
+    print("\n   [ TACTICAL TIMELINE (NEXT 7 DAYS) ]\n")
+    
+    for d in dates:
+        d_str = d.strftime("%Y-%m-%d")
+        d_label = d.strftime("%A, %b %d")
+        print(f"─ {d_label} {'─' * (50 - len(d_label))}")
+        
+        # Check Prime Target
+        prime_found = False
+        for tid, d_key in mapping.items():
+            if d_key == f"{d_str}_prime":
+                tsk = task_dict.get(tid)
+                if tsk:
+                    print(f"  [★ PRIME TARGET] {tsk.title} (ID:{tid})")
+                    prime_found = True
+                    break
+        
+        if not prime_found:
+            print("  [ ] No Prime Target assigned.")
+            
+        # Standard Tasks
+        has_standard = False
+        for tid, d_key in mapping.items():
+            if d_key == d_str:
+                tsk = task_dict.get(tid)
+                if tsk:
+                    if not has_standard:
+                        print("\n  Scheduled Missions:")
+                    print(f"   • {tsk.title} (ID:{tid}) [{tsk.priority.upper()}]")
+                    has_standard = True
+                    
+        print() # Padding between days
 
 def show_today_tasks() -> None:
-    """Show today's scheduled tasks."""
+    """Show today's scheduled tasks based on the timeline mapping."""
     today = datetime.now().strftime("%Y-%m-%d")
     tasks = storage.load_tasks()
+    mapping = storage.load_timeline()
     
     today_tasks = []
-    for task in tasks:
-        if f"[Scheduled: {today}]" in (task.notes or ""):
-            today_tasks.append(task)
+    prime_task = None
     
-    if today_tasks:
-        print(f"\n📅 Today's Tasks ({datetime.now().strftime('%A, %b %d')}):")
-        for task in today_tasks:
-            print(f"  {task}")
+    for task in tasks:
+        d_key = mapping.get(str(task.id))
+        if d_key == f"{today}_prime":
+            prime_task = task
+        elif d_key == today:
+            today_tasks.append(task)
+            
+    print(f"\n📅 Today's Active Assignments ({datetime.now().strftime('%A, %b %d')}):")
+    
+    if prime_task:
+        print(f"\n  🎯 [PRIME TARGET]\n    #{prime_task.id}: {prime_task.title} [{prime_task.priority.upper()}]")
     else:
-        Messenger.note(f"No tasks scheduled for today ({datetime.now().strftime('%A, %b %d')}).")
+        print("\n  🎯 [PRIME TARGET] -> Not Assigned. Run 'taskflow prime <id>' to prioritize.")
+
+    if today_tasks:
+        print("\n  📋 Missions:")
+        for task in today_tasks:
+            print(f"    #{task.id}: {task.title} [{task.priority.upper()}]")
+    elif not prime_task:
+        Messenger.note("\nNo tasks active for today.")
 
 
 # =========================================================
@@ -1622,9 +1704,10 @@ def normalize_priority(priority: str) -> str:
     priority = priority.strip().lower()
     
     priority_map = {
-        'high': 'High', 'h': 'High',
-        'medium': 'Medium', 'm': 'Medium',
-        'low': 'Low', 'l': 'Low'
+        'high': 'Critical', 'h': 'Critical', 'critical': 'Critical',
+        'medium': 'Strategic', 'm': 'Strategic', 'strategic': 'Strategic',
+        'low': 'Noise', 'l': 'Noise', 'noise': 'Noise',
+        'purge': 'Purge', 'p': 'Purge'
     }
     
-    return priority_map.get(priority, 'Medium')
+    return priority_map.get(priority, 'Strategic')

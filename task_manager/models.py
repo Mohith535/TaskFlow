@@ -30,7 +30,7 @@ class Task:
         if len(self.title) > 200:
             raise ValueError("Task title too long (max 200 characters)")
         
-        if self.priority not in ["Low", "Medium", "High"]:
+        if self.priority not in ["Low", "Medium", "High", "Critical", "Strategic", "Noise", "Purge"]:
             raise ValueError(f"Invalid priority: {self.priority}")
         
         if self.completed and not self.completed_at:
@@ -133,11 +133,14 @@ class TaskManager:
         completed = sum(1 for task in self.tasks if task.completed)
         pending = total - completed
         
-        priority_stats = {"Low": 0, "Medium": 0, "High": 0}
+        priority_stats = {"Low": 0, "Medium": 0, "High": 0, "Critical": 0, "Strategic": 0, "Noise": 0, "Purge": 0}
         total_focus_minutes = 0
         
         for task in self.tasks:
-            priority_stats[task.priority] += 1
+            p = task.priority
+            if p not in priority_stats:
+                priority_stats[p] = 0
+            priority_stats[p] += 1
             total_focus_minutes += task.focus_minutes_spent
         
         return {
