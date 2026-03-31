@@ -4,10 +4,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TaskFlow | Mission Control</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400&family=Inter:ital,opsz,wght@0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700&display=swap" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="/static/three.min.js"></script>
     <style>
         /* ─── RESET ─────────────────────────────── */
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -46,8 +43,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             --emerald:       #4ade80;
             --emerald-glow:  rgba(74, 222, 128, 0.15);
 
-            --font-mono: 'DM Mono', monospace;
-            --font-body: 'Inter', sans-serif;
+            --font-mono: Consolas, 'Courier New', monospace;
+            --font-body: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Ubuntu, 'Helvetica Neue', sans-serif;
 
             /* System States */
             --system-blur: 12px;

@@ -4,6 +4,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import threading
 from urllib.parse import urlparse, parse_qs
 from task_manager import storage, commands
+from task_manager.commands import normalize_priority
 from task_manager.web_ui import HTML_TEMPLATE
 from task_manager import models
 
@@ -73,6 +74,30 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
                 self.end_headers_json()
                 self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
             
+        elif path.startswith("/static/"):
+            try:
+                import os
+                file_path = path[8:]
+                if '..' in file_path:
+                    raise Exception("Invalid path")
+                
+                static_dir = os.path.join(os.path.dirname(__file__), 'static')
+                full_path = os.path.join(static_dir, file_path)
+                
+                if os.path.exists(full_path) and os.path.isfile(full_path):
+                    self.send_response(200)
+                    if full_path.endswith('.js'):
+                        self.send_header('Content-Type', 'application/javascript')
+                    self.end_headers()
+                    with open(full_path, 'rb') as f:
+                        self.wfile.write(f.read())
+                else:
+                    self.send_response(404)
+                    self.end_headers()
+            except Exception:
+                self.send_response(404)
+                self.end_headers()
+
         else:
             self.send_response(404)
             self.end_headers()
@@ -92,7 +117,8 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
         if path == "/api/tasks" and self.command == 'POST':
             try:
                 title = data.get("title")
-                priority = data.get("priority", "medium")
+                priority_raw = data.get("priority", "medium")
+                priority = normalize_priority(priority_raw)
                 tags = data.get("tags", [])
                 
                 if not title:
@@ -130,7 +156,7 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
                 found = False
                 for task in tasks:
                     if task.id == task_id:
-                        task.status = 'done'
+                        task.mark_complete()
                         found = True
                         break
                 
