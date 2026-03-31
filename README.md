@@ -1,10 +1,14 @@
-# 🌊 TaskFlow v3.5.0 "Momentum"
+# 🌊 TaskFlow v4.0.0 "The Execution Engine"
 > **Momentum Engineering for Calm Productivity. A high-fidelity, privacy-first task ecosystem built for deep work.**
 
 ---
 
-## 💎 The TaskFlow Philosophy
-TaskFlow is not just a task manager; it is a **Tactical Command Center** for your cognitive load. Designed with a "Premium Emerald" aesthetic and built on a foundation of "Momentum Engineering," it provides a supportive, high-performance environment for effortless mastery.
+## 💎 The Execution Philosophy
+TaskFlow is not just a task manager; it is a **Tactical Command Center** engineered to reduce cognitive load. 
+Instead of forcing you to organize endless lists, it uses psychological frameworks to guide execution:
+- **Eisenhower Matrix Native**: Priorities are treated as `[CRITICAL]`, `[STRATEGIC]`, `[NOISE]`, and `[PURGE]`, visually color-coded to guide your attention.
+- **The "One Frog" Protocol**: The `[PRIME TARGET]` system mathematically limits you to exactly *one* prime objective per day. No over-planning, just execution.
+- **Seamless State Sync**: Whether you drag-and-drop on the Web HUD or type commands in the Terminal, your tactical timeline is instantly synchronized across both platforms.
 
 ---
 
@@ -52,13 +56,14 @@ TaskFlow features a multi-layered distraction defense system designed to protect
 | `taskflow complete <id>`| Confirm mission [V] SUCCESS |
 | `taskflow delete <id>` | Purge mission from the local database |
 
-### ⏳ Chrono & Focus
+### ⚡ The Execution Engine (Web + CLI Sync)
 | Command | Description |
 | :--- | :--- |
-| `taskflow focus` | Activate Focus Flow (`--id`, `--minutes`, `--mode`) |
-| `taskflow schedule` | Assign mission to the timeline (`today`, `tomorrow`, `YYYY-MM-DD`) |
-| `taskflow ui` | Deploy the **Mission Control** Web HUD |
-| `taskflow ui --tui` | (Coming Soon) Launch the **Momentum Cascade** standalone |
+| `taskflow timeline` | Render a beautiful 7-day tactical strategy directly in stdout |
+| `taskflow prime <id>` | Lock in your day's single `[★ PRIME TARGET]` (Enforces 1-Frog rule) |
+| `taskflow schedule <id> YYYY-MM-DD` | Deploy a secondary mission to the timeline |
+| `taskflow today` | Review today's Prime Target and secondary tactical assignments |
+| `taskflow ui` | Deploy the **Mission Control** Web HUD (Fully synced with CLI timeline) |
 
 ### 🧠 Intelligence & Ops
 | Command | Description |
