@@ -27,6 +27,6 @@ setup(
         "Topic :: Office/Business :: Scheduling",
     ],
     keywords="cli task manager productivity time-management focus pomodoro",
-    long_description=open("README.md").read() if os.path.exists("README.md") else "",
+    long_description=open("README.md", encoding="utf-8").read() if os.path.exists("README.md") else "",
     long_description_content_type="text/markdown",
 )

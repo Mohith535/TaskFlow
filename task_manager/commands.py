@@ -129,7 +129,8 @@ class FocusManager:
             traceback.print_exc()
             return False
     
-    def start_focus_session(self, task_id, task_title, minutes=25, 
+    def start_focus_session(self, task_id: int, task_title: str, task_notes: str = "", 
+                            priority: str = "medium", minutes: int = 25, 
                            sites=None, apps=None, mode="gentle"):
         """Start a focus session with optional blocking."""
         
@@ -146,8 +147,9 @@ class FocusManager:
         self.active_focus_task = task_id
         self.focus_start_time = datetime.now()
         
-        # Start focus timer (your existing function)
-        if not time_tracker.start_focus(task_id, task_title, minutes):
+        # Start focus timer (sync state to disk)
+        if not time_tracker.start_focus(task_id, task_title, task_notes, 
+                                        priority, minutes, sites, mode):
             return False
         
         # Start blocking if requested
@@ -225,8 +227,12 @@ class FocusManager:
             "focus_active": True,
             "task_id": focus_status.get("task_id"),
             "task_title": focus_status.get("task_title"),
-            "minutes_left": focus_status.get("minutes_left"),
-            "end_time": focus_status.get("end_time"),
+            "task_notes": focus_status.get("task_notes"),
+            "priority": focus_status.get("priority"),
+            "minutes_left": focus_status.get("remaining_minutes"), # Consistent with check_focus return
+            "remaining_seconds": focus_status.get("remaining_seconds"),
+            "paused": focus_status.get("paused", False),
+            "cycles_completed": focus_status.get("cycles_completed", 0),
             "blocking_active": False,
             "blocking_mode": None,
             "blocked_items": {}
@@ -243,6 +249,16 @@ class FocusManager:
                     "apps": block_status.get("blocked_apps", [])
                 },
                 "blocked_since": block_status.get("since")
+            })
+        elif focus_status.get("blocked_sites"):
+            # Fallback for Inter-Process Sync (e.g. Server reading CLI session)
+            result.update({
+                "blocking_active": True,
+                "blocking_mode": focus_status.get("mode", "gentle"),
+                "blocked_items": {
+                    "sites": focus_status.get("blocked_sites", []),
+                    "apps": []
+                }
             })
         
         return result
@@ -299,49 +315,62 @@ class TimeTracker:
         self.on_session_expired = None
         self._load_state()
     
-    def _load_state(self):
+    def _load_state(self, quiet: bool = False):
         """Load saved focus state from disk."""
         try:
-            state_file = Path(".taskflow/focus_state.json")
+            from task_manager.storage import storage
+            state_file = storage.data_dir / "focus_state.json"
             if state_file.exists():
-                with open(state_file, 'r') as f:
-                    state = json.load(f)
+                state = None
+                for _ in range(10): # Retry up to 1 second
+                    try:
+                        with open(state_file, 'r') as f:
+                            state = json.load(f)
+                        break
+                    except PermissionError:
+                        time.sleep(0.1)
+                        
+                if state and state.get('active_session'):
+                    start_time_str = state['active_session']['start_time']
+                    start_time = datetime.fromisoformat(start_time_str)
+                    minutes = state['active_session']['minutes']
                     
-                    # Check if we have an active session
-                    if state.get('active_session'):
-                        # Convert string time back to datetime
-                        start_time_str = state['active_session']['start_time']
-                        start_time = datetime.fromisoformat(start_time_str)
-                        minutes = state['active_session']['minutes']
-                        
-                        # Calculate elapsed time
-                        elapsed = (datetime.now() - start_time).total_seconds()
-                        remaining = (minutes * 60) - elapsed
-                        
-                        if remaining > 0:
-                            # Session still active - restore it
-                            self.active_session = state['active_session']
-                            self.start_time = time.time() - elapsed
-                            # REMOVED the print statement here to avoid spam
-                        else:
-                            # Session expired - auto-end it
-                            print(f"⏰ Previous focus session expired.")
-                            self._save_state({'active_session': None, 'start_time': None})
-                            if hasattr(self, 'on_session_expired') and self.on_session_expired:
-                                self.on_session_expired()  # Let FocusManager handle it
+                    # Handle pausing logic for elapsed time
+                    is_paused = state['active_session'].get('paused', False)
+                    if is_paused:
+                        paused_at = datetime.fromisoformat(state['active_session']['paused_at'])
+                        elapsed = (paused_at - start_time).total_seconds()
                     else:
-                        # No active session - ensure clean state
-                        self.active_session = None
-                        self.start_time = None
-        except (json.JSONDecodeError, FileNotFoundError, KeyError, ValueError):
-            # If any error, start fresh
+                        elapsed = (datetime.now() - start_time).total_seconds()
+                    
+                    remaining = (minutes * 60) - elapsed
+                    
+                    if remaining > 0:
+                        self.active_session = state['active_session']
+                        self.start_time = time.time() - elapsed
+                    else:
+                        if not quiet:
+                            print(f"⏰ Previous focus session expired.")
+                        
+                        # Increment cycle since it completed naturally while CLI was closed
+                        self.increment_cycle()
+                        
+                        self._save_state({'active_session': None, 'start_time': None})
+                        if hasattr(self, 'on_session_expired') and self.on_session_expired:
+                            self.on_session_expired()
+                else:
+                    self.active_session = None
+                    self.start_time = None
+        except (json.JSONDecodeError, FileNotFoundError, KeyError, ValueError, PermissionError) as e:
             self.active_session = None
             self.start_time = None
+
     
     def _save_state(self, state=None):
         """Save focus state to disk."""
         try:
-            state_file = Path(".taskflow/focus_state.json")
+            from task_manager.storage import storage
+            state_file = storage.data_dir / "focus_state.json"
             state_file.parent.mkdir(parents=True, exist_ok=True)
             
             if state is None:
@@ -351,33 +380,129 @@ class TimeTracker:
                     'saved_at': datetime.now().isoformat()
                 }
             
-            with open(state_file, 'w') as f:
-                json.dump(state, f)
+            for _ in range(10): # Retry up to 1 second
+                try:
+                    with open(state_file, 'w') as f:
+                        json.dump(state, f)
+                    break
+                except PermissionError:
+                    time.sleep(0.1)
         except Exception:
-            pass  # Silent fail for focus state
+            pass
+            
+    def get_cycles(self):
+        try:
+            from task_manager.storage import storage
+            stats_file = storage.data_dir / "user_stats.json"
+            if stats_file.exists():
+                with open(stats_file, 'r') as f:
+                    stats = json.load(f)
+                    today = datetime.now().strftime('%Y-%m-%d')
+                    if stats.get('last_cycle_date') == today:
+                        return stats.get('cycles_today', 0)
+        except:
+            pass
+        return 0
+        
+    def increment_cycle(self):
+        try:
+            from task_manager.storage import storage
+            stats_file = storage.data_dir / "user_stats.json"
+            stats = {'cycles_today': 0, 'last_cycle_date': '', 'streak_days': 0}
+            if stats_file.exists():
+                try:
+                    with open(stats_file, 'r') as f:
+                        stats.update(json.load(f))
+                except: pass
+                
+            today = datetime.now().strftime('%Y-%m-%d')
+            if stats.get('last_cycle_date') == today:
+                stats['cycles_today'] += 1
+            else:
+                last_date_str = stats.get('last_cycle_date', '')
+                if last_date_str:
+                    try:
+                        last_date = datetime.strptime(last_date_str, '%Y-%m-%d')
+                        # Check streak
+                        if (datetime.now() - last_date).days == 1:
+                            stats['streak_days'] += 1
+                        else:
+                            stats['streak_days'] = 1
+                    except:
+                        stats['streak_days'] = 1
+                else:
+                    stats['streak_days'] = 1
+                
+                stats['cycles_today'] = 1
+                stats['last_cycle_date'] = today
+                
+            with open(stats_file, 'w') as f:
+                json.dump(stats, f)
+        except:
+            pass
     
-    def start_focus(self, task_id: int, task_title: str, minutes: int = 25):
+    def start_focus(self, task_id: int, task_title: str, task_notes: str = "", 
+                    priority: str = "medium", minutes: int = 25, 
+                    blocked_sites: list = None, mode: str = "gentle"):
         """Start a focus session for a task."""
         self.active_session = {
             'task_id': task_id,
             'task_title': task_title,
+            'task_notes': task_notes,
+            'priority': priority,
             'minutes': minutes,
-            'start_time': datetime.now().isoformat()
+            'blocked_sites': blocked_sites or [],
+            'mode': mode,
+            'start_time': datetime.now().isoformat(),
+            'paused': False
         }
         self.start_time = time.time()
-        
-        # Save immediately
         self._save_state()
-        
         Messenger.focus_start(task_title, minutes)
         return self.active_session
+
+    def pause_focus(self):
+        """Pause current session."""
+        self._load_state(quiet=True)
+        if self.active_session and not self.active_session.get('paused'):
+            self.active_session['paused'] = True
+            self.active_session['paused_at'] = datetime.now().isoformat()
+            self._save_state()
+
+    def resume_focus(self):
+        """Resume current session."""
+        self._load_state(quiet=True)
+        if self.active_session and self.active_session.get('paused'):
+            paused_at = datetime.fromisoformat(self.active_session['paused_at'])
+            start_time = datetime.fromisoformat(self.active_session['start_time'])
+            
+            pause_duration = datetime.now() - paused_at
+            # Shift start time forward so time doesn't appear to have elapsed
+            new_start_time = start_time + pause_duration
+            
+            self.active_session['start_time'] = new_start_time.isoformat()
+            self.active_session['paused'] = False
+            del self.active_session['paused_at']
+            
+            self.start_time += pause_duration.total_seconds()
+            self._save_state()
     
     def check_focus(self):
         """Check current focus session status."""
+        self._load_state(quiet=True)
+        
         if not self.active_session:
             return None
+            
+        start_time = datetime.fromisoformat(self.active_session['start_time'])
+        is_paused = self.active_session.get('paused', False)
         
-        elapsed = time.time() - self.start_time
+        if is_paused:
+            paused_at = datetime.fromisoformat(self.active_session['paused_at'])
+            elapsed = (paused_at - start_time).total_seconds()
+        else:
+            elapsed = (datetime.now() - start_time).total_seconds()
+            
         remaining = (self.active_session['minutes'] * 60) - elapsed
         
         if remaining <= 0:
@@ -385,47 +510,53 @@ class TimeTracker:
             if hasattr(self, 'on_session_expired') and self.on_session_expired:
                 self.on_session_expired()
             else:
+                self.increment_cycle()
                 self._save_state({'active_session': None, 'start_time': None})
                 self.active_session = None
                 self.start_time = None
-            return {'status': 'completed', 'session': session}
+            return {'status': 'completed', 'session': session, 'cycles_completed': self.get_cycles()}
 
-        
         return {
             'status': 'active',
+            'task_id': self.active_session.get('task_id'),
+            'task_title': self.active_session.get('task_title'),
+            'task_notes': self.active_session.get('task_notes'),
+            'priority': self.active_session.get('priority'),
+            'blocked_sites': self.active_session.get('blocked_sites', []),
+            'mode': self.active_session.get('mode', 'gentle'),
             'elapsed_minutes': int(elapsed / 60),
             'remaining_minutes': int(remaining / 60),
-            'remaining_seconds': int(remaining % 60)
+            'remaining_seconds': int(remaining % 60),
+            'paused': is_paused,
+            'cycles_completed': self.get_cycles()
         }
     
-    def end_focus(self):
+    def end_focus(self, completed: bool = False):
         """End current focus session."""
         if not self.active_session:
             Messenger.note("No active focus session to end.")
             return
         
+        session_minutes = self.active_session.get('minutes', 25)
+        task_title = self.active_session.get('task_title', 'Task')
         try:
-            # Add focus time to task
+            from task_manager.storage import storage
             tasks = storage.load_tasks()
-            session_minutes = self.active_session['minutes']
-            task_title = self.active_session['task_title']
             
             for task in tasks:
-                if task.id == self.active_session['task_id']:
+                if task.id == self.active_session.get('task_id'):
                     task.add_focus_minutes(session_minutes)
                     storage.save_tasks(tasks)
                     break
         except Exception:
-            pass  # Don't crash if can't save focus time
+            pass
+            
+        if completed:
+            self.increment_cycle()
         
-        # Show completion message
         Messenger.focus_complete(task_title, session_minutes)
-        
-        # Clear session
         self.active_session = None
         self.start_time = None
-        
-        # Clear saved state
         self._save_state({'active_session': None, 'start_time': None})
         print("🧹 Focus session cleared from memory.")
 
@@ -433,14 +564,79 @@ class TimeTracker:
 # Global instance
 time_tracker = TimeTracker()
 time_tracker.on_session_expired = focus_manager.end_focus_session
-# If there was an active session that we loaded and it was already expired,
-# _load_state within __init__ wouldn't have called the callback since it wasn't bound.
-# We do a quick check here.
+
 if not time_tracker.active_session:
-    # Just in case there is some orphaned block system state, let FocusManager ensure everything is clean
     if focus_manager.blocker and focus_manager.blocker.is_active:
         focus_manager.end_focus_session()
 
+
+
+# =========================================================
+# INTELLIGENT MOMENTUM ENGINE
+# =========================================================
+def get_momentum_targets(limit=3):
+    """Priority selection engine to find optimal next tasks."""
+    from datetime import datetime
+    from task_manager import storage
+    
+    tasks = storage.load_tasks()
+    timeline = storage.load_timeline()
+    today_str = datetime.now().strftime('%Y-%m-%d')
+    
+    # 1. Timeline TODAY targets
+    today_task_ids = {int(tid) for tid, tslot in timeline.items() if tslot.startswith(today_str)}
+    today_tasks = [t for t in tasks if not t.completed and t.id in today_task_ids]
+    
+    # 2. HIGH priority incomplete targets (Critical, Strategic, High)
+    high_impact = [t for t in tasks if not t.completed and t.id not in today_task_ids and t.priority in ['Critical', 'Strategic']]
+    high_priority = [t for t in tasks if not t.completed and t.id not in today_task_ids and t.priority == 'High']
+    
+    # 3. Remaining unscheduled incomplete targets
+    other_tasks = [t for t in tasks if not t.completed and t.id not in today_task_ids and t.priority not in ['Critical', 'Strategic', 'High']]
+    
+    # Combine pools in order and deduplicate logically
+    momentum_pool = today_tasks + high_impact + high_priority + other_tasks
+    
+    targets = []
+    seen_ids = set()
+    for t in momentum_pool:
+        if t.id not in seen_ids:
+            targets.append({
+                "id": t.id,
+                "title": t.title,
+                "priority": t.priority,
+                "tags": t.tags,
+                "notes": t.notes
+            })
+            seen_ids.add(t.id)
+            if len(targets) >= limit:
+                break
+                
+    return targets
+
+def complete_focus(efficiency_score=0, time_saved=0, time_used=0):
+    """Early Completion Success Flow: End session, log stats, trigger momentum mode."""
+    status = focus_manager.get_focus_status()
+    if not status or not status.get("focus_active"):
+        return False
+        
+    task_title = status.get("task_title", "Task")
+    
+    print(f"\n[FOCUS COMPLETE] ✦ MISSION SUCCESS ✦")
+    print(f"Task: {task_title}")
+    if time_used > 0:
+        print(f"Time Used: {time_used}m")
+    if time_saved > 0:
+        print(f"Saved: {time_saved}m")
+    if efficiency_score > 0:
+        print(f"Efficiency: {efficiency_score}%")
+    print("[MOMENTUM MODE] Ready for next sequence.")
+    
+    # Force end the session properly globally
+    time_tracker.end_focus(completed=True)
+    focus_manager.end_focus_session()
+    
+    return True
 
 
 # =========================================================
@@ -1009,7 +1205,7 @@ def list_ids() -> None:
 
 def focus_task(task_id: int, minutes: int = 25, 
                block_sites: list = None, block_apps: list = None,
-               mode: str = "gentle"):
+               mode: str = "gentle", force: bool = False):
     """Start focus on a task with optional distraction blocking.
     
     Args:
@@ -1064,8 +1260,11 @@ def focus_task(task_id: int, minutes: int = 25,
             
             # Start focus with blocking
             success = focus_manager.start_focus_session(
-                task_id, task.title, minutes, 
-                block_sites, block_apps, mode
+                task_id, task.title, 
+                task_notes=task.notes or "",
+                priority=task.priority or "medium",
+                minutes=minutes, 
+                sites=block_sites, apps=block_apps, mode=mode
             )
             
             if success:
@@ -1098,6 +1297,7 @@ def focus_task(task_id: int, minutes: int = 25,
                     except Exception as e:
                         print(f"   ⚠️  Background auto-unblocker failed to start: {e}")
                         
+                open_web_ui(force=False)
                 return True
             return False
     
@@ -1121,7 +1321,8 @@ def check_focus():
     print(f"\n🎯 Currently focusing on:")
     print(f"   Task: {status['task_title']} (ID: {status['task_id']})")
     print(f"   Time left: {status['minutes_left']} minutes")
-    print(f"   Ends at: {status['end_time'].strftime('%H:%M')}")
+    end_time = datetime.now() + timedelta(minutes=status['minutes_left'])
+    print(f"   Ends at: {end_time.strftime('%H:%M')}")
     
     # Show blocking info if active
     if status["blocking_active"]:

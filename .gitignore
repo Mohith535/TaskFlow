@@ -29,3 +29,8 @@ restart_server.py
 .idea/
 *.log
 .env
+
+EXECUTION_PHASE_2.md
+log.txt
+test_crash.py
+test_import.txt

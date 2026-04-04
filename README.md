@@ -43,6 +43,10 @@ TaskFlow features a multi-layered distraction defense system designed to protect
 - **Anti-Impulse Logic**: Prevents accidental or impulsive session breaks by requiring intentional confirmation before early unblocking.
 - **Self-Healing Index**: Automatically detects and repairs orphaned system-level blocks on startup from previous system crashes.
 
+### 🌀 The Momentum Engine
+- **Early Completion Success Flow**: Finishing a mission before the timer ends calculates an efficiency score and time banked, instantly converting your unused time into momentum.
+- **Intelligent Next Targets**: Instead of dumping you back into the main list, completing a mission immediately offers a curated, 3-task deployment modal based on priority, schedule, and previous habits to lock you into a continuous flow state.
+
 ---
 
 ## 🛠️ Tactical Command Guide

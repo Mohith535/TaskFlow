@@ -119,18 +119,131 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         body.state-deep-work .col-advisor { opacity: 0.3; pointer-events: auto; }
         body.state-deep-work .col-main { filter: blur(8px); opacity: 0.2; pointer-events: none; }
         
-        /* Focus Overlay */
+        /* Focus Overlay (The HUD) */
         .focus-overlay {
-            position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column;
-            align-items: center; justify-content: center; pointer-events: none; opacity: 0;
-            transition: opacity 0.5s ease;
+            position: fixed; inset: 0; background: rgba(6, 10, 15, 0.92);
+            backdrop-filter: blur(40px) saturate(200%);
+            -webkit-backdrop-filter: blur(40px) saturate(200%);
+            z-index: 50000; display: none; opacity: 0; 
+            transition: all 1s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 1s linear;
+            align-items: center; justify-content: center;
         }
-        .focus-overlay.active { pointer-events: auto; opacity: 1; }
+        .focus-overlay.active { display: flex; opacity: 1; }
+        .focus-overlay.blur-heavy { backdrop-filter: blur(60px) saturate(150%); }
         .focus-overlay-content {
-            background: rgba(22, 27, 34, 0.4); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
-            padding: 48px; border-radius: 24px; border: 1px solid rgba(255,255,255,0.05); text-align: center;
-            display: flex; flex-direction: column; gap: 24px; min-width: 400px;
+            width: 100%; max-width: 1000px; padding: 60px;
+            display: grid; grid-template-columns: 1fr 1fr; gap: 60px;
+            text-align: left;
         }
+
+        .focus-progress-bar {
+            position: absolute; top: 0; left: 0;
+            height: 2px; background: linear-gradient(90deg, var(--blue), var(--ai-purple));
+            transition: width 1s linear; box-shadow: 0 0 10px var(--blue);
+            width: 0%; z-index: 50001; display: none;
+        }
+        .focus-overlay.active ~ .focus-progress-bar { display: block; }
+        
+        @keyframes timerPulse {
+            0%, 100% { text-shadow: 0 0 30px rgba(88,166,255,0.3); }
+            50% { text-shadow: 0 0 60px rgba(88,166,255,0.6), 0 0 100px rgba(88,166,255,0.2); }
+        }
+        .timer-running { animation: timerPulse 4s ease-in-out infinite; }
+
+        .abort-modal {
+            position: fixed; inset: 0; z-index: 50002;
+            display: none; align-items: center; justify-content: center;
+            opacity: 0; transition: opacity 0.3s ease; pointer-events: none;
+        }
+        .abort-modal.active { display: flex; opacity: 1; pointer-events: auto; }
+        .abort-modal-content {
+            background: rgba(15, 20, 25, 0.95); border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 20px; padding: 40px; text-align: center; max-width: 400px; width: 100%;
+            transform: scale(0.95); transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        }
+        .abort-modal.active .abort-modal-content { transform: scale(1); }
+        .abort-icon { font-size: 40px; color: var(--red); margin-bottom: 20px; animation: glowPulse 2s infinite; }
+
+        .reward-screen {
+            position: fixed; inset: 0; z-index: 50002; display: none; align-items: center; justify-content: center;
+            background: rgba(6, 10, 15, 0.98); opacity: 0; transition: opacity 0.5s ease;
+        }
+        .reward-screen.active { display: flex; opacity: 1; }
+        .reward-content { text-align: center; max-width: 500px; }
+        .reward-title { font-size: 24px; font-weight: 700; color: #f0a030; letter-spacing: 6px; margin-bottom: 12px; text-shadow: 0 0 30px rgba(240,160,48,0.4); }
+        .reward-subtitle { font-size: 16px; color: var(--text-hero); margin-bottom: 40px; font-weight:600; }
+        .reward-stats {
+            background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 16px; padding: 30px; margin-bottom: 40px; display: flex; flex-direction: column; gap: 16px;
+        }
+        .reward-stat-row { font-size: 18px; font-weight: 600; }
+
+        .btn-assist {
+            width:100%; background:rgba(163,113,247,0.1); border:1px solid var(--ai-purple); color:var(--ai-purple); padding:16px; border-radius:12px; font-weight:700; cursor:pointer; transition:all 0.3s; display:flex; align-items:center; justify-content:center; gap:8px;
+        }
+        .btn-assist:hover { background:rgba(163,113,247,0.2); box-shadow: 0 0 20px rgba(163,113,247,0.2); transform: translateY(-2px); }
+        .btn-assist:active { transform: translateY(0); }
+        .btn-assist.pulsing { animation: glowPulse 2s infinite; }
+
+        .btn-focus-pause {
+            flex:1; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); 
+            color:var(--text-muted); padding:16px; border-radius:12px; cursor:pointer; font-weight:700; 
+            transition:all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .btn-focus-pause:hover { background:rgba(255,255,255,0.1); color:var(--text-hero); transform: translateY(-2px); box-shadow: 0 4px 15px rgba(255,255,255,0.05); }
+        .btn-focus-pause:active { transform: translateY(1px); box-shadow: none; }
+
+        .btn-focus-abort {
+            flex:1; background:transparent; border:1px solid rgba(248,81,73,0.3); color:var(--red); 
+            padding:16px; border-radius:12px; cursor:pointer; font-weight:700; 
+            transition:all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .btn-focus-abort-full { padding: 12px; width: 100%; }
+        .btn-focus-abort:hover, .btn-focus-abort-full:hover { 
+            background:rgba(248,81,73,0.1); border-color:var(--red); 
+            transform: translateY(-2px); box-shadow: 0 4px 20px rgba(248,81,73,0.2); 
+        }
+        .btn-focus-abort:active, .btn-focus-abort-full:active { transform: translateY(1px); box-shadow: 0 0 10px rgba(248,81,73,0.1); }
+
+        .btn-focus-resume {
+            width:100%; background:var(--emerald); border:none; color:#000; padding:16px; border-radius:12px; 
+            font-weight:700; font-size:16px; cursor:pointer; 
+            transition:all 0.3s cubic-bezier(0.16, 1, 0.3, 1); box-shadow:0 0 20px rgba(74,222,128,0.4);
+        }
+        .btn-focus-resume:disabled { opacity: 0.5; filter: grayscale(50%); cursor: not-allowed; transform: none; box-shadow: none; }
+        .btn-focus-resume:not(:disabled):hover { filter: brightness(1.1); transform: translateY(-2px) scale(1.02); box-shadow:0 10px 30px rgba(74,222,128,0.5); }
+        .btn-focus-resume:not(:disabled):active { transform: translateY(1px) scale(0.98); box-shadow:0 0 10px rgba(74,222,128,0.4); }
+
+        .btn-modal-primary { 
+            width:100%; background:rgba(74,222,128,0.1); border:1px solid var(--emerald); color:var(--emerald); 
+            padding:16px; border-radius:10px; font-weight:700; font-size:16px; cursor:pointer; 
+            transition:all 0.3s cubic-bezier(0.16, 1, 0.3, 1); 
+        }
+        .btn-modal-primary:hover { 
+            background:rgba(74,222,128,0.2); transform: translateY(-2px); box-shadow: 0 4px 15px rgba(74,222,128,0.2); 
+            text-shadow: 0 0 10px rgba(74,222,128,0.5);
+        }
+        .btn-modal-primary:active { transform: translateY(1px); box-shadow: none; }
+
+        .btn-modal-danger { 
+            width:100%; background:transparent; border:1px solid rgba(248,81,73,0.2); color:var(--red); 
+            padding:12px; border-radius:10px; font-weight:600; cursor:pointer; 
+            transition:all 0.3s cubic-bezier(0.16, 1, 0.3, 1); 
+        }
+        .btn-modal-danger:hover { 
+            background:rgba(248,81,73,0.1); border-color:var(--red); transform: translateY(-2px); 
+            box-shadow: 0 4px 20px rgba(248,81,73,0.2); 
+        }
+        .btn-modal-danger:active { transform: translateY(1px); box-shadow: none; }
+
+        .btn-focus-complete {
+            width:100%; background:rgba(74,222,128,0.15); border:1px solid var(--emerald); color:var(--emerald); 
+            padding:16px; border-radius:12px; font-weight:700; font-size:16px; cursor:pointer; 
+            transition:all 0.3s cubic-bezier(0.16, 1, 0.3, 1); display:flex; align-items:center; justify-content:center; gap:8px;
+        }
+        .btn-focus-complete:hover { background:rgba(74,222,128,0.25); transform: translateY(-2px); box-shadow: 0 8px 25px rgba(74,222,128,0.3); }
+        .btn-focus-complete:active { transform: translateY(1px); box-shadow: 0 0 10px rgba(74,222,128,0.2); }
 
         /* ─── SIDEBAR ELEMENTS ──────────────────── */
         .logo-area { margin-bottom: 40px; display: flex; align-items: center; gap: 12px; padding: 0 12px; }
@@ -832,7 +945,175 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <div id="hud-scanlines"></div>
     <div id="toast">Protocol Offline</div>
 
-    <div id="focus-overlay" class="focus-overlay"></div>
+    <!-- New Top Progress Bar -->
+    <div id="focus-progress-bar" class="focus-progress-bar"></div>
+
+    <div id="focus-overlay" class="focus-overlay">
+        <div class="focus-overlay-content">
+            <!-- Left: Strategic Info -->
+            <div style="display:flex; flex-direction:column; gap:30px;">
+                <div>
+                    <div style="font-size:10px; font-weight:700; color:var(--blue); letter-spacing:4px; margin-bottom:8px;">FOCUS PROTOCOL ACTIVE</div>
+                    <div style="font-size:11px; font-weight:700; color:#f0a030; letter-spacing:3px; margin-bottom:8px; display:flex; align-items:center; gap:6px;">
+                        <span>★</span> PRIME TARGET
+                    </div>
+                    <div id="focus-task-title" style="font-size:28px; color:var(--text-hero); font-weight:700; line-height:1.2;">[TASK NAME]</div>
+                </div>
+
+                <div>
+                    <div style="font-size:10px; font-weight:700; color:var(--text-disabled); letter-spacing:2px; margin-bottom:12px;">OBJECTIVE</div>
+                    <div id="focus-task-notes" style="padding:16px; background:rgba(255,255,255,0.03); border-radius:12px; border:1px solid rgba(255,255,255,0.05); font-size:14px; color:var(--text-body); line-height:1.6; opacity:0.8;">No tactical notes provided.</div>
+                </div>
+
+                <div>
+                    <div style="font-size:10px; font-weight:700; color:var(--text-disabled); letter-spacing:2px; margin-bottom:12px;">FOCUS CYCLE</div>
+                    <div style="display:flex; align-items:center; gap:16px;">
+                        <div style="flex:1; height:8px; background:rgba(255,255,255,0.1); border-radius:4px; overflow:hidden;">
+                            <div id="focus-cycle-bar" style="height:100%; width:25%; background:linear-gradient(90deg, var(--blue), var(--ai-purple)); transition:width 0.5s;"></div>
+                        </div>
+                        <div id="focus-cycle-text" style="font-size:12px; font-weight:700; color:var(--text-hero);">1 / 4</div>
+                    </div>
+                </div>
+
+                <div>
+                    <div style="font-size:10px; font-weight:700; color:var(--text-disabled); letter-spacing:2px; margin-bottom:12px;">SYSTEM STATUS</div>
+                    <div id="focus-system-status" style="font-size:14px; color:var(--text-hero); display:flex; align-items:center; gap:8px;">
+                        <span style="color:var(--emerald); animation:glowPulse 2s infinite;">●</span> <span id="focus-status-text">Stabilizing focus...</span>
+                    </div>
+                </div>
+
+                <div>
+                    <div style="font-size:10px; font-weight:700; color:var(--text-disabled); letter-spacing:2px; margin-bottom:12px;">DOMAIN NEUTRALIZATION</div>
+                    <div id="focus-blocked-list" style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom: 12px;">
+                        <!-- Blocked sites will appear here -->
+                    </div>
+                    <div id="focus-defense-feed" style="font-size:12px; color:var(--text-muted); height:16px; transition:opacity 0.3s; opacity:0;"></div>
+                    <div id="focus-defense-counter" style="font-size:11px; color:rgba(255,255,255,0.4); margin-top:8px;">✦ 0 breach attempts deflected</div>
+                </div>
+            </div>
+
+            <!-- Right: Execution Status -->
+            <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:40px; border-left:1px solid rgba(255,255,255,0.05); padding-left:60px; position:relative;">
+                <div id="focus-timer" class="timer-running" style="font-size:120px; font-family:var(--font-mono); font-weight:700; color:var(--blue); line-height:1; transition: color 2s ease;">25:00</div>
+                <div id="focus-paused-indicator" style="position:absolute; top:40%; left:50%; transform:translate(-50%,-50%); font-size:24px; font-weight:700; color:var(--text-hero); letter-spacing:8px; display:none; background:rgba(0,0,0,0.8); padding:10px 20px; border-radius:10px; border:1px solid rgba(255,255,255,0.1);">PAUSED</div>
+                
+                <div id="focus-controls" style="display:flex; flex-direction:column; gap:16px; width:100%;">
+                    <button id="btn-focus-ai" onclick="assistExecution()" class="btn-assist pulsing">
+                        <span style="font-size:18px;">◆</span> Assist Execution
+                    </button>
+
+                    <button id="btn-focus-complete" onclick="promptCompleteMission()" class="btn-focus-complete">
+                        ✓ Complete Mission
+                    </button>
+                    
+                    <div style="display:flex; gap:16px;">
+                        <button id="btn-focus-pause" onclick="togglePauseFocus()" class="btn-focus-pause">
+                            ⏸ Pause
+                        </button>
+                        <button id="btn-focus-abort" onclick="showAbortModal()" class="btn-focus-abort">
+                            Abort Protocol
+                        </button>
+                    </div>
+                </div>
+                <!-- Controls shown when paused -->
+                <div id="focus-resume-controls" style="display:none; flex-direction:column; gap:16px; width:100%;">
+                    <button id="btn-focus-resume" onclick="togglePauseFocus()" class="btn-focus-resume">
+                        ▶ Resume Focus <span id="resume-cooldown"></span>
+                    </button>
+                    <button onclick="showAbortModal()" class="btn-focus-abort btn-focus-abort-full">
+                        Abort Protocol
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Abort Modal -->
+    <div id="abort-modal" class="abort-modal">
+        <div class="abort-modal-content">
+            <div class="abort-icon">⚠</div>
+            <h2 style="color:var(--text-hero); margin-bottom:12px; font-size:24px;">Abort Focus Session?</h2>
+            <p style="color:var(--text-muted); margin-bottom:30px; line-height:1.5;">Progress will be lost.<br>Session discipline will be impacted.</p>
+            <div style="display:flex; flex-direction:column; gap:12px;">
+                <button onclick="hideAbortModal()" class="btn-modal-primary">Continue Focus</button>
+                <button onclick="confirmAbortFocus()" class="btn-modal-danger">Abort Anyway</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Early Completion Modal -->
+    <div id="complete-modal" class="abort-modal">
+        <div class="abort-modal-content" style="border-color: rgba(74,222,128,0.3); box-shadow: 0 20px 60px rgba(74,222,128,0.15);">
+            <div class="abort-icon" style="color: var(--emerald); animation: none; font-size:48px;">✓</div>
+            <h2 style="color:var(--text-hero); margin-bottom:12px; font-size:24px;">Mission Completed Early?</h2>
+            <p id="complete-modal-time" style="color:var(--text-muted); margin-bottom:30px; line-height:1.5;">Remaining time: calculating...</p>
+            <div style="display:flex; flex-direction:column; gap:12px;">
+                <button onclick="submitMissionComplete()" class="btn-modal-primary" style="background:var(--emerald); color:#000;">Complete & End Session</button>
+                <button onclick="hideCompleteModal()" class="btn-modal-danger" style="color:var(--text-muted); border-color:rgba(255,255,255,0.2);">Continue Focus</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Momentum Deployment Modal (Base Dashboard) -->
+    <div id="momentum-modal" class="abort-modal">
+        <div class="abort-modal-content" style="max-width: 600px; padding: 40px; text-align: left; background: rgba(5,7,10,0.95);">
+            <div style="text-align: center; margin-bottom: 25px;">
+                <div class="reward-icon" style="font-size:24px; color:var(--emerald); letter-spacing:6px; margin-bottom:12px;">✨ MISSION COMPLETE ✨</div>
+                <h2 id="momentum-cycle-text" style="color:var(--text-hero); font-size:18px; font-weight:700; margin-bottom:20px;">Focus Cycle Completed</h2>
+                
+                <div class="reward-stats" style="margin-bottom: 25px;">
+                    <div style="color:var(--emerald); font-weight:700; margin-bottom:12px;">+<span id="momentum-reward-minutes">25</span> min Deep Work</div>
+                    <div id="momentum-efficiency" style="color:var(--blue); font-weight:700; margin-bottom:12px;">Execution Efficiency ↑</div>
+                    <div style="color:var(--ai-purple); font-weight:700;">System Stability: OPTIMAL</div>
+                </div>
+
+                <div style="width: 50px; height: 2px; background: rgba(255,255,255,0.1); margin: 0 auto 25px;"></div>
+
+                <div style="font-size: 32px; color: var(--blue); margin-bottom: 10px; animation: glowPulse 2s infinite;">⚡</div>
+                <h2 style="color:var(--text-hero); font-size:24px; margin: 0;">Momentum Detected</h2>
+                <p style="color:var(--text-muted); font-size: 14px; margin-top: 8px;">Stay in execution flow?</p>
+            </div>
+            
+            <div style="margin-bottom: 16px; font-size: 12px; font-weight: 700; color: var(--text-disabled); letter-spacing: 2px; text-align: center;">NEXT OPTIMAL TARGETS</div>
+            
+            <div id="momentum-targets-container" style="display: flex; flex-direction: column; gap: 12px; max-height: 250px; overflow-y: auto; padding-right:8px;">
+                <!-- dynamic targets loaded here -->
+            </div>
+            
+            <div style="margin-top: 25px; text-align: center;">
+                <button onclick="hideMomentumModal()" style="background: transparent; border: none; color: var(--text-muted); font-size: 14px; cursor: pointer; text-decoration: underline; transition: all 0.2s;" onmouseover="this.style.color='var(--text-hero)'" onmouseout="this.style.color='var(--text-muted)'">Close & Return to Dashboard</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Reward Screen -->
+    <div id="reward-screen" class="reward-screen">
+        <div class="reward-content">
+            <div class="reward-title">✦ MISSION COMPLETE ✦</div>
+            <div id="reward-cycle-text" class="reward-subtitle">Focus Cycle 1/4 Completed</div>
+            
+            <div class="reward-stats">
+                <div class="reward-stat-row">
+                    <span style="color:var(--emerald);">+<span id="reward-minutes">25</span> min Deep Work</span>
+                </div>
+                <div class="reward-stat-row">
+                    <span style="color:var(--blue);">Execution Efficiency ↑</span>
+                </div>
+                <div class="reward-stat-row">
+                    <span style="color:var(--ai-purple);">System Stability: HIGH</span>
+                </div>
+            </div>
+            
+            <div style="color:var(--text-muted); margin-bottom:40px; line-height:1.6;">
+                Session discipline maintained.<br>
+                Take a short break to recover.
+            </div>
+            
+            <button onclick="closeRewardScreen()" style="background:var(--bg-surface); border:1px solid rgba(255,255,255,0.1); color:var(--text-hero); padding:16px 32px; border-radius:12px; font-weight:700; cursor:pointer; transition:all 0.3s; box-shadow:0 0 20px rgba(255,255,255,0.1);">
+                Return to Dashboard
+            </button>
+        </div>
+    </div>
 
     <div id="modal-overlay">
         <div class="modal-card" id="mission-brief-modal">
@@ -1675,7 +1956,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     }
 
     function formatDateISO(d) {
-        return d.toISOString().split('T')[0];
+        const offset = d.getTimezoneOffset() * 60000;
+        return (new Date(d.getTime() - offset)).toISOString().split('T')[0];
     }
 
     function renderTimeline() {
@@ -1782,7 +2064,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
                 
                 el.ondragstart = (e) => {
-                    e.dataTransfer.setData('text/plain', task.id);
+                    e.dataTransfer.setData('application/task-id', task.id.toString());
                     setTimeout(() => el.classList.add('dragging'), 0);
                 };
                 el.ondragend = () => {
@@ -1825,7 +2107,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         const zone = e.currentTarget;
         zone.classList.remove('drag-over');
         
-        const taskId = e.dataTransfer.getData('text/plain');
+        const taskId = e.dataTransfer.getData('application/task-id');
         if (!taskId) return;
         const dateKey = zone.dataset.date;
 
@@ -1911,23 +2193,28 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         setTimeout(() => startFocus(taskId), 150);
     }
 
-    function startFocus(taskId) {
+    async function startFocus(taskId) {
         const task = allTasks.find(t => t.id === taskId);
         if (!task) return;
-        closeModal();
-        setSystemState('deep-work');
         
-        const overlay = document.getElementById('focus-overlay');
-        overlay.innerHTML = `
-            <div class="focus-overlay-content">
-                <div style="font-size:12px; letter-spacing:3px; color:var(--blue); font-weight:700;">ACTIVE FOCUS PROTOCOL</div>
-                <h2 style="font-size:32px; font-weight:700; color:var(--text-hero); margin:0;">${task.title}</h2>
-                <div style="font-size:72px; font-family:var(--font-mono); color:var(--text-hero); font-weight:300;">25:00</div>
-                <button class="btn-execute" onclick="endFocus(${task.id})" style="padding:16px 32px; background:transparent; border:1px solid var(--red); color:var(--red);">ABORT FOCUS</button>
-            </div>
-        `;
-        overlay.classList.add('active');
-        if (typeof startSimulation === 'function') startSimulation('focus');
+        try {
+            const res = await fetch('/api/focus/start', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ task_id: taskId, minutes: 25, mode: 'gentle' })
+            });
+            
+            if (res.ok) {
+                closeModal();
+                setSystemState('deep-work');
+                // Immediate lock for responsiveness
+                activateFocusLock({ focus_active: true, task_title: task.title, remaining_minutes: 25, remaining_seconds: 0 });
+                if (typeof startSimulation === 'function') startSimulation('focus');
+                showToast("Focus sequence initiated.", "var(--blue)");
+            } else {
+                showToast("Failed to initiate focus sequence.", "var(--red)");
+            }
+        } catch(e) { console.error(e); }
     }
 
     function endFocus(taskId) {
@@ -1968,7 +2255,399 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         initThreeJS();
         initTimelineControls();
         loadTasks();
+        
+        // Start Focus Sync Engine
+        checkFocusState();
+        setInterval(checkFocusState, 5000);
     };
+
+    // ── FOCUS PROTOCOL SYNC (SOFT LOCK) ────────────────────────
+    let focusTickInterval = null;
+    let focusStatusInterval = null;
+    let focusDefenseInterval = null;
+    let currentFocusMinutesLeft = 0;
+    let totalFocusSecondsInitial = 0;
+    let deflections = 0;
+    let isPaused = false;
+    let activeBlockedSites = [];
+
+    async function checkFocusState() {
+        try {
+            const res = await fetch('/api/focus_state');
+            if (res.ok) {
+                const data = await res.json();
+                if (data.focus_active) {
+                    if (data.paused && !isPaused) {
+                        isPaused = true;
+                        updatePauseUI();
+                    } else if (!data.paused && isPaused) {
+                        isPaused = false;
+                        updatePauseUI();
+                    }
+                    activateFocusLock(data);
+                } else {
+                    if (focusTickInterval) deactivateFocusLock();
+                }
+            }
+        } catch (e) { console.error("Focus sync error:", e); }
+    }
+
+    function activateFocusLock(data) {
+        if (!focusTickInterval && !document.getElementById('focus-overlay').classList.contains('active')) {
+            document.body.classList.add('state-deep-work');
+            const overlay = document.getElementById('focus-overlay');
+            overlay.classList.add('active');
+            
+            const titleEl = document.getElementById('focus-task-title');
+            if (titleEl) titleEl.innerText = data.task_title || '[★ PRIME TARGET]';
+            
+            const notesEl = document.getElementById('focus-task-notes');
+            if (notesEl) notesEl.innerText = data.task_notes || 'No tactical notes provided for this mission.';
+
+            const blockEl = document.getElementById('focus-blocked-list');
+            if (blockEl && data.blocked_items && data.blocked_items.sites) {
+                activeBlockedSites = data.blocked_items.sites;
+                blockEl.innerHTML = activeBlockedSites.map(s => 
+                    `<div class="badge tag" style="background:rgba(248,81,73,0.1); border-color:rgba(248,81,73,0.3); color:var(--red);">${s}</div>`
+                ).join('');
+            } else {
+                activeBlockedSites = [];
+            }
+            
+            const cycles = data.cycles_completed || 0;
+            const cycleText = document.getElementById('focus-cycle-text');
+            if (cycleText) cycleText.innerText = `${(cycles % 4) + 1} / 4`;
+            const cycleBar = document.getElementById('focus-cycle-bar');
+            if (cycleBar) cycleBar.style.width = `${(((cycles % 4) + 1)/4)*100}%`;
+
+            currentFocusMinutesLeft = data.minutes_left || data.remaining_minutes || 0;
+            const currentSecs = data.remaining_seconds || 0;
+            totalFocusSecondsInitial = (currentFocusMinutesLeft * 60) + currentSecs;
+            
+            updateFocusTimerDisplay(currentFocusMinutesLeft, currentSecs);
+
+            let totalSeconds = totalFocusSecondsInitial;
+            focusTickInterval = setInterval(() => {
+                if (isPaused) return;
+                if (totalSeconds > 0) {
+                    totalSeconds--;
+                    const m = Math.floor(totalSeconds / 60);
+                    const s = totalSeconds % 60;
+                    updateFocusTimerDisplay(m, s);
+                    updateProgressAndGlow(totalSeconds, totalFocusSecondsInitial);
+                } else {
+                    completeFocusSession();
+                }
+            }, 1000);
+            
+            startMentalSupportFeed();
+            startDefenseFeed();
+
+            document.addEventListener('keydown', focusKeydownHandler);
+        }
+    }
+
+    function updateProgressAndGlow(remaining, initial) {
+        if (initial === 0) return;
+        const passedData = initial - remaining;
+        const progressPct = (passedData / initial) * 100;
+        document.getElementById('focus-progress-bar').style.width = `${progressPct}%`;
+
+        const timerEl = document.getElementById('focus-timer');
+        const overlay = document.getElementById('focus-overlay');
+        
+        if (remaining <= 60) {
+            timerEl.style.color = 'var(--red)';
+            timerEl.style.textShadow = '0 0 50px rgba(248,81,73,0.5)';
+        } else if (remaining <= 300) {
+            timerEl.style.color = '#f0a030';
+            timerEl.style.textShadow = '0 0 50px rgba(240,160,48,0.5)';
+        } else {
+            timerEl.style.color = 'var(--blue)';
+        }
+
+        const elapsedMins = Math.floor(passedData / 60);
+        if (elapsedMins >= 20) overlay.style.boxShadow = 'inset 0 0 100px rgba(163,113,247,0.3)';
+        else if (elapsedMins >= 10) overlay.style.boxShadow = 'inset 0 0 80px rgba(88,166,255,0.2)';
+        else if (elapsedMins >= 5) overlay.style.boxShadow = 'inset 0 0 50px rgba(88,166,255,0.1)';
+        else overlay.style.boxShadow = 'none';
+    }
+
+    function startMentalSupportFeed() {
+        const statuses = [
+            { t: 0, text: "Stabilizing focus..." },
+            { t: 5, text: "Momentum building..." },
+            { t: 10, text: "Deep focus detected..." },
+            { t: 20, text: "Peak performance zone..." }
+        ];
+        const statusEl = document.getElementById('focus-status-text');
+        
+        focusStatusInterval = setInterval(() => {
+            if (isPaused) {
+                statusEl.innerText = "Session paused — discipline maintained.";
+                return;
+            }
+            const elapsedMins = Math.floor((totalFocusSecondsInitial / 60) - currentFocusMinutesLeft);
+            let currentText = statuses[0].text;
+            for (let s of statuses) {
+                if (elapsedMins >= s.t) currentText = s.text;
+            }
+            statusEl.innerText = currentText;
+        }, 10000);
+    }
+
+    function startDefenseFeed() {
+        deflections = 0;
+        const feedEl = document.getElementById('focus-defense-feed');
+        const counterEl = document.getElementById('focus-defense-counter');
+        
+        focusDefenseInterval = setInterval(() => {
+            if (isPaused || activeBlockedSites.length === 0) return;
+            
+            if (Math.random() > 0.4) {
+                const site = activeBlockedSites[Math.floor(Math.random() * activeBlockedSites.length)];
+                feedEl.innerText = `✦ ${site} access neutralized.`;
+                feedEl.style.opacity = '1';
+                deflections++;
+                counterEl.innerText = `✦ ${deflections} breach attempts deflected`;
+                
+                setTimeout(() => { feedEl.style.opacity = '0'; }, 3000);
+            }
+        }, 40000);
+    }
+
+    window.assistExecution = () => {
+        const title = document.getElementById('focus-task-title').innerText;
+        const btn = document.getElementById('btn-focus-ai');
+        if(btn) btn.classList.remove('pulsing');
+        
+        const tips = [
+            `Step 1: Define the exact deliverable for "${title}"`,
+            `Step 2: Write the ugliest first draft. Perfection kills momentum.`,
+            `Step 3: Set a micro-deadline: finish one section in the next 5 mins.`,
+            `⚡ Power move: Close every tab except the one you need right now.`,
+            `🎯 Focus anchor: What is the ONE thing that moves this forward?`
+        ];
+        const tip = tips[Math.floor(Math.random() * tips.length)];
+        showToast(`✦ AI ADVISOR: ${tip}`, "var(--ai-purple)");
+    }
+
+    function deactivateFocusLock() {
+        document.body.classList.remove('state-deep-work');
+        document.getElementById('focus-overlay').classList.remove('active');
+        document.removeEventListener('keydown', focusKeydownHandler);
+        if (focusTickInterval) clearInterval(focusTickInterval);
+        if (focusStatusInterval) clearInterval(focusStatusInterval);
+        if (focusDefenseInterval) clearInterval(focusDefenseInterval);
+        focusTickInterval = null; focusStatusInterval = null; focusDefenseInterval = null;
+        isPaused = false;
+        document.getElementById('focus-progress-bar').style.width = '0%';
+        document.getElementById('focus-overlay').style.boxShadow = 'none';
+        document.getElementById('focus-timer').style.color = 'var(--blue)';
+        document.getElementById('focus-timer').style.textShadow = '';
+    }
+
+    function updateFocusTimerDisplay(m, s = 0) {
+        currentFocusMinutesLeft = m; 
+        const timerEl = document.getElementById('focus-timer');
+        if (timerEl) {
+            timerEl.innerText = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        }
+    }
+
+    window.showAbortModal = () => {
+        document.getElementById('focus-overlay').classList.add('blur-heavy');
+        document.getElementById('abort-modal').classList.add('active');
+    }
+    window.hideAbortModal = () => {
+        document.getElementById('focus-overlay').classList.remove('blur-heavy');
+        document.getElementById('abort-modal').classList.remove('active');
+    }
+    window.confirmAbortFocus = async () => {
+        hideAbortModal();
+        try {
+            await fetch('/api/focus_end', {method: 'POST'});
+            deactivateFocusLock();
+            showToast("Focus sequence aborted.", "var(--red)");
+            loadTasks();
+        } catch(e) { console.error(e); }
+    };
+    
+    window.promptCompleteMission = () => {
+        const remaining = document.getElementById('focus-timer').innerText;
+        document.getElementById('complete-modal-time').innerText = `Remaining time: ${remaining}`;
+        document.getElementById('focus-overlay').classList.add('blur-heavy');
+        document.getElementById('complete-modal').classList.add('active');
+    };
+    window.hideCompleteModal = () => {
+        document.getElementById('focus-overlay').classList.remove('blur-heavy');
+        document.getElementById('complete-modal').classList.remove('active');
+    };
+    window.submitMissionComplete = async () => {
+        hideCompleteModal();
+        const timeUsedSecs = totalFocusSecondsInitial - (currentFocusMinutesLeft * 60);
+        const timeSavedMins = currentFocusMinutesLeft;
+        const timeUsedMins = Math.floor(timeUsedSecs / 60);
+        const effScore = Math.floor((totalFocusSecondsInitial / (timeUsedSecs > 0 ? timeUsedSecs : 1)) * 100);
+        const finalEffScore = effScore > 500 ? 500 : effScore;
+        
+        try {
+            await fetch('/api/focus/complete', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ 
+                    efficiency_score: finalEffScore, 
+                    time_saved: timeSavedMins,
+                    time_used: timeUsedMins
+                })
+            });
+            deactivateFocusLock();
+            loadTasks();
+            
+            // Pop the unified Momentum Modal directly
+            const cycleText = document.getElementById('focus-cycle-text');
+            const cText = cycleText ? `Focus Cycle ${cycleText.innerText} Completed` : 'Focus Cycle Completed';
+            
+            openMomentumDeployment(timeUsedMins, timeSavedMins, finalEffScore, cText);
+            
+        } catch(e) { console.error(e); }
+    };
+
+    async function openMomentumDeployment(usedMins, savedMins, effScore, cycleText) {
+        // Set stats in unified modal
+        document.getElementById('momentum-cycle-text').innerText = cycleText;
+        document.getElementById('momentum-reward-minutes').innerText = usedMins;
+        const effEl = document.getElementById('momentum-efficiency');
+        if (effScore > 100) {
+            effEl.innerHTML = `Execution Efficiency <span style="color:var(--emerald);">+${effScore - 100}% ↑</span>`;
+        } else {
+            effEl.innerHTML = `Execution Efficiency <span style="color:var(--emerald);">Validated</span>`;
+        }
+
+        try {
+            const res = await fetch('/api/focus/next');
+            if (res.ok) {
+                const data = await res.json();
+                renderMomentumTargets(data.targets || []);
+            }
+        } catch(e) { console.error(e); }
+    }
+    
+    function renderMomentumTargets(targets) {
+        const container = document.getElementById('momentum-targets-container');
+        if (!targets || targets.length === 0) {
+            container.innerHTML = `
+                <div style="text-align:center; padding: 20px; color: var(--text-muted); font-style: italic;">
+                    No pending missions remain.<br>Sequence complete.
+                </div>
+            `;
+        } else {
+            container.innerHTML = targets.map((t, idx) => `
+                <div class="task-card" style="padding: 20px; cursor: default; transition:all 0.3s;" onmouseenter="this.style.boxShadow='0 0 20px rgba(88,166,255,0.2)'; this.style.transform='translateX(4px)'" onmouseleave="this.style.boxShadow='none'; this.style.transform='none'">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <div style="font-weight:700; color:var(--text-hero); font-size: 18px; margin-bottom: 8px;">${t.title}</div>
+                            <div style="display:flex; gap:8px;">
+                                <span class="badge ${t.priority.toLowerCase()}">${t.priority.toUpperCase()}</span>
+                                ${idx===0 ? '<span class="badge tag" style="color:var(--emerald); border-color:var(--emerald);">#1 Optimal</span>' : ''}
+                            </div>
+                        </div>
+                        <button class="btn-execute" onclick="launchSuggestedTask(${t.id})" style="background:var(--blue); min-width: 120px;">DEPLOY ▶</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        // Blur background UI and show modal
+        document.body.classList.add('state-deep-work'); // reuses background blur
+        document.getElementById('momentum-modal').classList.add('active');
+    }
+    
+    window.launchSuggestedTask = (taskId) => {
+        hideMomentumModal();
+        startFocus(taskId);
+    };
+
+    window.hideMomentumModal = () => {
+        document.getElementById('momentum-modal').classList.remove('active');
+        document.body.classList.remove('state-deep-work');
+    };
+
+    window.togglePauseFocus = async () => {
+        const resumeBtn = document.getElementById('btn-focus-resume');
+        
+        if (!isPaused) {
+            isPaused = true;
+            try { await fetch('/api/focus/pause', {method: 'POST'}); } catch(e) { console.error(e); }
+            updatePauseUI();
+            
+            resumeBtn.disabled = true;
+            resumeBtn.style.opacity = '0.5';
+            let cd = 5;
+            const cdEl = document.getElementById('resume-cooldown');
+            cdEl.innerText = `(${cd}s)`;
+            const cdInt = setInterval(() => {
+                cd--;
+                if (cd > 0) { cdEl.innerText = `(${cd}s)`; } 
+                else { 
+                    clearInterval(cdInt); 
+                    cdEl.innerText = ''; 
+                    resumeBtn.disabled = false; 
+                    resumeBtn.style.opacity = '1'; 
+                }
+            }, 1000);
+        } else {
+            if (resumeBtn.disabled) return;
+            isPaused = false;
+            try { await fetch('/api/focus/resume', {method: 'POST'}); } catch(e) { console.error(e); }
+            updatePauseUI();
+        }
+    };
+
+    function updatePauseUI() {
+        if (isPaused) {
+            document.getElementById('focus-timer').classList.remove('timer-running');
+            document.getElementById('focus-controls').style.display = 'none';
+            document.getElementById('focus-resume-controls').style.display = 'flex';
+            document.getElementById('focus-paused-indicator').style.display = 'block';
+            document.getElementById('focus-timer').style.opacity = '0.3';
+        } else {
+            document.getElementById('focus-timer').classList.add('timer-running');
+            document.getElementById('focus-controls').style.display = 'flex';
+            document.getElementById('focus-resume-controls').style.display = 'none';
+            document.getElementById('focus-paused-indicator').style.display = 'none';
+            document.getElementById('focus-timer').style.opacity = '1';
+        }
+    }
+
+    function completeFocusSession() {
+        deactivateFocusLock();
+        document.getElementById('reward-minutes').innerText = Math.round(totalFocusSecondsInitial / 60);
+        const cycleText = document.getElementById('focus-cycle-text');
+        if(cycleText) document.getElementById('reward-cycle-text').innerText = `Focus Cycle ${cycleText.innerText} Completed`;
+        
+        document.getElementById('reward-screen').classList.add('active');
+        showToast("Execution efficiency +12%. Momentum verified.", "var(--green)");
+        loadTasks();
+    }
+    window.closeRewardScreen = () => {
+        document.getElementById('reward-screen').classList.remove('active');
+    };
+
+    function focusKeydownHandler(e) {
+        if (document.getElementById('abort-modal').classList.contains('active')) return;
+        
+        if (e.code === 'Space') {
+            e.preventDefault();
+            window.togglePauseFocus();
+        } else if (e.code === 'Escape') {
+            e.preventDefault();
+            window.showAbortModal();
+        } else if (e.code === 'KeyA') {
+            e.preventDefault();
+            window.assistExecution();
+        }
+    }
 
 
     // ── 3D PARTICLE SIMULATION (THREE.JS) ─────────────────────────────

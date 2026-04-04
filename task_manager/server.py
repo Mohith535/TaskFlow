@@ -68,6 +68,19 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
             self.end_headers_json()
             self.wfile.write(json.dumps(mapping).encode('utf-8'))
             
+        elif path == "/api/focus_state":
+            try:
+                from task_manager.commands import focus_manager
+                status = focus_manager.get_focus_status()
+                # e.g. {"focus_active": True, "task_id": X, "task_title": "...", "minutes_left": 25, ...}
+                self.send_response(200)
+                self.end_headers_json()
+                self.wfile.write(json.dumps(status).encode('utf-8'))
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers_json()
+                self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
+            
         elif path == "/api/blocklist":
             try:
                 from task_manager.blockers.blocklist import blocklist_manager
@@ -168,6 +181,106 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
                 self.end_headers_json()
                 self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
             return
+            
+        elif (path == "/api/focus_end" or path == "/api/focus/end") and self.command == 'POST':
+            try:
+                from task_manager import commands
+                # Forcefully end focus
+                try:
+                    commands.end_focus(force=True)
+                except Exception as ex:
+                    try:
+                        commands.time_tracker.end_focus()
+                        commands.time_tracker._save_state({'active_session': None, 'start_time': None})
+                    except: pass
+                self.send_response(200)
+                self.end_headers_json()
+                self.wfile.write(json.dumps({"success": True}).encode('utf-8'))
+            except Exception as e:
+                import traceback; open(r'C:\Users\Admin\Desktop\error_abort.txt', 'w').write(traceback.format_exc())
+                self.send_response(500)
+                self.end_headers_json()
+                self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
+            return
+
+        elif path == "/api/focus/pause" and self.command == 'POST':
+            try:
+                from task_manager import commands
+                commands.time_tracker.pause_focus()
+                self.send_response(200)
+                self.end_headers_json()
+                self.wfile.write(json.dumps({"success": True}).encode('utf-8'))
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers_json()
+                self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
+            return
+
+        elif path == "/api/focus/resume" and self.command == 'POST':
+            try:
+                from task_manager import commands
+                commands.time_tracker.resume_focus()
+                self.send_response(200)
+                self.end_headers_json()
+                self.wfile.write(json.dumps({"success": True}).encode('utf-8'))
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers_json()
+                self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
+            return
+
+        elif path == "/api/focus/complete" and self.command == 'POST':
+            try:
+                from task_manager import commands
+                efficiency_score = data.get("efficiency_score", 0)
+                time_saved = data.get("time_saved", 0)
+                time_used = data.get("time_used", 0)
+                
+                # Update task in storage
+                status = commands.focus_manager.get_focus_status()
+                if status and status.get("focus_active"):
+                    task_id = status.get("task_id")
+                    if task_id:
+                        tasks = storage.load_tasks()
+                        for task in tasks:
+                            if task.id == task_id:
+                                task.mark_complete()
+                                task.add_focus_minutes(time_used)
+                                storage.save_tasks(tasks)
+                                break
+                
+                # Sync logic
+                try:
+                    commands.complete_focus(efficiency_score, time_saved, time_used)
+                except Exception as ex:
+                    try:
+                        commands.time_tracker.end_focus()
+                        commands.time_tracker._save_state({'active_session': None, 'start_time': None})
+                    except: pass
+                
+                self.send_response(200)
+                self.end_headers_json()
+                self.wfile.write(json.dumps({"success": True}).encode('utf-8'))
+            except Exception as e:
+                import traceback; traceback.dump(e, open(r'C:\Users\Admin\Desktop\error1.txt', 'w')) if hasattr(traceback, "dump") else open(r'C:\Users\Admin\Desktop\error1.txt', 'w').write(traceback.format_exc())
+                self.send_response(500)
+                self.end_headers_json()
+                self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
+            return
+            
+        elif path == "/api/focus/next" and self.command == 'GET':
+            try:
+                from task_manager import commands
+                limit = int(parse_qs(parsed.query).get('limit', ['3'])[0])
+                targets = commands.get_momentum_targets(limit=limit)
+                self.send_response(200)
+                self.end_headers_json()
+                self.wfile.write(json.dumps({"targets": targets}).encode('utf-8'))
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers_json()
+                self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
+            return
 
         elif path.startswith("/api/tasks/") and path.endswith("/complete"):
             try:
@@ -237,6 +350,12 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
                 self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
 
         elif path == "/api/focus/start":
+            task_id_raw = data.get("task_id") or data.get("id")
+            try:
+                task_id = int(task_id_raw) if task_id_raw is not None else None
+            except (ValueError, TypeError):
+                task_id = None
+                
             minutes = int(data.get("minutes", 25))
             mode = data.get("mode", "gentle")
             
@@ -246,17 +365,11 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
                     # Mask stdout so it doesn't spam the daemon server logs
                     original = sys.stdout
                     sys.stdout = io.StringIO()
-                    commands.focus_task(task_id=None, minutes=minutes, mode=mode, force=True)
+                    commands.focus_task(task_id=task_id, minutes=minutes, mode=mode, force=True)
                     sys.stdout = original
                 except Exception as e:
                     pass
             threading.Thread(target=run_focus, daemon=True).start()
-            self.send_response(200)
-            self.end_headers_json()
-            self.wfile.write(json.dumps({"success": True}).encode('utf-8'))
-            
-        elif path == "/api/focus/end":
-            commands.end_focus(force=True)
             self.send_response(200)
             self.end_headers_json()
             self.wfile.write(json.dumps({"success": True}).encode('utf-8'))
