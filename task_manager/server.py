@@ -168,6 +168,31 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
                 self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
             return
 
+        elif path == "/api/tasks/dump" and self.command == 'POST':
+            try:
+                title = data.get("title", "").strip()
+                if not title:
+                    self.send_response(400)
+                    self.end_headers_json()
+                    self.wfile.write(json.dumps({"error": "Empty title"}).encode('utf-8'))
+                    return
+                    
+                from task_manager import commands
+                task_dict = commands.dump_task(title)
+                if task_dict:
+                    self.send_response(201)
+                    self.end_headers_json()
+                    self.wfile.write(json.dumps({"success": True, "task": task_dict}).encode('utf-8'))
+                else:
+                    self.send_response(500)
+                    self.end_headers_json()
+                    self.wfile.write(json.dumps({"error": "Failed to dump task"}).encode('utf-8'))
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers_json()
+                self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
+            return
+
         elif path == "/api/timeline" and self.command == 'POST':
             try:
                 # Expect dict {"mapping": {"1": "2026-03-31_prime"}}

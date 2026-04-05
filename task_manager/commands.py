@@ -676,6 +676,59 @@ def add_task() -> bool:
         Messenger.careful(f"Could not add task: {e}")
         return False
 
+def dump_task(title: str) -> dict:
+    """Frictionless capture: instantly add a task without prompts."""
+    import re
+    tasks = storage.load_tasks()
+    manager = TaskManager(tasks)
+    
+    # Frictionless Parser: Extract #tags and !priority
+    tags = ["inbox"]
+    priority = "Medium"
+    
+    # Extract tags starting with #
+    extracted_tags = re.findall(r'#(\w+)', title)
+    for t in extracted_tags:
+        if t.lower() not in [tg.lower() for tg in tags]:
+            tags.append(t)
+    
+    # Extract priority starting with !
+    # Using (?!\w) ensures we don't match "!hello" as "!h"
+    extracted_priorities = re.findall(r'!(low|medium|high|noise|strategic|critical|l|m|h|p|purge)(?!\w)', title, re.IGNORECASE)
+    if extracted_priorities:
+        priority = extracted_priorities[-1] # Take the last one specified
+        
+    # Clean the title by removing the extracted markers
+    clean_title = re.sub(r'#\w+', '', title)
+    clean_title = re.sub(r'!(low|medium|high|noise|strategic|critical|l|m|h|p|purge)(?!\w)', '', clean_title, flags=re.IGNORECASE)
+    clean_title = validate_title(clean_title.strip())
+    
+    if not clean_title:
+        return None
+        
+    task = Task(
+        id=0,
+        title=clean_title,
+        priority=normalize_priority(priority.capitalize()),
+        tags=tags
+    )
+    
+    try:
+        task_id = manager.add_task(task)
+        storage.save_tasks(manager.tasks)
+        try:
+            prin_tags = ", ".join(f"#{t}" for t in tags)
+            print(f"\nCaptured: {clean_title} | [{task.priority}] {prin_tags}")
+        except Exception:
+            pass # Ignore print errors in background daemon
+        return task.to_dict()
+    except Exception as e:
+        try:
+            print(f"Capture failed: {e}")
+        except Exception:
+            pass
+        return None
+
 def kill_web_ui():
     """Find and terminate any existing Web UI server processes on port 18083."""
     import subprocess

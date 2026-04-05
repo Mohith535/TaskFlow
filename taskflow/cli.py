@@ -77,24 +77,25 @@ from task_manager.commands import (
     test_blocking,
     emergency_cleanup,
     manage_blocklist,
-    manage_blocklist,
     open_web_ui,
-    kill_web_ui
+    kill_web_ui,
+    dump_task
 )
 
 APP_NAME = "TaskFlow"
-APP_VERSION = "v3.2.0"
-APP_TAGLINE = "Calm, Powerful CLI Task Assistant with Focus Blocking"
+APP_VERSION = "v4.0.0"
+APP_TAGLINE = "Momentum Engineering for Calm Productivity"
 
 
 def show_help() -> None:
     """Show comprehensive help with premium formatting."""
     print(f"""
-  TaskFlow v3.2.0 — Calm, Powerful CLI Task Assistant
+  TaskFlow v4.0.0 — The Execution Engine
   {"─" * 60}
 
   CORE COMMANDS:
     add                     Add mission interactively
+    dump <thought>          Frictionless quick capture of a sudden thought
     list                    List your mission board (--todo, --done)
     view <id>               View detailed mission brief
     edit <id>               Recalibrate mission parameters
@@ -264,6 +265,11 @@ Examples:
     # Emergency cleanup
     subparsers.add_parser('cleanup', 
                          help='Emergency cleanup if blocking gets stuck or system crashes')
+                         
+    # Frictionless dump
+    dump_parser = subparsers.add_parser('dump', help='Frictionless quick capture of a thought')
+    dump_parser.add_argument('text', nargs=argparse.REMAINDER, help='The task description string')
+    
     
     # Simple commands without arguments
     simple_commands = [
@@ -469,6 +475,13 @@ def main():
         
         elif args.command == 'cleanup':
             emergency_cleanup()
+            
+        elif args.command == 'dump':
+            text = " ".join(args.text).strip()
+            if not text:
+                print("Error: Nothing to dump.")
+            else:
+                dump_task(text)
         
         else:
             print(f"Unknown command: {args.command}")

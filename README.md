@@ -47,6 +47,11 @@ TaskFlow features a multi-layered distraction defense system designed to protect
 - **Early Completion Success Flow**: Finishing a mission before the timer ends calculates an efficiency score and time banked, instantly converting your unused time into momentum.
 - **Intelligent Next Targets**: Instead of dumping you back into the main list, completing a mission immediately offers a curated, 3-task deployment modal based on priority, schedule, and previous habits to lock you into a continuous flow state.
 
+### ⚡ Frictionless Capture Engine
+- **Cognitive Offloading**: When you are in a flow state, jumping through interactive menus breaks your momentum. TaskFlow provides a lightning-fast `dump` command that instantly banks sudden thoughts into your `[inbox]` without a single prompt.
+- **Inline NLP Parsing**: Instantly organize thoughts from any text box. E.g., typing `Contact client #urgent !high` will automatically be detected, cleanly stripped, and categorized as a `[Critical]` task with the `#urgent` tag.
+- **Web UI Omnibar**: Hit `Ctrl + K` from anywhere on the Web dashboard to instantly focus the Capture Bar, allowing you to seamlessly offload thoughts to the backend API without ever letting go of your keyboard.
+
 ---
 
 ## 🛠️ Tactical Command Guide
@@ -55,6 +60,7 @@ TaskFlow features a multi-layered distraction defense system designed to protect
 | Command | Description |
 | :--- | :--- |
 | `taskflow add` | Initiate an interactive mission entry sequence |
+| `taskflow dump <thought>`| Frictionless capture. Bypasses all menus via NLP (e.g. `!high #tag`) |
 | `taskflow list` | Query the mission board (`--todo`, `--priority`, `--tag`) |
 | `taskflow view <id>`| Access a detailed mission brief and intel |
 | `taskflow complete <id>`| Confirm mission [V] SUCCESS |

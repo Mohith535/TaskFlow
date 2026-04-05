@@ -636,6 +636,33 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         .cb.checked { background: var(--green); border-color: var(--green); position: relative; }
         .cb.checked::after { content: '✓'; color: #fff; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; }
 
+        /* ─── OMNIBAR (FRICTIONLESS CAPTURE) ──── */
+        .omnibar-container {
+            position: relative; margin-bottom: 20px;
+        }
+        #omnibar-input {
+            width: 100%; background: rgba(15, 20, 25, 0.8);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px; padding: 18px 24px;
+            color: var(--text-hero); font-size: 14px; font-family: 'Inter', sans-serif;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            outline: none; box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        #omnibar-input:focus {
+            background: rgba(20, 25, 30, 0.95);
+            border-color: rgba(163, 113, 247, 0.5);
+            box-shadow: 0 0 25px rgba(163, 113, 247, 0.2);
+        }
+        #omnibar-input::placeholder { color: var(--text-disabled); }
+        .omnibar-hint {
+            position: absolute; right: 20px; top: 50%; transform: translateY(-50%);
+            font-size: 10px; font-weight: 700; letter-spacing: 1px; color: var(--text-disabled);
+            pointer-events: none; transition: opacity 0.3s;
+        }
+        #omnibar-input:focus + .omnibar-hint { color: var(--ai-purple); opacity: 0.8; }
+        .omnibar-flash { animation: omniFlash 0.4s ease-out; }
+        @keyframes omniFlash { 0% { background: rgba(163,113,247,0.3); border-color:var(--ai-purple); transform: scale(1.02); } 100% { background: rgba(15, 20, 25, 0.8); border-color: rgba(255,255,255,0.1); transform: scale(1); } }
+        
         /* ─── TIMELINE VIEW CSS ────────────────── */
         .timeline-grid { 
             display: flex; gap: 12px; margin-top: 24px; 
@@ -1212,6 +1239,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         <!-- VIEW: MISSIONS (QUEUE) -->
         <div id="view-tasks" class="view-content hidden">
             <div style="margin-top:20px;">
+            
+                <!-- FRICTIONLESS OMNIBAR -->
+                <div class="omnibar-container">
+                    <input type="text" id="omnibar-input" placeholder="Type a thought... (Ctrl+K)" autocomplete="off">
+                    <div class="omnibar-hint">PRESS ENTER</div>
+                </div>
+
                 <div id="integrity-hud">
                     <div class="integrity-label-row">
                         <div class="section-label" style="font-size:9px; letter-spacing:2px;">COMPLETION HORIZON</div>
@@ -2259,6 +2293,57 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         // Start Focus Sync Engine
         checkFocusState();
         setInterval(checkFocusState, 5000);
+
+        // ── OMNIBAR (FRICTIONLESS CAPTURE) INIT ────────
+        const omniInput = document.getElementById('omnibar-input');
+        if (omniInput) {
+            // Global Ctrl+K Listener
+            document.addEventListener('keydown', (e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                    e.preventDefault(); // Prevent browser search box
+                    const viewTasks = document.getElementById('view-tasks');
+                    // Automatically switch to missions view if not already there
+                    if (viewTasks.classList.contains('hidden')) {
+                        switchView('tasks');
+                    }
+                    omniInput.focus();
+                }
+            });
+
+            // Enter key Listener
+            omniInput.addEventListener('keydown', async (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const text = omniInput.value.trim();
+                    if (!text) return;
+                    
+                    // Visual feedback
+                    omniInput.value = '';
+                    omniInput.classList.remove('omnibar-flash');
+                    void omniInput.offsetWidth; // Trigger reflow
+                    omniInput.classList.add('omnibar-flash');
+                    
+                    try {
+                        const res = await fetch('/api/tasks/dump', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({title: text})
+                        });
+                        
+                        if (res.ok) {
+                            // Instantly refresh timeline to pull the new task
+                            loadTasks();
+                            showToast("Captured to Inbox", "var(--ai-purple)");
+                        } else {
+                            showToast("Failed to capture thought", "var(--red)");
+                        }
+                    } catch (err) {
+                        console.error(err);
+                        showToast("Capture transmission failed", "var(--red)");
+                    }
+                }
+            });
+        }
     };
 
     // ── FOCUS PROTOCOL SYNC (SOFT LOCK) ────────────────────────
