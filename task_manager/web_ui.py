@@ -637,31 +637,51 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         .cb.checked::after { content: '✓'; color: #fff; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; }
 
         /* ─── OMNIBAR (FRICTIONLESS CAPTURE) ──── */
+        .omnibar-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 25000; display: flex; align-items: flex-start; justify-content: center;
+            padding-top: 18vh; background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .omnibar-overlay.active { opacity: 1; pointer-events: auto; }
         .omnibar-container {
-            position: relative; margin-bottom: 20px;
+            position: relative; width: 560px; max-width: 90vw;
+            transform: translateY(-30px) scale(0.96);
+            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .omnibar-overlay.active .omnibar-container {
+            transform: translateY(0) scale(1);
         }
         #omnibar-input {
-            width: 100%; background: rgba(15, 20, 25, 0.8);
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 12px; padding: 18px 24px;
-            color: var(--text-hero); font-size: 14px; font-family: 'Inter', sans-serif;
+            width: 100%; background: rgba(15, 20, 25, 0.95);
+            border: 1px solid rgba(163, 113, 247, 0.3);
+            border-radius: 16px; padding: 20px 28px;
+            color: var(--text-hero); font-size: 15px; font-family: 'Inter', sans-serif;
             transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-            outline: none; box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            outline: none; box-shadow: 0 8px 40px rgba(0,0,0,0.5), 0 0 30px rgba(163,113,247,0.1);
         }
         #omnibar-input:focus {
-            background: rgba(20, 25, 30, 0.95);
-            border-color: rgba(163, 113, 247, 0.5);
-            box-shadow: 0 0 25px rgba(163, 113, 247, 0.2);
+            border-color: rgba(163, 113, 247, 0.6);
+            box-shadow: 0 8px 40px rgba(0,0,0,0.5), 0 0 40px rgba(163,113,247,0.25);
         }
+        #omnibar-input:disabled { opacity: 0.5; cursor: wait; }
         #omnibar-input::placeholder { color: var(--text-disabled); }
-        .omnibar-hint {
-            position: absolute; right: 20px; top: 50%; transform: translateY(-50%);
-            font-size: 10px; font-weight: 700; letter-spacing: 1px; color: var(--text-disabled);
-            pointer-events: none; transition: opacity 0.3s;
+        .omnibar-hints {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-top: 10px; padding: 0 8px;
         }
-        #omnibar-input:focus + .omnibar-hint { color: var(--ai-purple); opacity: 0.8; }
-        .omnibar-flash { animation: omniFlash 0.4s ease-out; }
-        @keyframes omniFlash { 0% { background: rgba(163,113,247,0.3); border-color:var(--ai-purple); transform: scale(1.02); } 100% { background: rgba(15, 20, 25, 0.8); border-color: rgba(255,255,255,0.1); transform: scale(1); } }
+        .omnibar-hint {
+            font-size: 10px; font-weight: 600; letter-spacing: 0.8px;
+            color: rgba(255,255,255,0.25);
+        }
+        .omnibar-hint kbd {
+            background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 4px; padding: 2px 6px; font-family: var(--font-mono); font-size: 9px;
+        }
+        .omnibar-flash { animation: omniFlash 0.5s ease-out; }
+        @keyframes omniFlash { 0% { background: rgba(163,113,247,0.3); border-color:var(--ai-purple); transform: scale(1.02); } 100% { background: rgba(15, 20, 25, 0.95); border-color: rgba(163,113,247,0.3); transform: scale(1); } }
         
         /* ─── TIMELINE VIEW CSS ────────────────── */
         .timeline-grid { 
@@ -972,6 +992,17 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <div id="hud-scanlines"></div>
     <div id="toast">Protocol Offline</div>
 
+    <!-- FLOATING OMNIBAR OVERLAY (Ctrl+K from any view) -->
+    <div id="omnibar-overlay" class="omnibar-overlay">
+        <div class="omnibar-container">
+            <input type="text" id="omnibar-input" placeholder="Capture a thought..." autocomplete="off">
+            <div class="omnibar-hints">
+                <span class="omnibar-hint">Use <kbd>#tag</kbd> and <kbd>!h</kbd> <kbd>!m</kbd> <kbd>!l</kbd> for priority</span>
+                <span class="omnibar-hint"><kbd>Enter</kbd> to save &middot; <kbd>Esc</kbd> to close</span>
+            </div>
+        </div>
+    </div>
+
     <!-- New Top Progress Bar -->
     <div id="focus-progress-bar" class="focus-progress-bar"></div>
 
@@ -1239,12 +1270,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         <!-- VIEW: MISSIONS (QUEUE) -->
         <div id="view-tasks" class="view-content hidden">
             <div style="margin-top:20px;">
-            
-                <!-- FRICTIONLESS OMNIBAR -->
-                <div class="omnibar-container">
-                    <input type="text" id="omnibar-input" placeholder="Type a thought... (Ctrl+K)" autocomplete="off">
-                    <div class="omnibar-hint">PRESS ENTER</div>
-                </div>
+
 
                 <div id="integrity-hud">
                     <div class="integrity-label-row">
@@ -1485,7 +1511,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         t.textContent = msg;
         t.style.borderLeftColor = color || 'var(--blue)';
         t.classList.add('show');
-        setTimeout(() => t.classList.remove('show'), 3000);
+        setTimeout(() => t.classList.remove('show'), 5000);
     }
 
     // ── NAVIGATION PROTOCOL (VIEW SWITCHING) ─────────────────────────────
@@ -1956,7 +1982,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     }
 
     function setTimelineView(view) {
-
         timelineState.view = view;
         document.getElementById('current-view-label').textContent = view.toUpperCase().replace('WEEK', 'THIS WEEK').replace('MONTH', 'THIS MONTH').replace('CALENDAR', 'FULL CALENDAR');
         
@@ -2254,7 +2279,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     function endFocus(taskId) {
         document.getElementById('focus-overlay').classList.remove('active');
         setSystemState('idle');
-        showToast("Focus stability improved. Efficiency +12%", "var(--green)");
         const activeNav = document.querySelector('.nav-item.active').id;
         if (typeof startSimulation === 'function') {
             if (activeNav === 'nav-dashboard') startSimulation('execution');
@@ -2268,8 +2292,22 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         cbEl.classList.add('checked');
         const card = cbEl.closest('.task-card');
         if (card) card.classList.add('completing');
-        await fetch(`/api/tasks/${id}/complete`, {method: 'POST'});
-        showToast("Execution efficiency +12%. Momentum verified.", "var(--green)");
+        
+        try {
+            const res = await fetch(`/api/tasks/${id}/complete`, {method: 'POST'});
+            if (res.ok) {
+                const data = await res.json();
+                if (data.velocity) {
+                    const dayWord = data.streak === 1 ? 'Day' : 'Days';
+                    showToast(`✦ MISSION SUCCESS  +${data.velocity}% Velocity | Streak: ${data.streak} ${dayWord} | Today: ${data.daily_completions}`, "var(--green)");
+                } else {
+                    showToast("Mission execution successful.", "var(--green)");
+                }
+            }
+        } catch (e) {
+            console.error(e);
+            showToast("Mission execution successful.", "var(--green)");
+        }
         setTimeout(loadTasks, 750);
     };
 
@@ -2295,33 +2333,50 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         setInterval(checkFocusState, 5000);
 
         // ── OMNIBAR (FRICTIONLESS CAPTURE) INIT ────────
+        const omniOverlay = document.getElementById('omnibar-overlay');
         const omniInput = document.getElementById('omnibar-input');
-        if (omniInput) {
-            // Global Ctrl+K Listener
+
+        function openOmnibar() {
+            if (!omniOverlay || !omniInput) return;
+            omniOverlay.classList.add('active');
+            omniInput.value = '';
+            omniInput.disabled = false;
+            setTimeout(() => omniInput.focus(), 80);
+        }
+        function closeOmnibar() {
+            if (!omniOverlay) return;
+            omniOverlay.classList.remove('active');
+            omniInput.blur();
+        }
+
+        if (omniOverlay && omniInput) {
+            // Global Ctrl+K Listener — works from ANY view
             document.addEventListener('keydown', (e) => {
                 if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-                    e.preventDefault(); // Prevent browser search box
-                    const viewTasks = document.getElementById('view-tasks');
-                    // Automatically switch to missions view if not already there
-                    if (viewTasks.classList.contains('hidden')) {
-                        switchView('tasks');
-                    }
-                    omniInput.focus();
+                    e.preventDefault();
+                    openOmnibar();
                 }
             });
 
-            // Enter key Listener
+            // Escape to dismiss
+            omniInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') { e.preventDefault(); closeOmnibar(); }
+            });
+
+            // Click backdrop to dismiss
+            omniOverlay.addEventListener('click', (e) => {
+                if (e.target === omniOverlay) closeOmnibar();
+            });
+
+            // Enter key — fire capture with loading state
             omniInput.addEventListener('keydown', async (e) => {
                 if (e.key === 'Enter') {
                     e.preventDefault();
                     const text = omniInput.value.trim();
                     if (!text) return;
                     
-                    // Visual feedback
-                    omniInput.value = '';
-                    omniInput.classList.remove('omnibar-flash');
-                    void omniInput.offsetWidth; // Trigger reflow
-                    omniInput.classList.add('omnibar-flash');
+                    // Disable input to prevent duplicates  
+                    omniInput.disabled = true;
                     
                     try {
                         const res = await fetch('/api/tasks/dump', {
@@ -2331,14 +2386,18 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                         });
                         
                         if (res.ok) {
-                            // Instantly refresh timeline to pull the new task
+                            const data = await res.json();
+                            const savedTitle = (data.task && data.task.title) ? data.task.title : text;
+                            closeOmnibar();
                             loadTasks();
-                            showToast("Captured to Inbox", "var(--ai-purple)");
+                            showToast(`Captured: "${savedTitle}"`, "var(--ai-purple)");
                         } else {
+                            omniInput.disabled = false;
                             showToast("Failed to capture thought", "var(--red)");
                         }
                     } catch (err) {
                         console.error(err);
+                        omniInput.disabled = false;
                         showToast("Capture transmission failed", "var(--red)");
                     }
                 }
@@ -2569,15 +2628,17 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         document.getElementById('complete-modal').classList.remove('active');
     };
     window.submitMissionComplete = async () => {
-        hideCompleteModal();
-        const timeUsedSecs = totalFocusSecondsInitial - (currentFocusMinutesLeft * 60);
+        const timeUsedSecs = totalFocusSecondsInitial - (currentFocusMinutesLeft * 60 + currentFocusSecondsLeft);
         const timeSavedMins = currentFocusMinutesLeft;
         const timeUsedMins = Math.floor(timeUsedSecs / 60);
         const effScore = Math.floor((totalFocusSecondsInitial / (timeUsedSecs > 0 ? timeUsedSecs : 1)) * 100);
         const finalEffScore = effScore > 500 ? 500 : effScore;
         
+        hideCompleteModal();
+        deactivateFocusLock();
+        
         try {
-            await fetch('/api/focus/complete', {
+            const res = await fetch('/api/focus/complete', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ 
@@ -2586,15 +2647,26 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     time_used: timeUsedMins
                 })
             });
-            deactivateFocusLock();
             loadTasks();
             
-            // Pop the unified Momentum Modal directly
+            // Show live Dopamine toast from response
+            try {
+                if (res.ok) {
+                    const dopa = await res.json();
+                    if (dopa.velocity) {
+                        const dayWord = dopa.streak === 1 ? 'Day' : 'Days';
+                        showToast(`✦ FOCUS COMPLETE  +${dopa.velocity}% Velocity | Streak: ${dopa.streak} ${dayWord} | Today: ${dopa.daily_completions}`, "var(--green)");
+                    }
+                }
+            } catch(te) {}
+            
+            // Also show reward screen
+            document.getElementById('reward-minutes').innerText = timeUsedMins;
             const cycleText = document.getElementById('focus-cycle-text');
             const cText = cycleText ? `Focus Cycle ${cycleText.innerText} Completed` : 'Focus Cycle Completed';
-            
-            openMomentumDeployment(timeUsedMins, timeSavedMins, finalEffScore, cText);
-            
+            document.getElementById('reward-cycle-text').innerText = cText;
+            document.getElementById('reward-screen').classList.add('active');
+
         } catch(e) { console.error(e); }
     };
 
@@ -2706,14 +2778,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     }
 
     function completeFocusSession() {
-        deactivateFocusLock();
-        document.getElementById('reward-minutes').innerText = Math.round(totalFocusSecondsInitial / 60);
-        const cycleText = document.getElementById('focus-cycle-text');
-        if(cycleText) document.getElementById('reward-cycle-text').innerText = `Focus Cycle ${cycleText.innerText} Completed`;
-        
-        document.getElementById('reward-screen').classList.add('active');
-        showToast("Execution efficiency +12%. Momentum verified.", "var(--green)");
-        loadTasks();
+        // Natural end of timer - trigger submission
+        window.submitMissionComplete();
     }
     window.closeRewardScreen = () => {
         document.getElementById('reward-screen').classList.remove('active');

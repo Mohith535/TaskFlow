@@ -261,20 +261,26 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
                 time_saved = data.get("time_saved", 0)
                 time_used = data.get("time_used", 0)
                 
-                # Update task in storage
+                # Update task in storage via unified complete_task (triggers Dopamine Engine)
                 status = commands.focus_manager.get_focus_status()
+                dopamine = {}
                 if status and status.get("focus_active"):
                     task_id = status.get("task_id")
                     if task_id:
+                        # Generate dopamine via unified engine (marks complete + tracks streak)
+                        result = commands.complete_task(task_id)
+                        if isinstance(result, dict):
+                            dopamine = result
+                        
+                        # Also track the focus time (this was handled before mark_complete)
                         tasks = storage.load_tasks()
                         for task in tasks:
                             if task.id == task_id:
-                                task.mark_complete()
                                 task.add_focus_minutes(time_used)
                                 storage.save_tasks(tasks)
                                 break
-                
-                # Sync logic
+
+                # Sync focus state
                 try:
                     commands.complete_focus(efficiency_score, time_saved, time_used)
                 except Exception as ex:
@@ -282,10 +288,12 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
                         commands.time_tracker.end_focus()
                         commands.time_tracker._save_state({'active_session': None, 'start_time': None})
                     except: pass
-                
+
                 self.send_response(200)
                 self.end_headers_json()
-                self.wfile.write(json.dumps({"success": True}).encode('utf-8'))
+                response = {"success": True}
+                response.update(dopamine)
+                self.wfile.write(json.dumps(response).encode('utf-8'))
             except Exception as e:
                 import traceback; traceback.dump(e, open(r'C:\Users\Admin\Desktop\error1.txt', 'w')) if hasattr(traceback, "dump") else open(r'C:\Users\Admin\Desktop\error1.txt', 'w').write(traceback.format_exc())
                 self.send_response(500)
@@ -310,19 +318,16 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
         elif path.startswith("/api/tasks/") and path.endswith("/complete"):
             try:
                 task_id = int(path.split("/")[3])
-                tasks = storage.load_tasks()
-                found = False
-                for task in tasks:
-                    if task.id == task_id:
-                        task.mark_complete()
-                        found = True
-                        break
+                from task_manager import commands
+                dopamine = commands.complete_task(task_id)
                 
-                if found:
-                    storage.save_tasks(tasks)
+                if dopamine is not False:
                     self.send_response(200)
                     self.end_headers_json()
-                    self.wfile.write(json.dumps({"success": True}).encode('utf-8'))
+                    response_data = {"success": True}
+                    if isinstance(dopamine, dict):
+                        response_data.update(dopamine)
+                    self.wfile.write(json.dumps(response_data).encode('utf-8'))
                 else:
                     self.send_response(404)
                     self.end_headers_json()

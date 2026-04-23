@@ -83,19 +83,20 @@ from task_manager.commands import (
 )
 
 APP_NAME = "TaskFlow"
-APP_VERSION = "v4.0.0"
+APP_VERSION = "v6.0.0"
 APP_TAGLINE = "Momentum Engineering for Calm Productivity"
 
 
 def show_help() -> None:
     """Show comprehensive help with premium formatting."""
     print(f"""
-  TaskFlow v4.0.0 — The Execution Engine
+  TaskFlow v6.0.0 — The Execution Engine
   {"─" * 60}
 
   CORE COMMANDS:
     add                     Add mission interactively
-    dump <thought>          Frictionless quick capture of a sudden thought
+    dump <thought>          Frictionless quick capture (!h !m !l for priority, #tag)
+                            PowerShell: quote with "" if using # (e.g. "task #tag !h")
     list                    List your mission board (--todo, --done)
     view <id>               View detailed mission brief
     edit <id>               Recalibrate mission parameters

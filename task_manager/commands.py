@@ -398,48 +398,16 @@ class TimeTracker:
                 with open(stats_file, 'r') as f:
                     stats = json.load(f)
                     today = datetime.now().strftime('%Y-%m-%d')
-                    if stats.get('last_cycle_date') == today:
-                        return stats.get('cycles_today', 0)
+                    if stats.get('last_completion_date') == today:
+                        return stats.get('daily_completions', 0)
         except:
             pass
         return 0
         
     def increment_cycle(self):
-        try:
-            from task_manager.storage import storage
-            stats_file = storage.data_dir / "user_stats.json"
-            stats = {'cycles_today': 0, 'last_cycle_date': '', 'streak_days': 0}
-            if stats_file.exists():
-                try:
-                    with open(stats_file, 'r') as f:
-                        stats.update(json.load(f))
-                except: pass
-                
-            today = datetime.now().strftime('%Y-%m-%d')
-            if stats.get('last_cycle_date') == today:
-                stats['cycles_today'] += 1
-            else:
-                last_date_str = stats.get('last_cycle_date', '')
-                if last_date_str:
-                    try:
-                        last_date = datetime.strptime(last_date_str, '%Y-%m-%d')
-                        # Check streak
-                        if (datetime.now() - last_date).days == 1:
-                            stats['streak_days'] += 1
-                        else:
-                            stats['streak_days'] = 1
-                    except:
-                        stats['streak_days'] = 1
-                else:
-                    stats['streak_days'] = 1
-                
-                stats['cycles_today'] = 1
-                stats['last_cycle_date'] = today
-                
-            with open(stats_file, 'w') as f:
-                json.dump(stats, f)
-        except:
-            pass
+        # We now use the unified _generate_dopamine for tracking
+        dopa = _generate_dopamine()
+        return dopa
     
     def start_focus(self, task_id: int, task_title: str, task_notes: str = "", 
                     priority: str = "medium", minutes: int = 25, 
@@ -701,7 +669,8 @@ def dump_task(title: str) -> dict:
     # Clean the title by removing the extracted markers
     clean_title = re.sub(r'#\w+', '', title)
     clean_title = re.sub(r'!(low|medium|high|noise|strategic|critical|l|m|h|p|purge)(?!\w)', '', clean_title, flags=re.IGNORECASE)
-    clean_title = validate_title(clean_title.strip())
+    clean_title = re.sub(r'\s+', ' ', clean_title).strip()  # Collapse residual whitespace
+    clean_title = validate_title(clean_title)
     
     if not clean_title:
         return None
@@ -931,23 +900,113 @@ def list_tasks(filter_status: Optional[str] = None,
 
 
 
-def complete_task(task_id: int) -> bool:
-    """Mark a task as completed."""
-    tasks = storage.load_tasks()
+def _generate_dopamine(task_id: int = None, increment: bool = True) -> dict:
+    """
+    Unified Dopamine Engine: generates variable reward stats and persists
+    a single source-of-truth stats file (user_stats.json).
+    """
+    import random
+    velocity = random.randint(8, 25)
+    stats_file = storage.data_dir / "user_stats.json"
     
+    # Load existing stats
+    stats = {
+        'daily_completions': 0,
+        'daily_streak': 0,
+        'last_completion_date': '',
+        # Legacy Phase 2 keys kept for backward compatibility (synced below)
+        'cycles_today': 0,
+        'last_cycle_date': '',
+        'streak_days': 0,
+    }
+    if stats_file.exists():
+        try:
+            with open(stats_file, 'r') as f:
+                loaded = json.load(f)
+                stats.update(loaded)
+        except:
+            pass
+
+    today = datetime.now().strftime('%Y-%m-%d')
+
+    if increment:
+        if stats.get('last_completion_date') == today:
+            stats['daily_completions'] = stats.get('daily_completions', 0) + 1
+        else:
+            last_date_str = stats.get('last_completion_date', '')
+            if last_date_str:
+                try:
+                    last_date = datetime.strptime(last_date_str, '%Y-%m-%d')
+                    delta = (datetime.now() - last_date).days
+                    if delta == 1:
+                        stats['daily_streak'] = stats.get('daily_streak', 0) + 1
+                    else:
+                        stats['daily_streak'] = 1 
+                except:
+                    stats['daily_streak'] = 1
+            else:
+                stats['daily_streak'] = 1
+
+            stats['daily_completions'] = 1
+            stats['last_completion_date'] = today
+
+        # Synchronize Phase 2 legacy keys
+        stats['cycles_today'] = stats['daily_completions']
+        stats['last_cycle_date'] = today
+        stats['streak_days'] = stats['daily_streak']
+
+        try:
+            with open(stats_file, 'w') as f:
+                json.dump(stats, f, indent=2)
+        except:
+            pass
+
+    return {
+        "velocity": velocity,
+        "streak": stats['daily_streak'],
+        "daily_completions": stats['daily_completions'],
+    }
+
+
+def complete_task(task_id: int):
+    """Mark a task as completed and trigger Dopamine Engine."""
+    tasks = storage.load_tasks()
+
     for task in tasks:
         if task.id == task_id:
+            # If already done, we STILL want the dopamine payload (current stats) 
+            # but without incrementing the streak/count again.
             if task.completed:
-                Messenger.info(f"Task {task_id} is already completed.")
-                return True
-            
+                dopamine = _generate_dopamine(task_id, increment=False)
+                streak = dopamine['streak']
+                daily = dopamine['daily_completions']
+                day_word = "Day" if streak == 1 else "Days"
+                
+                try:
+                    print(f"\n[!] TASK ALREADY COMPLETED (ID: {task_id})")
+                    print(f"✦ Execution Streak: {streak} {day_word}  |  Today: {daily} mission(s) complete")
+                except: pass
+                return dopamine
+
             task.completed = True
             task.completed_at = datetime.now().strftime("%Y-%m-%d %H:%M")
             storage.save_tasks(tasks)
-            Messenger.success(f"Task #{task_id} marked as completed.")
-            Messenger.note("Nice progress. One step at a time.")
-            return True
-    
+
+            dopamine = _generate_dopamine(task_id, increment=True)
+            streak = dopamine['streak']
+            velocity = dopamine['velocity']
+            daily = dopamine['daily_completions']
+            day_word = "Day" if streak == 1 else "Days"
+
+            try:
+                print(f"\n[✓] MISSION SUCCESS (ID: {task_id})")
+                print(f"✦ +{velocity}% Execution Velocity")
+                print(f"✦ Execution Streak: {streak} {day_word}  |  Today: {daily} mission(s) complete")
+            except Exception:
+                pass 
+
+            return dopamine
+
     Messenger.task_not_found(task_id)
     return False
 
