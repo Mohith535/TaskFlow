@@ -17,6 +17,22 @@ class Task:
     tags: List[str] = field(default_factory=list)
     notes: str = ""
     focus_minutes_spent: int = 0  # NEW: Track focus time
+    duration: Optional[str] = None
+    deadline: Optional[str] = None
+    deadline_type: Optional[str] = None
+    postpone_count: int = 0
+    last_missed_prompt: Optional[str] = None
+    executed_late: Optional[bool] = None
+    dropped_at: Optional[str] = None
+    drop_reason: Optional[str] = None
+    offloaded_at: Optional[str] = None
+    offload_note: Optional[str] = None
+    postpone_history: List[str] = field(default_factory=list)
+    reminder_time: Optional[str] = None
+    reminder_time_2: Optional[str] = None
+    reminder_fired: bool = False
+    reminder_fired_2: bool = False
+    reminder_dismissed: bool = False
     
     def __post_init__(self):
         """Validate task after initialization."""
@@ -35,6 +51,11 @@ class Task:
         
         if self.completed and not self.completed_at:
             self.completed_at = datetime.now().strftime('%Y-%m-%d %H:%M')
+            
+        if self.duration:
+            self.duration = self.duration.lower()
+            if self.duration not in ["15m", "30m", "1h", "2h", "3h", "4h+"]:
+                self.duration = None  # Graceful handling if invalid is somehow passed
     
     def mark_complete(self):
         """Mark task as completed."""
@@ -71,7 +92,23 @@ class Task:
             "completed_at": self.completed_at,
             "tags": self.tags,
             "notes": self.notes,
-            "focus_minutes_spent": self.focus_minutes_spent
+            "focus_minutes_spent": self.focus_minutes_spent,
+            "duration": self.duration,
+            "deadline": self.deadline,
+            "deadline_type": self.deadline_type,
+            "postpone_count": self.postpone_count,
+            "last_missed_prompt": self.last_missed_prompt,
+            "executed_late": self.executed_late,
+            "dropped_at": self.dropped_at,
+            "drop_reason": self.drop_reason,
+            "offloaded_at": self.offloaded_at,
+            "offload_note": self.offload_note,
+            "postpone_history": self.postpone_history,
+            "reminder_time": self.reminder_time,
+            "reminder_time_2": self.reminder_time_2,
+            "reminder_fired": self.reminder_fired,
+            "reminder_fired_2": self.reminder_fired_2,
+            "reminder_dismissed": self.reminder_dismissed
         }
     
     @classmethod
@@ -84,6 +121,24 @@ class Task:
             data["notes"] = ""
         if "focus_minutes_spent" not in data:
             data["focus_minutes_spent"] = 0
+            
+        # Get optional new fields with safe defaults
+        data["duration"] = data.get("duration")
+        data["deadline"] = data.get("deadline")
+        data["deadline_type"] = data.get("deadline_type")
+        data["postpone_count"] = data.get("postpone_count", 0)
+        data["last_missed_prompt"] = data.get("last_missed_prompt")
+        data["executed_late"] = data.get("executed_late")
+        data["dropped_at"] = data.get("dropped_at")
+        data["drop_reason"] = data.get("drop_reason")
+        data["offloaded_at"] = data.get("offloaded_at")
+        data["offload_note"] = data.get("offload_note")
+        data["postpone_history"] = data.get("postpone_history", [])
+        data["reminder_time"] = data.get("reminder_time")
+        data["reminder_time_2"] = data.get("reminder_time_2")
+        data["reminder_fired"] = data.get("reminder_fired", False)
+        data["reminder_fired_2"] = data.get("reminder_fired_2", False)
+        data["reminder_dismissed"] = data.get("reminder_dismissed", False)
         
         return cls(**data)
     

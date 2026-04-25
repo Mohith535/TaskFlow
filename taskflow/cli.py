@@ -79,8 +79,16 @@ from task_manager.commands import (
     manage_blocklist,
     open_web_ui,
     kill_web_ui,
-    dump_task
+    dump_task,
+    run_today_view,
+    command_postpone,
+    command_remind,
+    command_recover,
+    check_reminders,
+    check_recovery_mode
 )
+from task_manager.storage import storage
+import colorama
 
 APP_NAME = "TaskFlow"
 APP_VERSION = "v6.0.0"
@@ -165,7 +173,11 @@ Examples:
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
     
     # Add command (no arguments - uses interactive input)
-    subparsers.add_parser('add', help='Add a new task (interactive)')
+    add_parser = subparsers.add_parser('add', help='Add a new task (interactive)')
+    add_parser.add_argument('--hard', action='store_true', help='Set hard deadline type')
+    add_parser.add_argument('--deadline', type=str, help='Set deadline directly (e.g. "3pm", "tomorrow")')
+    add_parser.add_argument('--duration', type=str, help='Set duration directly (e.g. "30m", "1h")')
+    add_parser.add_argument('--priority', choices=['low', 'medium', 'high'], help='Set priority directly')
     
     # List command with flags   
     list_parser = subparsers.add_parser('list', help='List tasks with filtering')
@@ -225,6 +237,21 @@ Examples:
     schedule_parser.add_argument('id', type=int, help='Task ID')
     schedule_parser.add_argument('date', help='Date (YYYY-MM-DD, "today", or "tomorrow")')
     
+    # Feature 6: Postpone
+    postpone_parser = subparsers.add_parser('postpone', help='Proactively postpone a task')
+    postpone_parser.add_argument('id', type=int, help='Task ID')
+    
+    # Feature 7: Remind
+    remind_parser = subparsers.add_parser('remind', help='Manage task reminders')
+    remind_parser.add_argument('id', type=int, help='Task ID')
+    remind_parser.add_argument('--set', dest='set_str', help='Set a new reminder time')
+    remind_parser.add_argument('--clear', action='store_true', help='Clear all reminders for this task')
+    
+    # Feature 9: Recover
+    recover_parser = subparsers.add_parser('recover', help='Manage system recovery mode')
+    recover_parser.add_argument('--trigger', action='store_true', help='Manually trigger recovery mode')
+    recover_parser.add_argument('--exit', action='store_true', help='Exit recovery mode')
+    
     # Timeline
     subparsers.add_parser('timeline', help='Render a 7-day tactical terminal view')
     
@@ -275,6 +302,7 @@ Examples:
     # Simple commands without arguments
     simple_commands = [
         ('today', "Show today's scheduled tasks"),
+        ('status', 'Show task list (alias for list)'),
         ('stats', 'Show task statistics'),
         ('summary', 'Human-readable summary'),
         ('backup', 'Create manual backup'),
@@ -302,6 +330,9 @@ def main():
         from task_manager.system_detector import SystemDetector
         from task_manager.blockers.windows import WindowsBlocker
         from task_manager.commands import time_tracker
+        
+        # Colorama init
+        colorama.init(autoreset=True)
         
         # If on Windows and admin, check for orphaned blocks IF no active session
         if SystemDetector.get_os() == "windows" and SystemDetector.is_admin():
@@ -343,10 +374,24 @@ def main():
     
     # Route commands
     try:
+        # STARTUP HOOKS (Features 7 and 9)
+        if args.command in ['list', 'status', 'today']:
+            tasks_for_startup = storage.load_tasks()
+            check_reminders(tasks_for_startup)
+            
+            if check_recovery_mode():
+                # Intercept normal views if recovery mode is active
+                args.command = 'recover'
+                
         if args.command == 'add':
-            add_task()
+            add_task(
+                is_hard=getattr(args, 'hard', False),
+                preset_deadline=getattr(args, 'deadline', None),
+                preset_duration=getattr(args, 'duration', None),
+                preset_priority=getattr(args, 'priority', None)
+            )
         
-        elif args.command == 'list':
+        elif args.command in ['list', 'status']:
             # Standard CLI List
             filter_status = None
             if args.todo:
@@ -419,7 +464,7 @@ def main():
             render_timeline()
         
         elif args.command == 'today':
-            show_today_tasks()
+            run_today_view()
         
         elif args.command == 'tag':
             tag_task(args.id, args.tags)
@@ -483,6 +528,17 @@ def main():
                 print("Error: Nothing to dump.")
             else:
                 dump_task(text)
+                
+        elif args.command == 'postpone':
+            command_postpone(args.id)
+            
+        elif args.command == 'remind':
+            command_remind(args.id, args.set_str, args.clear)
+            
+        elif args.command == 'recover':
+            trigger = getattr(args, 'trigger', False)
+            exit_mode = getattr(args, 'exit', False)
+            command_recover(trigger, exit_mode)
         
         else:
             print(f"Unknown command: {args.command}")

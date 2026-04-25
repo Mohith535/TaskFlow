@@ -5,6 +5,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TaskFlow | Mission Control</title>
     <script src="/static/three.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
     <style>
         /* ─── RESET ─────────────────────────────── */
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -433,6 +434,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             border-radius: 12px; padding: 18px 22px; cursor: pointer;
             position: relative; overflow: hidden;
             width: 100%;
+            transform: translateY(18px);
             opacity: 0;
             backdrop-filter: blur(var(--system-blur));
             transition: all 450ms cubic-bezier(0.16, 1, 0.3, 1);
@@ -440,7 +442,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             will-change: transform, opacity, box-shadow;
         }
         .task-card.cascade-visible {
-            animation: cascadeIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+            opacity: 1;
+            transform: translateY(0);
         }
         .task-card.priority-high  { border-left-color: var(--red); }
         .task-card.priority-medium { border-left-color: var(--amber); }
@@ -983,6 +986,203 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             50%  { box-shadow: 0 4px 24px rgba(31,111,235,0.5); }
         }
         .filter-chip.active { animation: chipPulse 2.5s ease infinite; }
+
+        /* ─── PHASE 1: NEW BADGE TYPES ─────────────── */
+        /* Map CLI priority names to badge styles */
+        .badge.critical  { color: var(--red);   background: rgba(248,81,73,0.1);   border: 1px solid rgba(248,81,73,0.2); }
+        .badge.strategic { color: var(--amber);  background: rgba(210,153,34,0.1);  border: 1px solid rgba(210,153,34,0.2); }
+        .badge.noise     { color: var(--blue);   background: rgba(88,166,255,0.1);  border: 1px solid rgba(88,166,255,0.2); }
+        .badge.purge     { color: #6E7681;        background: rgba(110,118,129,0.1); border: 1px solid rgba(110,118,129,0.2); }
+
+        /* Duration badge */
+        .duration-badge {
+            background: rgba(88,166,255,0.08); border: 1px solid rgba(88,166,255,0.15);
+            border-radius: 20px; padding: 2px 8px; font-size: 10px; color: var(--blue);
+            font-family: 'DM Mono', monospace; flex-shrink: 0;
+        }
+
+        /* Postpone badge */
+        .postpone-badge {
+            border-radius: 20px; padding: 2px 8px; font-size: 10px; font-weight: 600;
+            flex-shrink: 0;
+        }
+        .postpone-badge.mild  { background: rgba(210,153,34,0.08); border: 1px solid rgba(210,153,34,0.2); color: #D29922; }
+        .postpone-badge.warn  { background: rgba(248,81,73,0.08);  border: 1px solid rgba(248,81,73,0.2);  color: #F85149; }
+
+        /* Deadline row */
+        .deadline-row {
+            display: flex; align-items: center; gap: 6px; margin-top: 6px;
+            font-size: 11px; font-family: 'DM Mono', monospace;
+            transition: all 300ms ease-out;
+        }
+        .hard-tag {
+            font-size: 10px; font-weight: 700; color: #F85149;
+            border: 1px solid rgba(248,81,73,0.3); border-radius: 4px;
+            padding: 1px 5px; flex-shrink: 0;
+        }
+        .overdue-chip {
+            font-size: 9px; font-weight: 700; color: #F85149;
+            background: rgba(248,81,73,0.1); border: 1px solid rgba(248,81,73,0.3);
+            border-radius: 4px; padding: 1px 6px; margin-left: auto; flex-shrink: 0;
+        }
+
+        /* ─── PRESSURE LEVELS ─────────────────────── */
+        .task-card { transition: border-left-color 300ms ease-out, box-shadow 300ms ease-out, color 300ms ease-out; }
+        .task-card.pressure-1 { border-left-color: #D29922; box-shadow: 0 0 12px rgba(210,153,34,0.08); }
+        .task-card.pressure-2 { border-left-color: #D29922; box-shadow: 0 0 16px rgba(210,153,34,0.15); }
+        .task-card.pressure-2 .task-title { color: #D29922; }
+        .task-card.pressure-3 { border-left-color: #F85149; box-shadow: 0 0 20px rgba(248,81,73,0.2); animation: urgentBorder 1.5s ease-in-out infinite; }
+        .task-card.pressure-3 .task-title { color: #F85149; }
+        .task-card.overdue-card { background: rgba(248,81,73,0.04); border-left-color: #F85149; }
+        .task-card.overdue-card .task-title { color: #F85149; }
+        .task-card-wrap.hard-deadline-urgent::before {
+            content: ''; display: block; height: 1px; margin-bottom: 2px;
+            background: linear-gradient(90deg, transparent, #F85149, transparent);
+            animation: urgentPulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes urgentPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        @keyframes urgentBorder { 0%, 100% { border-left-color: #F85149; } 50% { border-left-color: rgba(248,81,73,0.3); } }
+
+        /* ─── SORT CONTROLS ───────────────────────── */
+        .sort-controls { display: flex; align-items: center; gap: 8px; }
+        .sort-label { font-size: 9px; font-weight: 700; color: var(--text-disabled); letter-spacing: 1.5px; }
+        .sort-chip {
+            font-size: 9px; font-weight: 700; letter-spacing: 1px; padding: 3px 8px;
+            border: 1px solid var(--border-neutral); border-radius: 4px; background: transparent;
+            color: var(--text-disabled); cursor: pointer; transition: all 150ms ease-out;
+        }
+        .sort-chip.active { background: rgba(88,166,255,0.1); border-color: var(--blue); color: var(--blue); }
+        .sort-chip:hover:not(.active) { border-color: #6E7681; color: var(--text-body); }
+
+        /* filter count badges */
+        .chip-count {
+            display: inline-block; background: rgba(255,255,255,0.1);
+            border-radius: 10px; padding: 0 5px; font-size: 10px;
+            margin-left: 4px; font-weight: 400;
+        }
+
+        /* ─── PRIORITY ALERT CARDS (Control Center) ─── */
+        .alert-card {
+            border-radius: 8px; padding: 12px 14px; margin-bottom: 8px;
+            border-left: 3px solid transparent;
+        }
+        .alert-card .alert-type { font-size: 10px; font-weight: 700; letter-spacing: 1px; margin-bottom: 4px; }
+        .alert-card .alert-title { font-size: 14px; font-weight: 500; color: var(--text-hero); margin-bottom: 2px; }
+        .alert-card .alert-meta { font-size: 12px; color: var(--text-muted); }
+        .alert-card.missed  { background: rgba(248,81,73,0.06); border-left-color: #F85149; }
+        .alert-card.urgent  { background: rgba(248,81,73,0.04); border-left-color: #D29922; }
+        .alert-card.deferred{ background: rgba(210,153,34,0.04); border-left-color: #D29922; }
+
+        /* ─── RECOVERY MODE ───────────────────────── */
+        #recovery-banner {
+            display: none; height: 56px; align-items: center; justify-content: space-between;
+            padding: 0 32px;
+            background: linear-gradient(90deg, rgba(248,81,73,0.08) 0%, rgba(210,153,34,0.05) 100%);
+            border-bottom: 1px solid rgba(248,81,73,0.2);
+            flex-shrink: 0;
+        }
+        #recovery-banner.active { display: flex; }
+        .recovery-badge { font-size: 11px; font-weight: 700; color: #F85149; letter-spacing: 2px; }
+        .recovery-sub { font-size: 13px; color: var(--text-muted); margin-left: 12px; }
+        .btn-exit-recovery {
+            background: transparent; border: 1px solid rgba(248,81,73,0.3); color: #F85149;
+            border-radius: 6px; padding: 6px 14px; font-size: 12px; cursor: pointer; transition: all 150ms ease;
+        }
+        .btn-exit-recovery:hover { background: rgba(248,81,73,0.08); }
+        .recovery-suppressed { opacity: 0.25; pointer-events: none; filter: blur(0.5px); transition: all 600ms ease-out; }
+        .recovery-highlighted {
+            border: 1px solid rgba(248,81,73,0.3) !important;
+            box-shadow: 0 0 20px rgba(248,81,73,0.1) !important;
+        }
+        .recovery-priority-badge {
+            font-size: 9px; font-weight: 700; color: #F85149;
+            background: rgba(248,81,73,0.1); border: 1px solid rgba(248,81,73,0.3);
+            border-radius: 4px; padding: 2px 8px; margin-left: auto;
+        }
+
+        /* ─── REMINDER TOASTS ─────────────────────── */
+        #reminder-stack {
+            position: fixed; bottom: 88px; right: 24px; z-index: 19000;
+            display: flex; flex-direction: column; gap: 8px; align-items: flex-end;
+        }
+        .reminder-toast {
+            width: 320px; background: #161B22; border: 1px solid #30363D;
+            border-left: 3px solid var(--blue); border-radius: 12px; padding: 16px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            transform: translateY(20px); opacity: 0;
+            animation: toastIn 300ms ease-out forwards;
+        }
+        .reminder-toast.hard-reminder { border-left-color: #F85149; background: linear-gradient(135deg, #161B22 0%, rgba(248,81,73,0.03) 100%); }
+        @keyframes toastIn { to { transform: translateY(0); opacity: 1; } }
+        .toast-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+        .toast-label { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; color: var(--blue); }
+        .toast-label.hard { color: #F85149; }
+        .toast-close { font-size: 16px; color: #6E7681; cursor: pointer; background: none; border: none; line-height: 1; padding: 0; }
+        .toast-title { font-size: 14px; font-weight: 500; color: var(--text-hero); margin-bottom: 4px; }
+        .toast-deadline { font-size: 12px; margin-bottom: 4px; font-family: 'DM Mono', monospace; }
+        .toast-meta { font-size: 11px; color: var(--text-muted); margin-bottom: 12px; }
+        .toast-actions { display: flex; gap: 8px; }
+        .btn-toast-focus {
+            background: linear-gradient(135deg, #1F6FEB, #388BFD); border: none;
+            border-radius: 6px; color: white; font-size: 12px; font-weight: 600;
+            padding: 6px 14px; cursor: pointer; transition: all 150ms ease;
+        }
+        .btn-toast-dismiss {
+            background: transparent; border: 1px solid #30363D;
+            border-radius: 6px; color: #8B949E; font-size: 12px;
+            padding: 6px 14px; cursor: pointer; transition: all 150ms ease;
+        }
+        .btn-toast-dismiss:hover { border-color: #6E7681; color: var(--text-body); }
+
+        /* ─── TIMELINE TASK CHIPS ─────────────────── */
+        .tl-chip {
+            border-radius: 6px; padding: 6px 10px; margin-bottom: 4px;
+            font-size: 12px; color: #C9D1D9; cursor: grab; border-left: 2px solid transparent;
+            overflow: hidden; line-height: 1.3;
+        }
+        .tl-chip .tl-chip-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .tl-chip .tl-chip-meta { font-size: 10px; color: var(--text-muted); font-family: 'DM Mono', monospace; margin-top: 2px; }
+        .tl-chip.p-critical { background: rgba(248,81,73,0.1);  border-left-color: #F85149; }
+        .tl-chip.p-strategic{ background: rgba(210,153,34,0.1); border-left-color: #D29922; }
+        .tl-chip.p-noise    { background: rgba(88,166,255,0.1); border-left-color: #58A6FF; }
+        .tl-chip.p-high     { background: rgba(248,81,73,0.1);  border-left-color: #F85149; }
+        .tl-chip.p-medium   { background: rgba(210,153,34,0.1); border-left-color: #D29922; }
+        .tl-chip.p-low      { background: rgba(88,166,255,0.1); border-left-color: #58A6FF; }
+        .col-mission-count  { font-size: 10px; color: var(--text-disabled); letter-spacing: 1.5px; font-weight: 700; margin-bottom: 4px; }
+
+        /* ─── CREATE MISSION: NEW FIELDS ─────────── */
+        .duration-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
+        .dur-pill {
+            height: 36px; border-radius: 8px; font-size: 12px; font-weight: 500;
+            background: #0D1117; border: 1px solid #30363D; color: #8B949E;
+            cursor: pointer; transition: all 150ms ease-out; font-family: 'DM Mono', monospace;
+        }
+        .dur-pill:hover { border-color: #6E7681; color: var(--text-body); }
+        .dur-pill.selected {
+            background: rgba(88,166,255,0.1); border-color: var(--blue);
+            color: var(--blue); transform: translateY(-1px);
+            box-shadow: 0 0 12px rgba(88,166,255,0.15);
+        }
+        .deadline-input {
+            width: 100%; height: 44px; background: #0D1117;
+            border: 1px solid #30363D; border-radius: 10px; padding: 0 14px;
+            color: var(--text-hero); font-size: 14px; outline: none;
+            caret-color: var(--blue); transition: border-color 150ms ease;
+        }
+        .deadline-input:focus { border-color: var(--blue); }
+        .deadline-parsed { font-size: 12px; margin-top: 6px; opacity: 0; transition: opacity 200ms ease-out; }
+        .deadline-parsed.visible { opacity: 1; }
+        .deadline-type-row { display: flex; gap: 12px; margin-top: 10px; }
+        .dl-type-pill {
+            flex: 1; height: 40px; border-radius: 8px; font-size: 12px; font-weight: 500;
+            cursor: pointer; border: 1px solid #30363D; background: transparent;
+            color: #8B949E; transition: all 150ms ease-out;
+        }
+        .dl-type-pill.soft.selected { background: rgba(88,166,255,0.08); border-color: var(--blue); color: var(--blue); }
+        .dl-type-pill.hard.selected { background: rgba(248,81,73,0.08); border-color: #F85149; color: #F85149; box-shadow: 0 0 12px rgba(248,81,73,0.15); }
+        .hard-warning { font-size: 11px; color: #F85149; opacity: 0.7; margin-top: 6px; display: none; }
+        .hard-warning.visible { display: block; }
     </style>
 </head>
 <body class="state-idle">
@@ -1005,6 +1205,18 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     <!-- New Top Progress Bar -->
     <div id="focus-progress-bar" class="focus-progress-bar"></div>
+
+    <!-- RECOVERY MODE BANNER -->
+    <div id="recovery-banner">
+        <div style="display:flex; align-items:center;">
+            <span class="recovery-badge">⚡ RECOVERY MODE ACTIVE</span>
+            <span class="recovery-sub">· Today's been rough. Let's salvage it.</span>
+        </div>
+        <button class="btn-exit-recovery" id="btn-exit-recovery">EXIT RECOVERY</button>
+    </div>
+
+    <!-- REMINDER TOAST STACK -->
+    <div id="reminder-stack"></div>
 
     <div id="focus-overlay" class="focus-overlay">
         <div class="focus-overlay-content">
@@ -1253,6 +1465,17 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                                 <div style="font-size: 20px; font-weight: 700; color: var(--blue); font-family: var(--font-mono); line-height: 1;">0</div>
                             </div>
                         </div>
+                        <!-- Phase 1: Overdue + Deferred row -->
+                        <div style="display:flex; gap:24px; margin-top:16px; padding-top:12px; border-top:1px solid var(--border-subtle);">
+                            <div>
+                                <div style="font-size:10px; color:var(--text-disabled); letter-spacing:1.5px; text-transform:uppercase; margin-bottom:4px;">OVERDUE</div>
+                                <div id="cc-overdue-count" style="font-size:18px; font-weight:700; color:#F85149; font-family:var(--font-mono);">0</div>
+                            </div>
+                            <div>
+                                <div style="font-size:10px; color:var(--text-disabled); letter-spacing:1.5px; text-transform:uppercase; margin-bottom:4px;">DEFERRED</div>
+                                <div id="cc-deferred-count" style="font-size:18px; font-weight:700; color:#D29922; font-family:var(--font-mono);">0</div>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- 5. AI INSIGHT PANEL -->
@@ -1284,10 +1507,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 <div class="mission-panel" style="padding:16px; margin-bottom:16px; border-radius:8px;">
                     <div class="section-label" style="font-size:9px; margin-bottom:12px;">SIGNAL FILTERS</div>
                     <div class="filter-hud" style="margin:0;">
-                        <div class="filter-chip active" onclick="filterTasks('all', this)">ALL</div>
-                        <div class="filter-chip" onclick="filterTasks('high', this)">HIGH-THREAT</div>
-                        <div class="filter-chip" onclick="filterTasks('medium', this)">STABLE</div>
-                        <div class="filter-chip" onclick="filterTasks('low', this)">ROUTINE</div>
+                        <div class="filter-chip active" id="fc-all" onclick="filterTasks('all', this)">ALL<span class="chip-count" id="fc-count-all">0</span></div>
+                        <div class="filter-chip" id="fc-high" onclick="filterTasks('high', this)">HIGH-THREAT<span class="chip-count" id="fc-count-high">0</span></div>
+                        <div class="filter-chip" id="fc-medium" onclick="filterTasks('medium', this)">STABLE<span class="chip-count" id="fc-count-medium">0</span></div>
+                        <div class="filter-chip" id="fc-low" onclick="filterTasks('low', this)">ROUTINE<span class="chip-count" id="fc-count-low">0</span></div>
                     </div>
 
                     <div class="section-label" style="font-size:9px; margin:20px 0 12px;">SIGNAL DISCOVERY (TAGS)</div>
@@ -1298,7 +1521,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
                 <div style="display:flex; justify-content:space-between; align-items:center; margin: 32px 0 16px;">
                     <div class="section-label" style="font-size:10px; margin:0; letter-spacing:3px;">PRIORITY SIGNALS</div>
-                    <div id="header-task-count" style="font-size:10px; color:var(--text-disabled); font-family:var(--font-mono);">0 ACTIVE</div>
+                    <div style="display:flex; align-items:center; gap:12px;">
+                        <div id="header-task-count" style="font-size:10px; color:var(--text-disabled); font-family:var(--font-mono);">0 ACTIVE</div>
+                        <div class="sort-controls">
+                            <span class="sort-label">SORT BY:</span>
+                            <button class="sort-chip active" id="sort-urgency" onclick="setSortMode('urgency', this)">URGENCY ▾</button>
+                            <button class="sort-chip" id="sort-priority" onclick="setSortMode('priority', this)">PRIORITY</button>
+                            <button class="sort-chip" id="sort-created" onclick="setSortMode('created', this)">CREATED</button>
+                        </div>
+                    </div>
                 </div>
                 <div id="task-list-container" class="task-list">
                     <div class="filament-line"></div>
@@ -1469,15 +1700,145 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     <input type="text" id="mission-tags" class="input-system" placeholder="e.g. work, personal, critical" autocomplete="off">
                 </div>
             </div>
+
+            <!-- PHASE 1: DURATION -->
+            <div class="flex-row" style="margin-top:24px;">
+                <div class="mission-field">
+                    <label class="section-label" style="font-size:9px;">ESTIMATED DURATION</label>
+                    <div class="duration-grid">
+                        <button class="dur-pill" data-dur="15m">15m</button>
+                        <button class="dur-pill" data-dur="30m">30m</button>
+                        <button class="dur-pill" data-dur="1h">1h</button>
+                        <button class="dur-pill" data-dur="2h">2h</button>
+                        <button class="dur-pill" data-dur="3h">3h</button>
+                        <button class="dur-pill" data-dur="4h+">4h+</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PHASE 1: DEADLINE -->
+            <div class="flex-row" style="margin-top:24px;">
+                <div class="mission-field">
+                    <label class="section-label" style="font-size:9px;">DEADLINE</label>
+                    <input type="text" id="mission-deadline" class="deadline-input"
+                           placeholder="e.g. tomorrow 3pm, Friday, in 2 hours" autocomplete="off">
+                    <div class="deadline-parsed" id="deadline-parsed-display"></div>
+                    <!-- DEADLINE TYPE — shown only after deadline parsed -->
+                    <div id="deadline-type-section" style="display:none;">
+                        <div class="deadline-type-row">
+                            <button class="dl-type-pill soft selected" id="dl-soft" onclick="setDeadlineType('soft')">🔵 Soft — flexible</button>
+                            <button class="dl-type-pill hard" id="dl-hard" onclick="setDeadlineType('hard')">🔴 Hard — critical</button>
+                        </div>
+                        <div class="hard-warning" id="hard-warning">⚠ Hard deadlines trigger strong alerts if missed.</div>
+                    </div>
+                </div>
+            </div>
+
             <div style="display:flex; gap:12px; margin-top:32px;">
-                <button class="btn-deploy" id="btn-deploy" disabled style="margin:0;">DEPLOY</button>
+                <button class="btn-deploy" id="btn-deploy" disabled style="margin:0;">DEPLOY MISSION</button>
                 <button class="btn-execute" onclick="toggleCreateMission()" style="margin:0; background:transparent; border-color:var(--border-neutral); color:var(--text-muted); width:auto; padding:0 24px;">CANCEL</button>
             </div>
         </div>
     </div>
 
+
     <script>
     let allTasks = [], currentFilter = 'all', currentActiveTaskId = null, selectedPriority = 'medium';
+    let currentSortMode = 'urgency';
+    let selectedDuration = null, parsedDeadlineISO = null, selectedDeadlineType = 'soft';
+    let recoveryActive = false, recoveryTaskIds = [];
+
+    // ── PRIORITY NORMALIZATION (BUG FIX) ──────────────────────────────
+    // CLI stores: Critical, Strategic, Noise, Purge
+    // UI expects: high, medium, low
+    function normalizePriority(p) {
+        if (!p) return 'medium';
+        const lp = p.toLowerCase();
+        if (lp === 'critical' || lp === 'high') return 'high';
+        if (lp === 'strategic' || lp === 'medium') return 'medium';
+        if (lp === 'noise' || lp === 'low' || lp === 'purge') return 'low';
+        return 'medium';
+    }
+
+    // ── PHASE 1 UTILITIES ─────────────────────────────────────────────
+    function formatDeadline(isoString) {
+        if (!isoString) return null;
+        try {
+            const deadline = new Date(isoString);
+            if (isNaN(deadline.getTime())) return null;
+            const now = new Date();
+            const diffMs = deadline - now;
+            const diffMin = Math.floor(diffMs / 60000);
+            const diffHr = diffMs / 3600000;
+            const isToday = deadline.toDateString() === now.toDateString();
+            const tomorrow = new Date(now); tomorrow.setDate(tomorrow.getDate() + 1);
+            const isTomorrow = deadline.toDateString() === tomorrow.toDateString();
+            const timeStr = deadline.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+            const dateStr = deadline.toLocaleDateString([], {weekday:'short', day:'numeric', month:'short'});
+            let text, color, isOverdue = false, isUrgent = false, pressureLevel = 0;
+
+            if (diffMs < 0) {
+                isOverdue = true; pressureLevel = 3;
+                text = 'OVERDUE · ' + (isToday ? 'Today ' + timeStr : dateStr + ' · ' + timeStr);
+                color = '#F85149';
+            } else if (isToday) {
+                if (diffHr > 3) { text = 'Today at ' + timeStr; color = '#8B949E'; pressureLevel = 0; }
+                else if (diffHr > 1) { text = 'Today at ' + timeStr + ' · ' + Math.floor(diffHr) + 'h ' + (diffMin % 60) + 'm left'; color = '#D29922'; pressureLevel = 1; isUrgent = true; }
+                else if (diffMin > 15) { text = 'Today at ' + timeStr + ' · ' + diffMin + 'm left'; color = '#D29922'; pressureLevel = 2; isUrgent = true; }
+                else { text = 'Today at ' + timeStr + ' · ' + diffMin + 'm left ⚠'; color = '#F85149'; pressureLevel = 3; isUrgent = true; }
+            } else if (isTomorrow) { text = 'Tomorrow at ' + timeStr; color = '#8B949E'; }
+            else { text = dateStr + ' · ' + timeStr; color = '#8B949E'; }
+            return { text, color, isOverdue, isUrgent, pressureLevel };
+        } catch(e) { return null; }
+    }
+
+    function getPressureLevel(task) {
+        if (!task.deadline) return 0;
+        const dl = formatDeadline(task.deadline);
+        return dl ? dl.pressureLevel : 0;
+    }
+
+    function parseDeadlineInput(str) {
+        if (!str || !str.trim()) return null;
+        const s = str.trim().toLowerCase();
+        const now = new Date();
+        let d = null;
+        const timeMatch = s.match(/(\\d{1,2})(?::(\\d{2}))?\\s*(am|pm)?/i);
+        function applyTime(date, h, m, ampm) {
+            if (ampm === 'pm' && h < 12) h += 12;
+            if (ampm === 'am' && h === 12) h = 0;
+            date.setHours(h, m || 0, 0, 0);
+            return date;
+        }
+        if (s.startsWith('today')) {
+            d = new Date(now);
+            if (timeMatch) applyTime(d, parseInt(timeMatch[1]), parseInt(timeMatch[2]||0), timeMatch[3]);
+            else d.setHours(23, 59, 0, 0);
+        } else if (s.startsWith('tomorrow')) {
+            d = new Date(now); d.setDate(d.getDate() + 1);
+            if (timeMatch) applyTime(d, parseInt(timeMatch[1]), parseInt(timeMatch[2]||0), timeMatch[3]);
+            else d.setHours(23, 59, 0, 0);
+        } else if (s.match(/^in\\s+(\\d+)\\s*h/)) {
+            const hrs = parseInt(s.match(/^in\\s+(\\d+)/)[1]);
+            d = new Date(now.getTime() + hrs * 3600000);
+        } else if (s.match(/^in\\s+(\\d+)\\s*m/)) {
+            const mins = parseInt(s.match(/^in\\s+(\\d+)/)[1]);
+            d = new Date(now.getTime() + mins * 60000);
+        } else {
+            const days = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+            for (let i = 0; i < days.length; i++) {
+                if (s.startsWith(days[i]) || s.startsWith(days[i].slice(0,3))) {
+                    d = new Date(now);
+                    let diff = i - now.getDay(); if (diff <= 0) diff += 7;
+                    d.setDate(d.getDate() + diff);
+                    if (timeMatch) applyTime(d, parseInt(timeMatch[1]), parseInt(timeMatch[2]||0), timeMatch[3]);
+                    else d.setHours(23, 59, 0, 0);
+                    break;
+                }
+            }
+        }
+        return d;
+    }
 
     // ── SYSTEM STATES & AMBIENCE ──────────────────────────────────────────
     function setSystemState(state) {
@@ -1586,16 +1947,24 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             const tags = tagStr.split(',').map(s=>s.trim()).filter(s=>s.length > 0);
             if (!title) return;
             setSystemState('thinking');
-            const res = await fetch('/api/tasks', {
+            const payload = { title, priority: selectedPriority, tags };
+            if (selectedDuration) payload.duration = selectedDuration;
+            if (parsedDeadlineISO) { payload.deadline = parsedDeadlineISO; payload.deadline_type = selectedDeadlineType; }
+            const res = await fetch('/api/tasks/create-full', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ title, priority: selectedPriority, tags })
+                body: JSON.stringify(payload)
             });
             if (res.ok) {
                 missionTitle.value = '';
                 if(document.getElementById('mission-tags')) document.getElementById('mission-tags').value = '';
+                if(document.getElementById('mission-deadline')) document.getElementById('mission-deadline').value = '';
                 btnDeploy.disabled = true;
                 btnDeploy.classList.remove('active');
+                selectedDuration = null; parsedDeadlineISO = null; selectedDeadlineType = 'soft';
+                document.querySelectorAll('.dur-pill').forEach(p => p.classList.remove('selected'));
+                const dts = document.getElementById('deadline-type-section'); if(dts) dts.style.display='none';
+                const dp = document.getElementById('deadline-parsed-display'); if(dp){dp.textContent='';dp.classList.remove('visible');}
                 showToast('Mission deployed.', 'var(--green)');
                 toggleCreateMission();
                 await loadTasks();
@@ -1644,63 +2013,108 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     }
 
     function updateControlCenter() {
-        const activeTasks = allTasks;
-        const highPriority = activeTasks.filter(t => (t.priority||'medium').toLowerCase() === 'high');
-        const others = activeTasks.filter(t => (t.priority||'medium').toLowerCase() !== 'high');
+        const now = new Date();
+        const activeTasks = allTasks.filter(t => !t.completed && t.status !== 'completed' && t.status !== 'done');
 
+        // ── PRIORITY ALERTS (Phase 1: Real alerts from data) ──
         const alertsContainer = document.getElementById('cc-alerts');
         if (alertsContainer) {
-            alertsContainer.innerHTML = highPriority.length > 0
-                ? highPriority.slice(0,3).map(t => `<div style="padding:12px; background:rgba(248,81,73,0.05); border-radius:8px; border-left:3px solid var(--red);">${t.title}</div>`).join('')
-                : '<div style="opacity:0.5;">No critical alerts.</div>';
+            let alerts = [];
+            activeTasks.forEach(t => {
+                const dl = formatDeadline(t.deadline);
+                if (dl && dl.isOverdue && t.deadline_type === 'hard') {
+                    alerts.push({type:'missed', title:t.title, meta:'Was due: '+dl.text.replace('OVERDUE · ',''), sort:0});
+                } else if (dl && dl.pressureLevel >= 2 && t.deadline_type === 'hard') {
+                    alerts.push({type:'urgent', title:t.title, meta:dl.text, sort:1});
+                } else if ((t.postpone_count||0) >= 3) {
+                    alerts.push({type:'deferred', title:t.title, meta:'Postponed ' + t.postpone_count + '×', sort:2});
+                }
+            });
+            alerts.sort((a,b) => a.sort - b.sort);
+            alerts = alerts.slice(0, 5);
+
+            if (alerts.length > 0) {
+                alertsContainer.innerHTML = alerts.map(a => {
+                    const cls = a.type === 'missed' ? 'missed' : a.type === 'urgent' ? 'urgent' : 'deferred';
+                    const icon = a.type === 'missed' ? '⚠ HARD DEADLINE MISSED' : a.type === 'urgent' ? '⚡ DEADLINE APPROACHING' : '↩ REPEATEDLY DEFERRED';
+                    const iconColor = a.type === 'deferred' ? '#D29922' : (a.type === 'missed' ? '#F85149' : '#D29922');
+                    return `<div class="alert-card ${cls}">
+                        <div class="alert-type" style="color:${iconColor}">${icon}</div>
+                        <div class="alert-title">${a.title}</div>
+                        <div class="alert-meta">${a.meta}</div>
+                    </div>`;
+                }).join('');
+            } else {
+                alertsContainer.innerHTML = '<div style="color:#3FB950; font-size:13px;">✓ All systems nominal. No critical alerts.</div>';
+            }
         }
 
+        // ── UPCOMING MISSIONS ──
         const upcomingContainer = document.getElementById('cc-upcoming');
         if (upcomingContainer) {
-            upcomingContainer.innerHTML = others.length > 0
-                ? others.slice(0,4).map(t => `<div style="padding:12px; background:rgba(255,255,255,0.02); border-radius:8px; border-left:3px solid var(--${t.priority === 'low' ? 'blue' : 'amber'});">${t.title}</div>`).join('')
+            const upcoming = activeTasks.slice(0, 4);
+            upcomingContainer.innerHTML = upcoming.length > 0
+                ? upcoming.map(t => {
+                    const np = normalizePriority(t.priority);
+                    const borderColor = np === 'high' ? 'var(--red)' : np === 'medium' ? 'var(--amber)' : 'var(--blue)';
+                    const dlInfo = formatDeadline(t.deadline);
+                    const dlStr = dlInfo ? `<span style="font-size:10px;color:${dlInfo.color};margin-left:8px;font-family:'DM Mono',monospace;">${dlInfo.text}</span>` : '';
+                    return `<div style="padding:12px;background:rgba(255,255,255,0.02);border-radius:8px;border-left:3px solid ${borderColor};">${t.title}${dlStr}</div>`;
+                }).join('')
                 : '<div style="opacity:0.5;">Queue transparent.</div>';
         }
 
+        // ── PERFORMANCE: Overdue + Deferred counts ──
+        const overdueCount = activeTasks.filter(t => { const dl = formatDeadline(t.deadline); return dl && dl.isOverdue; }).length;
+        const deferredCount = activeTasks.filter(t => (t.postpone_count || 0) >= 2).length;
+        const ccOverdue = document.getElementById('cc-overdue-count');
+        const ccDeferred = document.getElementById('cc-deferred-count');
+        if (ccOverdue) ccOverdue.textContent = overdueCount;
+        if (ccDeferred) ccDeferred.textContent = deferredCount;
+
+        // ── INSIGHT ──
+        const highPriority = activeTasks.filter(t => normalizePriority(t.priority) === 'high');
         const insight = document.getElementById('cc-insight');
         if (insight && highPriority.length > 0) {
             insight.textContent = `CRITICAL: ${highPriority.length} high-threat missions require immediate execution.`;
             insight.style.color = "var(--red)";
-            insight.previousElementSibling.style.color = "var(--red)";
         } else if (insight) {
             insight.textContent = "System stable. High-priority execution recommended to maintain optimal momentum.";
             insight.style.color = "var(--text-body)";
-            insight.previousElementSibling.style.color = "var(--ai-purple)";
         }
     }
 
-    function updateIntegrityMeter(stats) {
-        const total = stats.total || 0;
-        const done  = stats.completed || 0;
-        const pct   = stats.completion_rate || 0;
+    function updateIntegrityMeter() {
+        const total = allTasks.length;
+        const done = allTasks.filter(t => t.completed === true || t.status === 'completed' || t.status === 'done').length;
+        const pct = total === 0 ? 0 : Math.round((done / total) * 100);
 
         const fill    = document.getElementById('integrity-fill');
         const pctEl   = document.getElementById('integrity-percent');
         const victory = document.getElementById('integrity-victory');
 
         if (fill)  fill.style.width = `${pct}%`;
-        if (pctEl) pctEl.textContent = `${Math.round(pct)}%  (${done}/${total})`;
+        if (pctEl) pctEl.textContent = `${pct}% (${done}/${total})`;
         
         const ccPct = document.getElementById('cc-completion-pct');
         const ccActive = document.getElementById('cc-active-count');
-        if (ccPct) ccPct.textContent = `${Math.round(pct)}%`;
+        if (ccPct) ccPct.textContent = `${pct}%`;
         if (ccActive) ccActive.textContent = total - done;
 
         if (victory) {
             let msg = '';
             if (total === 0)     msg = 'Fresh start. Add your first win.';
             else if (done === 0) msg = 'Momentum building. Pick one.';
-            else if (pct < 50)   msg = 'Flow state activated.';
-            else if (pct < 100)  msg = "Mastery mode. Unstoppable.";
-
-            else                 msg = 'All tasks cleared! Celebrate.';
+            else if (pct < 100)  msg = `${pct}% complete · ${total - done} missions remaining`;
+            else                 msg = 'All missions complete. Outstanding execution.';
+            
             victory.style.opacity = '0';
-            setTimeout(() => { victory.textContent = msg; victory.style.opacity = '1'; }, 300);
+            setTimeout(() => { 
+                victory.textContent = msg; 
+                if (pct === 100 && total > 0) victory.style.color = 'var(--green)';
+                else victory.style.color = '';
+                victory.style.opacity = '1'; 
+            }, 300);
         }
     }
 
@@ -1720,35 +2134,95 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 if (card) rects.set(wrap.dataset.id, card.getBoundingClientRect());
             });
 
-            const filtered = allTasks.filter(t => {
-                const p = (t.priority || 'medium').toLowerCase();
+            const activeTasks = allTasks.filter(t => !t.completed && t.status !== 'completed' && t.status !== 'done');
+            const filtered = activeTasks.filter(t => {
+                const p = normalizePriority(t.priority);
                 if (tagFilter) return (t.tags || []).includes(tagFilter);
                 if (currentFilter === 'all')    return true;
-                if (currentFilter === 'high')   return p === 'high';
-                if (currentFilter === 'medium') return p === 'medium';
+                if (currentFilter === 'high')   return p === 'high' || t.deadline_type === 'hard';
+                if (currentFilter === 'medium') return p === 'medium' && t.deadline_type !== 'hard';
                 if (currentFilter === 'low')    return p === 'low';
                 return true;
             });
 
+            // Sort tasks
+            filtered.sort((a, b) => {
+                if (currentSortMode === 'urgency') {
+                    const pa = getPressureLevel(a), pb = getPressureLevel(b);
+                    if (pa !== pb) return pb - pa;
+                    const priOrder = {high:0, medium:1, low:2};
+                    return (priOrder[normalizePriority(a.priority)]||1) - (priOrder[normalizePriority(b.priority)]||1);
+                } else if (currentSortMode === 'priority') {
+                    const priOrder = {high:0, medium:1, low:2};
+                    return (priOrder[normalizePriority(a.priority)]||1) - (priOrder[normalizePriority(b.priority)]||1);
+                } else {
+                    return (b.id || 0) - (a.id || 0);
+                }
+            });
+
             renderTagSignals();
+            updateFilterCounts();
             const countEl = document.getElementById('header-task-count');
             if (countEl) countEl.textContent = `${filtered.length} ACTIVE`;
 
-            showToast("Rendering " + filtered.length + " tasks", "var(--green)");
+            // 2. Render new DOM with Phase 1 card layout
+            container.innerHTML = filtered.map((t) => {
+                const np = normalizePriority(t.priority);
+                const dl = formatDeadline(t.deadline);
+                const pressure = dl ? dl.pressureLevel : 0;
+                const isOverdue = dl ? dl.isOverdue : false;
 
-            // 2. Render new DOM
-            container.innerHTML = filtered.map((t) => `
-                <div class="task-card-wrap priority-${(t.priority||'medium').toLowerCase()}" data-id="${t.id}">
-                    <div class="task-card priority-${(t.priority||'medium').toLowerCase()}" data-id="${t.id}"
+                // Duration badge
+                const durBadge = t.duration ? `<span class="duration-badge">${t.duration}</span>` : '';
+
+                // Overdue chip
+                const overdueChip = isOverdue ? `<span class="overdue-chip">OVERDUE</span>` : '';
+
+                // Postpone badge
+                let postponeBadge = '';
+                if ((t.postpone_count || 0) >= 2) {
+                    const pc = t.postpone_count;
+                    const cls = pc >= 3 ? 'warn' : 'mild';
+                    const warn = pc >= 5 ? ' ⚠⚠' : pc >= 3 ? ' ⚠' : '';
+                    postponeBadge = `<span class="postpone-badge ${cls}">postponed ×${pc}${warn}</span>`;
+                }
+
+                // Deadline row
+                let deadlineRow = '';
+                if (dl) {
+                    const hardTag = t.deadline_type === 'hard' ? '<span class="hard-tag">⚠ HARD</span>' : '';
+                    deadlineRow = `<div class="deadline-row" style="color:${dl.color}">⏰ ${dl.text} ${hardTag}</div>`;
+                }
+
+                // Pressure + overdue CSS classes
+                let pressureClass = pressure > 0 ? ` pressure-${pressure}` : '';
+                let overdueClass = isOverdue ? ' overdue-card' : '';
+                let wrapExtra = (pressure >= 3 && t.deadline_type === 'hard') ? ' hard-deadline-urgent' : '';
+
+                // Recovery mode classes
+                let recoveryClass = '';
+                if (recoveryActive) {
+                    if (recoveryTaskIds.includes(t.id)) recoveryClass = ' recovery-highlighted';
+                    else recoveryClass = ' recovery-suppressed';
+                }
+
+                return `
+                <div class="task-card-wrap priority-${np}${wrapExtra}" data-id="${t.id}">
+                    <div class="task-card priority-${np}${pressureClass}${overdueClass}${recoveryClass}" data-id="${t.id}"
                          onclick="openModal(${t.id}, this)">
                         <div class="card-top">
                             <div class="cb" onclick="event.stopPropagation(); completeTask(${t.id}, this)"></div>
                             <div class="task-title">${t.title}</div>
-                            <span class="badge ${(t.priority||'medium').toLowerCase()}">${(t.priority||'medium').toUpperCase()}</span>
-                            ${(t.tags||[]).map(tg =>
-                                `<span class="badge tag" onclick="event.stopPropagation(); filterByTag('${tg}')">#${tg}</span>`
-                            ).join('')}
+                            ${durBadge}${overdueChip}
                         </div>
+                        <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px;padding-left:28px;">
+                            <span class="badge ${np}">${(t.priority||'Medium').toUpperCase()}</span>
+                            ${(t.tags||[]).map(tg =>
+                                '<span class="badge tag" onclick="event.stopPropagation(); filterByTag(\\'' + tg + '\\')">#' + tg + '</span>'
+                            ).join('')}
+                            ${postponeBadge}
+                        </div>
+                        ${deadlineRow ? '<div style="padding-left:28px;">' + deadlineRow + '</div>' : ''}
                     </div>
                         <div class="task-action-strip">
                             <div class="action-icon" onclick="event.stopPropagation(); startFocusFromCard(${t.id}, this)" title="Deploy Focus Protocol">
@@ -1759,7 +2233,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                             </div>
                         </div>
                     </div>
-                `).join('');
+                `;
+            }).join('');
 
             // 3. FLIP Playback
             const newWraps = Array.from(container.querySelectorAll('.task-card-wrap'));
@@ -1772,7 +2247,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     const dy = oldRect.top - newRect.top;
                     card.style.transform = `translateY(${dy}px)`;
                     card.style.transition = 'none';
-                    card.classList.add('cascade-visible');
+                    card.style.opacity = '1'; // Keep existing cards fully visible
 
                     requestAnimationFrame(() => {
                         requestAnimationFrame(() => {
@@ -1781,9 +2256,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                         });
                     });
                 } else {
-                    card.style.animationDelay = `${(i % 10) * 50}ms`;
+                    card.style.transitionDelay = `${(i % 10) * 50}ms`;
                     requestAnimationFrame(() => {
-                        requestAnimationFrame(() => card.classList.add('cascade-visible'));
+                        requestAnimationFrame(() => {
+                            card.classList.add('cascade-visible');
+                            // Reset transition delay after cascade so it doesn't delay future interactions
+                            setTimeout(() => { card.style.transitionDelay = '0ms'; }, ((i % 10) * 50) + 450);
+                        });
                     });
                 }
             });
@@ -1806,6 +2285,110 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         if (element) element.classList.add('active');
         renderTaskList();
     }
+
+    function updateFilterCounts() {
+        const activeTasks = allTasks.filter(t => !t.completed && t.status !== 'completed' && t.status !== 'done');
+        const all = activeTasks.length;
+        const high = activeTasks.filter(t => normalizePriority(t.priority)==='high' || t.deadline_type==='hard').length;
+        const med = activeTasks.filter(t => normalizePriority(t.priority)==='medium' && t.deadline_type!=='hard').length;
+        const low = activeTasks.filter(t => normalizePriority(t.priority)==='low').length;
+        const el = (id, v) => { const e = document.getElementById(id); if(e) e.textContent = v; };
+        el('fc-count-all', all); el('fc-count-high', high); el('fc-count-medium', med); el('fc-count-low', low);
+    }
+
+    window.setSortMode = function(mode, el) {
+        currentSortMode = mode;
+        document.querySelectorAll('.sort-chip').forEach(c => c.classList.remove('active'));
+        if (el) el.classList.add('active');
+        renderTaskList();
+    };
+
+    // ── PHASE 1: LIVE PRESSURE UPDATES ────────────────────────────────
+    function updateAllPressureLevels() {
+        document.querySelectorAll('.task-card').forEach(card => {
+            const id = card.dataset.id;
+            const task = allTasks.find(t => String(t.id) === String(id));
+            if (!task) return;
+            const pressure = getPressureLevel(task);
+            card.classList.remove('pressure-1','pressure-2','pressure-3','overdue-card');
+            const wrap = card.closest('.task-card-wrap');
+            if (wrap) wrap.classList.remove('hard-deadline-urgent');
+            const dl = formatDeadline(task.deadline);
+            if (dl && dl.isOverdue) card.classList.add('overdue-card');
+            if (pressure > 0) card.classList.add('pressure-' + pressure);
+            if (pressure >= 3 && task.deadline_type === 'hard' && wrap) wrap.classList.add('hard-deadline-urgent');
+            // Update deadline text if exists
+            const dlRow = card.querySelector('.deadline-row');
+            if (dlRow && dl) { dlRow.style.color = dl.color; dlRow.innerHTML = '⏰ ' + dl.text + (task.deadline_type==='hard'?' <span class="hard-tag">⚠ HARD</span>':''); }
+        });
+    }
+
+    // ── PHASE 1: RECOVERY MODE ────────────────────────────────────────
+    async function checkRecoveryStatus() {
+        try {
+            const res = await fetch('/api/recovery-status');
+            if (!res.ok) return;
+            const state = await res.json();
+            recoveryActive = !!state.active;
+            recoveryTaskIds = (state.session_tasks || []).map(t => typeof t === 'object' ? t.id : t);
+            const banner = document.getElementById('recovery-banner');
+            if (recoveryActive) {
+                if (banner) banner.classList.add('active');
+                document.body.style.background = '#060A0F';
+            } else {
+                if (banner) banner.classList.remove('active');
+                document.body.style.background = '';
+            }
+        } catch(e) { /* recovery endpoint not available yet, ignore */ }
+    }
+
+    // ── PHASE 1: REMINDER TOASTS ──────────────────────────────────────
+    function checkReminders() {
+        const stack = document.getElementById('reminder-stack');
+        if (!stack) return;
+        const activeTasks = allTasks.filter(t => !t.completed && t.status !== 'completed' && t.status !== 'done');
+        const due = activeTasks.filter(t => t.reminder_fired && !t.reminder_dismissed);
+        stack.innerHTML = '';
+        due.slice(0, 3).forEach(t => {
+            const dl = formatDeadline(t.deadline);
+            const isHard = t.deadline_type === 'hard';
+            const dlText = dl ? dl.text : '';
+            const dlColor = dl ? dl.color : '#8B949E';
+            stack.innerHTML += `
+            <div class="reminder-toast${isHard?' hard-reminder':''}" id="reminder-${t.id}">
+                <div class="toast-header">
+                    <span class="toast-label${isHard?' hard':''}">🔔 REMINDER</span>
+                    <button class="toast-close" onclick="dismissReminder(${t.id})">&times;</button>
+                </div>
+                <div class="toast-title">${t.title}</div>
+                ${dl ? '<div class="toast-deadline" style="color:'+dlColor+'">Due: '+dlText+'</div>' : ''}
+                <div class="toast-meta">${(t.priority||'Medium').toUpperCase()}${t.duration ? ' · '+t.duration : ''}</div>
+                <div class="toast-actions">
+                    <button class="btn-toast-focus" onclick="dismissReminder(${t.id});startFocus(${t.id})">Start Focus</button>
+                    <button class="btn-toast-dismiss" onclick="dismissReminder(${t.id})">Dismiss</button>
+                </div>
+            </div>`;
+        });
+        if (due.length > 3) {
+            stack.innerHTML += `<div style="font-size:12px;color:#8B949E;text-align:right;margin-top:4px;">and ${due.length-3} more reminders</div>`;
+        }
+    }
+
+    window.dismissReminder = async function(taskId) {
+        const el = document.getElementById('reminder-' + taskId);
+        if (el) { el.style.opacity = '0'; el.style.transform = 'translateY(20px)'; setTimeout(() => el.remove(), 200); }
+        try { await fetch('/api/reminder-dismiss/' + taskId, {method:'POST'}); } catch(e) {}
+        const t = allTasks.find(x => x.id === taskId);
+        if (t) t.reminder_dismissed = true;
+    };
+
+    // ── PHASE 1: DEADLINE TYPE + DURATION MODAL CONTROLS ──────────────
+    window.setDeadlineType = function(type) {
+        selectedDeadlineType = type;
+        document.getElementById('dl-soft').classList.toggle('selected', type === 'soft');
+        document.getElementById('dl-hard').classList.toggle('selected', type === 'hard');
+        document.getElementById('hard-warning').classList.toggle('visible', type === 'hard');
+    };
 
     // ── ANALYTICS & INTELLIGENCE SYSTEM ────────────────────────────────────
     async function loadStats() {
@@ -2110,18 +2693,24 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
 
             pool.innerHTML = '';
+            
+            const activeTasks = allTasks.filter(t => !t.completed && t.status !== 'completed' && t.status !== 'done');
 
-            allTasks.forEach(task => {
+            activeTasks.forEach(task => {
+                const np = normalizePriority(task.priority);
                 const el = document.createElement('div');
-                el.className = `timeline-task priority-${(task.priority||'medium').toLowerCase()}`;
+                el.className = `timeline-task tl-chip p-${np}`;
                 el.draggable = true;
                 el.dataset.id = task.id;
-                
-                // Force dynamic width in week mode
-                const ws = timelineState.view === 'week' ? 'white-space:nowrap;' : '';
-                el.innerHTML = `<div style="overflow:hidden; text-overflow:ellipsis; ${ws}">${task.title}</div>`;
 
-                
+                const dl = formatDeadline(task.deadline);
+                const timeStr = dl ? dl.text.split('·')[0].trim() : '';
+                const durStr = task.duration ? ' · [' + task.duration + ']' : '';
+                const hardIcon = task.deadline_type === 'hard' ? '⚠ ' : '';
+
+                el.innerHTML = `<div class="tl-chip-title">${hardIcon}${task.title}</div>` +
+                    (timeStr || durStr ? `<div class="tl-chip-meta">${timeStr}${durStr}</div>` : '');
+
                 el.ondragstart = (e) => {
                     e.dataTransfer.setData('application/task-id', task.id.toString());
                     setTimeout(() => el.classList.add('dragging'), 0);
@@ -2131,19 +2720,35 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     document.querySelectorAll('.drag-over').forEach(d => d.classList.remove('drag-over'));
                 };
 
+                // Place task: check mapping first, then deadline date, then unscheduled
                 const dateKey = mapping[task.id];
+                let placed = false;
                 if (dateKey) {
                     const zone = grid.querySelector(`[data-date="${dateKey}"]`);
-                    if (zone) zone.appendChild(el);
-                    else if (timelineState.view === 'week' || timelineState.view === 'calendar' || timelineState.view === 'month') {
+                    if (zone) { zone.appendChild(el); placed = true; }
+                    else {
                         const baseDate = dateKey.replace('_prime', '');
                         const fallbackZone = grid.querySelector(`.timeline-dropzone[data-date="${baseDate}"]`);
-                        if (fallbackZone) fallbackZone.appendChild(el);
-                        else pool.appendChild(el);
+                        if (fallbackZone) { fallbackZone.appendChild(el); placed = true; }
                     }
-                    else pool.appendChild(el);
-                } else {
-                    pool.appendChild(el);
+                }
+                if (!placed && task.deadline) {
+                    const dlDate = formatDateISO(new Date(task.deadline));
+                    const zone = grid.querySelector(`.timeline-dropzone[data-date="${dlDate}"]`);
+                    if (zone) { zone.appendChild(el); placed = true; }
+                }
+                if (!placed) pool.appendChild(el);
+            });
+
+            // Update column headers with mission counts
+            grid.querySelectorAll('.timeline-day').forEach(dayEl => {
+                const dropzone = dayEl.querySelector('.timeline-dropzone');
+                if (!dropzone) return;
+                const count = dropzone.querySelectorAll('.timeline-task').length;
+                const primeSlot = dayEl.querySelector('.prime-target-slot');
+                if (primeSlot) {
+                    const label = primeSlot.querySelector('.prime-target-label');
+                    if (label) label.textContent = count > 0 ? count + ' MISSION' + (count > 1 ? 'S' : '') : '[ PRIME TARGET ]';
                 }
             });
         } catch(e) {
@@ -2194,7 +2799,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     function renderTagSignals() {
         const discovery = document.getElementById('tag-signal-discovery');
         if (!discovery) return;
-        const uniqueTags = [...new Set(allTasks.flatMap(t => t.tags || []))];
+        const activeTasks = allTasks.filter(t => !t.completed && t.status !== 'completed' && t.status !== 'done');
+        const uniqueTags = [...new Set(activeTasks.flatMap(t => t.tags || []))];
         if (uniqueTags.length === 0) {
             discovery.innerHTML = `<div style="font-size:10px; color:var(--text-disabled); font-style:italic;">No signals discovered.</div>`;
             return;
@@ -2216,10 +2822,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         document.getElementById('modal-content').innerHTML = `
             <div class="section-label" style="margin-bottom:8px;">MISSION BRIEFING</div>
             <h2 style="font-size:28px; font-weight:700; color:var(--text-hero); margin-bottom:20px;">${task.title}</h2>
-            <div style="display:flex; gap:12px; margin-bottom:32px;">
-                <span class="badge ${(task.priority||'medium').toLowerCase()}">${(task.priority||'MEDIUM').toUpperCase()} PROTOCOL</span>
+            <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:20px;">
+                <span class="badge ${normalizePriority(task.priority)}">${(task.priority||'MEDIUM').toUpperCase()} PROTOCOL</span>
+                ${task.duration ? '<span class="duration-badge">'+task.duration+'</span>' : ''}
                 ${(task.tags||[]).map(tg => `<span class="badge tag">${tg}</span>`).join('')}
+                ${(task.postpone_count||0) >= 2 ? '<span class="postpone-badge '+(task.postpone_count>=3?'warn':'mild')+'">postponed ×'+task.postpone_count+'</span>' : ''}
             </div>
+            ${task.deadline ? '<div style="margin-bottom:20px;font-family:DM Mono,monospace;font-size:13px;color:'+(formatDeadline(task.deadline)||{}).color+'">⏰ '+(formatDeadline(task.deadline)||{}).text+(task.deadline_type==='hard'?' <span class="hard-tag">⚠ HARD</span>':'')+'</div>' : ''}
             <div style="background:rgba(255,255,255,0.02); padding:32px; border-radius:16px; border:1px solid var(--border-neutral); text-align:center;">
                 <div style="font-size:48px; font-family:var(--font-mono); margin-bottom:20px; color:var(--text-hero);">25:00</div>
                 <button class="btn-execute" style="width:100%; margin-bottom:12px;" onclick="startFocus(${task.id})">START FOCUS PROTOCOL</button>
@@ -2331,6 +2940,60 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         // Start Focus Sync Engine
         checkFocusState();
         setInterval(checkFocusState, 5000);
+
+        // ── PHASE 1: Duration pill clicks ──
+        document.querySelectorAll('.dur-pill').forEach(pill => {
+            pill.addEventListener('click', () => {
+                document.querySelectorAll('.dur-pill').forEach(p => p.classList.remove('selected'));
+                if (selectedDuration === pill.dataset.dur) { selectedDuration = null; }
+                else { pill.classList.add('selected'); selectedDuration = pill.dataset.dur; }
+            });
+        });
+
+        // ── PHASE 1: Deadline input parsing ──
+        let dlDebounce = null;
+        const dlInput = document.getElementById('mission-deadline');
+        if (dlInput) {
+            dlInput.addEventListener('input', () => {
+                clearTimeout(dlDebounce);
+                dlDebounce = setTimeout(() => {
+                    const disp = document.getElementById('deadline-parsed-display');
+                    const section = document.getElementById('deadline-type-section');
+                    const val = dlInput.value.trim();
+                    if (!val) { parsedDeadlineISO = null; if(disp){disp.textContent='';disp.classList.remove('visible');} if(section)section.style.display='none'; return; }
+                    const parsed = parseDeadlineInput(val);
+                    if (parsed) {
+                        parsedDeadlineISO = parsed.toISOString();
+                        const nice = parsed.toLocaleDateString([], {weekday:'long',day:'numeric',month:'short',year:'numeric'}) + ' at ' + parsed.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
+                        if(disp){disp.textContent='→ ' + nice; disp.style.color='#3FB950'; disp.classList.add('visible');}
+                        if(section) section.style.display='block';
+                    } else {
+                        parsedDeadlineISO = null;
+                        if(disp){disp.textContent="→ Could not understand. Try: 'Friday 3pm'"; disp.style.color='#F85149'; disp.classList.add('visible');}
+                        if(section)section.style.display='none';
+                    }
+                }, 800);
+            });
+        }
+
+        // ── PHASE 1: Recovery banner exit ──
+        const exitBtn = document.getElementById('btn-exit-recovery');
+        if (exitBtn) {
+            exitBtn.addEventListener('click', async () => {
+                if (!confirm('Exit Recovery Mode? You can re-enter from the CLI.')) return;
+                await fetch('/api/recovery-exit', {method:'POST'});
+                recoveryActive = false; recoveryTaskIds = [];
+                document.getElementById('recovery-banner').classList.remove('active');
+                document.body.style.background = '';
+                renderTaskList();
+            });
+        }
+
+        // ── PHASE 1: Start pressure, recovery, reminder intervals ──
+        checkRecoveryStatus();
+        setInterval(() => { updateAllPressureLevels(); checkReminders(); }, 60000);
+        setInterval(checkRecoveryStatus, 60000);
+        setTimeout(() => { checkReminders(); }, 2000);
 
         // ── OMNIBAR (FRICTIONLESS CAPTURE) INIT ────────
         const omniOverlay = document.getElementById('omnibar-overlay');

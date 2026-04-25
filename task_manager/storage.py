@@ -23,6 +23,8 @@ class TaskStorage:
         self.tasks_file = self.data_dir / "tasks.json"
         self.timeline_file = self.data_dir / "timeline.json"
         self.backup_dir = self.data_dir / "backups"
+        self.recovery_state_file = self.data_dir / "recovery_state.json"
+        self.recovery_log_file = self.data_dir / "recovery_log.json"
         
         self._ensure_directories()
 
@@ -208,6 +210,58 @@ class TaskStorage:
             return True
         except Exception as e:
             print(f"Error saving timeline mapping: {e}")
+            return False
+
+    def load_recovery_state(self) -> dict:
+        """Load the current recovery state."""
+        default_state = {
+            "active": False,
+            "triggered_at": None,
+            "trigger_reason": None,
+            "session_tasks": [],
+            "completed_in_recovery": [],
+            "dismissed_at": None
+        }
+        if not self.recovery_state_file.exists():
+            return default_state
+            
+        try:
+            with open(self.recovery_state_file, 'r') as file:
+                return json.load(file)
+        except Exception:
+            return default_state
+
+    def save_recovery_state(self, state: dict) -> bool:
+        """Save the recovery state."""
+        try:
+            temp_file = self.recovery_state_file.with_suffix('.tmp')
+            with open(temp_file, 'w') as file:
+                json.dump(state, file, indent=2)
+            temp_file.replace(self.recovery_state_file)
+            return True
+        except Exception as e:
+            print(f"Error saving recovery state: {e}")
+            return False
+
+    def append_recovery_log(self, entry: dict) -> bool:
+        """Append an entry to the recovery log."""
+        logs = []
+        if self.recovery_log_file.exists():
+            try:
+                with open(self.recovery_log_file, 'r') as file:
+                    logs = json.load(file)
+            except Exception:
+                logs = []
+        
+        logs.append(entry)
+        try:
+            temp_file = self.recovery_log_file.with_suffix('.tmp')
+            with open(temp_file, 'w') as file:
+                json.dump(logs, file, indent=2)
+            temp_file.replace(self.recovery_log_file)
+            return True
+        except Exception as e:
+            print(f"Error appending recovery log: {e}")
             return False
 
 

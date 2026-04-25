@@ -14,7 +14,10 @@ setup(
             'taskflow=taskflow.cli:main',
         ],
     },
-    install_requires=[],
+    install_requires=[
+        "dateparser>=1.1.0",
+        "colorama>=0.4.6"
+    ],
     python_requires=">=3.8",
     classifiers=[
         "Development Status :: 4 - Beta",

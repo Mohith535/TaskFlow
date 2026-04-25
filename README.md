@@ -1,7 +1,7 @@
 <div align="center">
   <h1>🌊 TaskFlow v6.0.0</h1>
-  <p><strong>The Execution Engine</strong></p>
-  <p><em>Momentum Engineering for Calm Productivity. A high-fidelity, privacy-first task ecosystem built for deep work.</em></p>
+  <p><strong>The Execution Engine — Engineered for Human Psychology</strong></p>
+  <p><em>More than a task manager. A premium, high-fidelity productivity framework built to hack motivation, reduce cognitive friction, and force deep execution.</em></p>
   
   <p>
     <img src="https://img.shields.io/badge/Version-6.0.0-blue?style=for-the-badge&logo=appveyor" alt="Version" />
@@ -12,51 +12,53 @@
 
 ---
 
-## 🌟 What's New in v6.0.0: The Professional Interface Upgrade
-Version 6.0.0 marks the arrival of the ultimate, highly professional **Mission Control Web HUD**. We have entirely rebuilt the visual user interface to match the raw power of the backend execution engine. Expect deep glassmorphism aesthetics, real-time millisecond DOM injection, and a meticulously crafted premium environment that makes managing tasks a deeply satisfying and cinematic experience.
+## 🌟 The Product Vision: A Psychological Edge
+TaskFlow was built as a premium startup-grade application to solve the fundamental flaw of modern to-do lists: **they cause anxiety instead of driving action.** 
+
+Every pixel, terminal command, and background process in TaskFlow is engineered around human psychology. We don't just store tasks; we manipulate visual tension, eliminate choice paralysis, and trigger dopamine pathways to make high-output execution the path of least resistance. 
+
+Version 6.0.0 introduces the **Mission Control Web HUD**, an elite, cinematic interface that translates your raw tasks into a visceral, glassmorphism-powered command center.
 
 ---
 
 ## 💎 The Execution Philosophy
 
-TaskFlow is not a mere to-do list—it is a **Tactical Command Center** engineered to eliminate cognitive friction. Instead of forcing you to organize endless queues, it uses psychological frameworks to compel execution.
+TaskFlow acts as a **Tactical Command Center** that forces you to confront reality, commit to timeblocks, and execute relentlessly.
 
-* **Eisenhower Matrix Native**: Priorities are visually weight-classed as `[CRITICAL]`, `[STRATEGIC]`, `[NOISE]`, and `[PURGE]`.
+* **Eisenhower Matrix Native**: Priorities aren't numbers; they are weight-classed as `[CRITICAL]`, `[STRATEGIC]`, `[NOISE]`, and `[PURGE]`. 
 * **The "One Frog" Protocol**: The `[★ PRIME TARGET]` mechanic mathematically limits you to *one* primary objective per day. No over-planning, just execution.
-* **Absolute Bi-Directional Sync**: Drag-and-drop on the Web HUD or type commands in the Terminal—your tactical timeline is instantly synchronized across both physical and visual spaces via disk-based IPC.
+* **Temporal Pressure System**: As deadlines approach, the UI shifts. Soft deadlines rest in calm blue, while hard deadlines escalate visually—eventually pulsing with a red warning beam that leverages your subconscious urgency response.
 
 ---
 
 ## 🚀 The Three Phases of Execution
 
-TaskFlow v6.0.0 brings three robust "Execution Phases" that work in concert to protect your flow state:
+TaskFlow brings three robust "Execution Phases" that work in concert to protect your flow state:
 
-### 🎯 Phase 1: Prioritization & Prime Targets
-We prevent productivity procrastination by hiding the matrix and baking it into the visual identity of your tasks:
-- **Progressive Reveal**: Unscheduled missions show bright red border beams for `[CRITICAL]` tasks, dropping down to dimmed text for `[PURGE]` tasks. You intuitively know what matters at a glance.
-- **The Amber Dropzone**: The Weekly Timeline enforces the "Eat That Frog" philosophy by actively rejecting any attempt to schedule more than one `[★ PRIME TARGET]` per day.
+### 🎯 Phase 1: Prioritization & The Live Dashboard
+We prevent procrastination by hiding the noise and weaponizing urgency:
+- **Dynamic Pressure Rendering**: Unscheduled missions exist calmly, but approaching deadlines trigger real-time CSS animations. A task missing its window isn't just "overdue"—it actively demands interception (Execute, Postpone, Drop, or Offload).
+- **Recovery Mode Protocol**: When your day collapses under too many missed targets, the system detects it. The UI darkens, non-essential tasks blur out to 25% opacity, and a massive `RECOVERY MODE ACTIVE` gradient locks you into salvaging the day with 1-2 critical missions.
 
 ### 🛡️ Phase 2: The Soft Lock Focus Protocol
 When you trigger a focus session, TaskFlow immerses you in a distraction-free environment that syncs your OS and your browser.
 - **Visual Lockdown**: The Web HUD background instantly blurs via Glassmorphism, removing the cognitive load of *"what's next?"*.
-- **The Anchor Mechanism**: Your Prime Target is displayed dead-center beneath a massive 120px countdown timer.
 - **Intentional Friction**: There is no "X" to close the focus window. You must click a translucent red `ABORT PROTOCOL` button and explicitly confirm a warning to break your focus.
 - **System-Level Defense**: Focus sessions physically sever digital distractions by modifying the Windows `hosts` file and terminating unauthorized background apps.
 
 ### ⚡ Phase 3: Frictionless Capture
-The greatest threat to deep work is the sudden interruption of a new idea. The Frictionless Capture system lets you dump thoughts instantly without breaking momentum.
-- **The CLI Telemetry Protocol**: Bypass the interactive wizard entirely. Type `taskflow dump Buy new microphone` to instantly bank a thought into your `[inbox]`.
-- **Inline NLP Parser**: The engine intercepts syntax natively. Typing `taskflow dump "Contact client #urgent !h"` silently categorizes the task as `[Critical]` and attaches the `#urgent` tag.
-- **The Web Omnibar**: Hit `Ctrl + K` from anywhere in the Web dashboard to instantly deploy the Capture Bar. Press `Enter` to inject the thought via `POST /api/tasks/dump` with zero page reloads.
+The greatest threat to deep work is the sudden interruption of a new idea. The Frictionless Capture system lets you dump thoughts instantly.
+- **NLP Deadline Parsing**: Type `tomorrow 3pm` or `in 2 hours` and the engine natively maps it. No strict date formats; just pure, frictionless input.
+- **The Web Omnibar**: Hit `Ctrl + K` from anywhere in the Web dashboard to instantly deploy the Capture Bar. Press `Enter` to inject the thought with zero page reloads.
 
 ---
 
 ## 🧠 The Dopamine & Momentum Engine
 
 TaskFlow actively rewires behavioral persistence by making progress undeniably visible:
-- **Execution Efficiency Scores**: Completing a `[🔥 CRITICAL]` task triggers premium visual dopamine overlays (`+15% Execution Efficiency`).
-- **Tactical Streaks**: The system monitors and displays consecutive days of completing the Prime Target, creating a psychological barrier to breaking the chain.
-- **Intelligent Next Targets**: Instead of dumping you back into the main list, completing a mission immediately offers a curated, 3-task deployment modal based on priority and previous habits to lock you into a continuous flow state.
+- **The Completion Horizon**: A live, animated progress bar measuring your integrity for the day. Watching the bar fill up provides an immediate, tangible dopamine reward.
+- **Postpone Mirrors**: If you defer a task too many times, a stark `postponed ×3 ⚠` badge appears. The UI holds a mirror to your avoidance, prompting you to act or drop it.
+- **Intelligent Next Targets**: Completing a mission triggers a curated, 3-task deployment modal based on priority, locking you into a continuous flow state.
 
 ---
 

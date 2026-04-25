@@ -36,7 +36,7 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
 
         elif path == "/api/tasks":
             tasks = storage.load_tasks()
-            # Only send non-completed tasks for the active list
+            # Return ALL fields (including Phase 1 fields) for pending tasks
             pending_tasks = [
                 {
                     "id": t.id,
@@ -44,13 +44,35 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
                     "priority": t.priority,
                     "tags": t.tags,
                     "notes": t.notes,
-                    "completed": t.completed
+                    "completed": t.completed,
+                    "created_at": t.created_at,
+                    # Phase 1 new fields
+                    "duration": getattr(t, 'duration', None),
+                    "deadline": getattr(t, 'deadline', None),
+                    "deadline_type": getattr(t, 'deadline_type', None),
+                    "postpone_count": getattr(t, 'postpone_count', 0),
+                    "postpone_history": getattr(t, 'postpone_history', []),
+                    "reminder_time": getattr(t, 'reminder_time', None),
+                    "reminder_time_2": getattr(t, 'reminder_time_2', None),
+                    "reminder_fired": getattr(t, 'reminder_fired', False),
+                    "reminder_fired_2": getattr(t, 'reminder_fired_2', False),
+                    "reminder_dismissed": getattr(t, 'reminder_dismissed', False),
+                    "dropped_at": getattr(t, 'dropped_at', None),
+                    "offloaded_at": getattr(t, 'offloaded_at', None),
+                    "offload_note": getattr(t, 'offload_note', None),
+                    "executed_late": getattr(t, 'executed_late', None),
                 }
-                for t in tasks if not t.completed
+                for t in tasks if getattr(t, 'dropped_at', None) is None and getattr(t, 'offloaded_at', None) is None
             ]
             self.send_response(200)
             self.end_headers_json()
             self.wfile.write(json.dumps({"tasks": pending_tasks}).encode('utf-8'))
+
+        elif path == "/api/debug_tasks":
+            tasks = storage.load_tasks()
+            self.send_response(200)
+            self.end_headers_json()
+            self.wfile.write(json.dumps({"len_tasks": len(tasks), "file": str(storage.TaskStorage().tasks_file)}).encode('utf-8'))
 
         elif path == "/api/stats":
             tasks = storage.load_tasks()
@@ -67,6 +89,39 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.end_headers_json()
             self.wfile.write(json.dumps(mapping).encode('utf-8'))
+
+        elif path == "/api/recovery-status":
+            try:
+                state = storage.storage.load_recovery_state()
+                self.send_response(200)
+                self.end_headers_json()
+                self.wfile.write(json.dumps(state).encode('utf-8'))
+            except Exception as e:
+                self.send_response(200)
+                self.end_headers_json()
+                self.wfile.write(json.dumps({"active": False}).encode('utf-8'))
+
+        elif path == "/api/stats-full":
+            # Extended stats including overdue + deferred counts
+            tasks = storage.load_tasks()
+            from datetime import datetime
+            now = datetime.now()
+            total = len(tasks)
+            completed = sum(1 for t in tasks if t.completed)
+            pending = [t for t in tasks if not t.completed]
+            overdue = sum(1 for t in pending if t.deadline and datetime.fromisoformat(t.deadline) < now)
+            deferred = sum(1 for t in pending if getattr(t, 'postpone_count', 0) >= 2)
+            rate = (completed / total * 100) if total > 0 else 0
+            self.send_response(200)
+            self.end_headers_json()
+            self.wfile.write(json.dumps({
+                "completion_rate": round(rate, 1),
+                "total": total,
+                "completed": completed,
+                "pending": len(pending),
+                "overdue": overdue,
+                "deferred": deferred
+            }).encode('utf-8'))
             
         elif path == "/api/focus_state":
             try:
@@ -403,8 +458,77 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.end_headers_json()
             self.wfile.write(json.dumps({"success": True}).encode('utf-8'))
-            
-                
+
+        elif path == "/api/recovery-exit" and self.command == 'POST':
+            try:
+                state = storage.storage.load_recovery_state()
+                state["active"] = False
+                storage.storage.save_recovery_state(state)
+                self.send_response(200)
+                self.end_headers_json()
+                self.wfile.write(json.dumps({"success": True}).encode('utf-8'))
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers_json()
+                self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
+
+        elif path.startswith("/api/reminder-dismiss/") and self.command == 'POST':
+            try:
+                task_id = int(path.split("/")[-1])
+                tasks = storage.load_tasks()
+                for task in tasks:
+                    if task.id == task_id:
+                        task.reminder_dismissed = True
+                        break
+                storage.save_tasks(tasks)
+                self.send_response(200)
+                self.end_headers_json()
+                self.wfile.write(json.dumps({"success": True}).encode('utf-8'))
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers_json()
+                self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
+
+        elif path == "/api/tasks/create-full" and self.command == 'POST':
+            # Create task with all Phase 1 fields (duration, deadline, deadline_type)
+            try:
+                title = data.get("title", "").strip()
+                if not title:
+                    self.send_response(400)
+                    self.end_headers_json()
+                    self.wfile.write(json.dumps({"error": "Title required"}).encode('utf-8'))
+                    return
+
+                priority_raw = data.get("priority", "medium")
+                priority = normalize_priority(priority_raw)
+                tags = data.get("tags", [])
+                duration = data.get("duration")
+                deadline = data.get("deadline")
+                deadline_type = data.get("deadline_type")
+
+                tasks = storage.load_tasks()
+                manager = models.TaskManager(tasks)
+
+                new_task = models.Task(
+                    id=0,
+                    title=title,
+                    priority=priority,
+                    tags=tags,
+                    duration=duration,
+                    deadline=deadline,
+                    deadline_type=deadline_type,
+                )
+                new_id = manager.add_task(new_task)
+                storage.save_tasks(manager.tasks)
+
+                self.send_response(201)
+                self.end_headers_json()
+                self.wfile.write(json.dumps({"success": True, "id": new_id}).encode('utf-8'))
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers_json()
+                self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
+
         else:
             self.send_response(404)
             self.end_headers()
