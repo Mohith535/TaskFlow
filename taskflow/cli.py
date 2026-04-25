@@ -91,14 +91,14 @@ from task_manager.storage import storage
 import colorama
 
 APP_NAME = "TaskFlow"
-APP_VERSION = "v6.0.0"
-APP_TAGLINE = "Momentum Engineering for Calm Productivity"
+APP_VERSION = "v7.0.0"
+APP_TAGLINE = "The Temporal Engine"
 
 
 def show_help() -> None:
     """Show comprehensive help with premium formatting."""
     print(f"""
-  TaskFlow v6.0.0 — The Execution Engine
+  TaskFlow v7.0.0 — The Temporal Engine
   {"─" * 60}
 
   CORE COMMANDS:
@@ -148,8 +148,15 @@ def show_help() -> None:
 """)
 def show_version():
     """Show version information."""
-    print(f"{APP_NAME} {APP_VERSION} — {APP_TAGLINE}")
-    print("Time Management & Focus Blocking Features Enabled")
+    print(f"\n  🌊 \033[1;36mTaskFlow {APP_VERSION}\033[0m — {APP_TAGLINE}")
+    print(f"  \033[90m{'─' * 60}\033[0m")
+    print("  \033[1mWHAT'S NEW IN v7.0.0:\033[0m")
+    print("  • \033[33mLive Temporal Pressure\033[0m: Real-time UI updates as deadlines approach")
+    print("  • \033[31mRecovery Protocol\033[0m: Automated UI dampening for collapsed schedules")
+    print("  • \033[32mNLP Deadline Engine\033[0m: Frictionless natural language parsing")
+    print("  • \033[36mGlassmorphism HUD\033[0m: Premium browser-based command center")
+    print(f"  \033[90m{'─' * 60}\033[0m")
+    print("  \033[3mBuilt for deep work. Engineered for execution.\033[0m\n")
 
 
 def create_parser():

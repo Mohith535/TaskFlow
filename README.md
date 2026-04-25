@@ -1,10 +1,10 @@
 <div align="center">
-  <h1>🌊 TaskFlow v6.0.0</h1>
-  <p><strong>The Execution Engine — Engineered for Human Psychology</strong></p>
+  <h1>🌊 TaskFlow v7.0.0</h1>
+  <p><strong>The Temporal Engine — Engineered for Human Psychology</strong></p>
   <p><em>More than a task manager. A premium, high-fidelity productivity framework built to hack motivation, reduce cognitive friction, and force deep execution.</em></p>
   
   <p>
-    <img src="https://img.shields.io/badge/Version-6.0.0-blue?style=for-the-badge&logo=appveyor" alt="Version" />
+    <img src="https://img.shields.io/badge/Version-7.0.0-blue?style=for-the-badge&logo=appveyor" alt="Version" />
     <img src="https://img.shields.io/badge/Python-3.8%2B-green?style=for-the-badge&logo=python" alt="Python Version" />
     <img src="https://img.shields.io/badge/License-MIT-purple?style=for-the-badge&logo=open-source-initiative" alt="License" />
   </p>
@@ -17,7 +17,7 @@ TaskFlow was built as a premium startup-grade application to solve the fundament
 
 Every pixel, terminal command, and background process in TaskFlow is engineered around human psychology. We don't just store tasks; we manipulate visual tension, eliminate choice paralysis, and trigger dopamine pathways to make high-output execution the path of least resistance. 
 
-Version 6.0.0 introduces the **Mission Control Web HUD**, an elite, cinematic interface that translates your raw tasks into a visceral, glassmorphism-powered command center.
+Version 7.0.0 introduces the **Temporal Pressure Engine** and the **Mission Control Web HUD**, an elite, cinematic interface that translates your raw tasks into a visceral, time-aware command center.
 
 ---
 
@@ -33,7 +33,7 @@ TaskFlow acts as a **Tactical Command Center** that forces you to confront reali
 
 ## 🚀 The Three Phases of Execution
 
-TaskFlow brings three robust "Execution Phases" that work in concert to protect your flow state:
+TaskFlow v7.0.0 brings three robust "Execution Phases" that work in concert to protect your flow state:
 
 ### 🎯 Phase 1: Prioritization & The Live Dashboard
 We prevent procrastination by hiding the noise and weaponizing urgency:
