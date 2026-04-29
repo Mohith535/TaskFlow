@@ -61,6 +61,12 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
                     "offloaded_at": getattr(t, 'offloaded_at', None),
                     "offload_note": getattr(t, 'offload_note', None),
                     "executed_late": getattr(t, 'executed_late', None),
+                    # Event system fields
+                    "mission_type": getattr(t, 'mission_type', 'Task'),
+                    "date": getattr(t, 'date', None),
+                    "start_time": getattr(t, 'start_time', None),
+                    "end_time": getattr(t, 'end_time', None),
+                    "status": getattr(t, 'status', None),
                 }
                 for t in tasks if getattr(t, 'dropped_at', None) is None and getattr(t, 'offloaded_at', None) is None
             ]
@@ -411,6 +417,97 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
                 self.end_headers_json()
                 self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
 
+        elif path.startswith("/api/tasks/") and path.endswith("/postpone"):
+            try:
+                task_id = int(path.split("/")[3])
+                increment = data.get("increment", "+1h")
+                tasks = storage.load_tasks()
+                task = None
+                for t in tasks:
+                    if t.id == task_id:
+                        task = t
+                        break
+                if not task:
+                    self.send_response(404)
+                    self.end_headers_json()
+                    self.wfile.write(json.dumps({"error": "Task not found"}).encode('utf-8'))
+                    return
+                from datetime import datetime, timedelta
+                now = datetime.now()
+                # Calculate new deadline based on increment
+                increment_map = {
+                    "+15m": timedelta(minutes=15),
+                    "+1h": timedelta(hours=1),
+                    "+3h": timedelta(hours=3),
+                    "tomorrow": None  # Special case
+                }
+                if increment == "tomorrow":
+                    tomorrow = now + timedelta(days=1)
+                    new_deadline = tomorrow.replace(hour=9, minute=0, second=0, microsecond=0)
+                elif increment in increment_map:
+                    base = datetime.fromisoformat(task.deadline) if task.deadline else now
+                    if base < now:
+                        base = now  # Don't postpone from an overdue date
+                    new_deadline = base + increment_map[increment]
+                else:
+                    try:
+                        # Attempt to parse as ISO string
+                        new_deadline = datetime.fromisoformat(increment.replace('Z', '+00:00'))
+                    except ValueError:
+                        new_deadline = now + timedelta(hours=1)
+                
+                reason = data.get("reason", "").strip()
+                history_entry = json.dumps({
+                    "date": now.isoformat(),
+                    "increment": increment,
+                    "reason": reason
+                })
+                
+                task.deadline = new_deadline.isoformat()
+                task.postpone_count += 1
+                task.postpone_history.append(history_entry)
+                storage.save_tasks(tasks)
+                
+                self.send_response(200)
+                self.end_headers_json()
+                self.wfile.write(json.dumps({
+                    "success": True,
+                    "postpone_count": task.postpone_count,
+                    "new_deadline": task.deadline
+                }).encode('utf-8'))
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers_json()
+                self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
+
+        elif path.startswith("/api/tasks/") and path.endswith("/offload"):
+            try:
+                task_id = int(path.split("/")[3])
+                note = data.get("note", "Delegated")
+                tasks = storage.load_tasks()
+                task = None
+                for t in tasks:
+                    if t.id == task_id:
+                        task = t
+                        break
+                if not task:
+                    self.send_response(404)
+                    self.end_headers_json()
+                    self.wfile.write(json.dumps({"error": "Task not found"}).encode('utf-8'))
+                    return
+                from datetime import datetime
+                task.offloaded_at = datetime.now().isoformat()
+                task.offload_note = note
+                storage.save_tasks(tasks)
+                
+                self.send_response(200)
+                self.end_headers_json()
+                self.wfile.write(json.dumps({"success": True}).encode('utf-8'))
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers_json()
+                self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
+
         elif path == "/api/blocklist":
             try:
                 from task_manager.blockers.blocklist import blocklist_manager
@@ -499,12 +596,49 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
                     self.wfile.write(json.dumps({"error": "Title required"}).encode('utf-8'))
                     return
 
+                import re
+                
                 priority_raw = data.get("priority", "medium")
-                priority = normalize_priority(priority_raw)
                 tags = data.get("tags", [])
+                
+                # Extract priority (!h, !m, !l)
+                pri_match = re.search(r'!(h|m|l|hard|medium|low)\b', title, re.IGNORECASE)
+                if pri_match:
+                    p_val = pri_match.group(1).lower()
+                    if p_val in ['h', 'hard']: priority_raw = 'high'
+                    elif p_val in ['l', 'low']: priority_raw = 'low'
+                    elif p_val in ['m', 'medium']: priority_raw = 'medium'
+                    title = re.sub(r'!(h|m|l|hard|medium|low)\b', '', title, flags=re.IGNORECASE).strip()
+                
+                # Extract tags (#tag)
+                tag_matches = re.findall(r'#(\w+)', title)
+                if tag_matches:
+                    tags.extend(tag_matches)
+                    title = re.sub(r'#\w+', '', title).strip()
+                    
+                priority = normalize_priority(priority_raw)
                 duration = data.get("duration")
                 deadline = data.get("deadline")
                 deadline_type = data.get("deadline_type")
+                mission_type = data.get("mission_type", "Task")
+                date = data.get("date")
+                start_time = data.get("start_time")
+                end_time = data.get("end_time")
+
+                # Setup default reminder for Events
+                reminder_time = None
+                if mission_type == "Event" and deadline:
+                    from datetime import datetime, timedelta
+                    try:
+                        dt = datetime.fromisoformat(deadline.replace('Z', '+00:00'))
+                        # Default offset is 60 minutes, handle None from JSON
+                        offset_minutes = data.get("reminder_offset", 60)
+                        if offset_minutes is None:
+                            offset_minutes = 60
+                        if offset_minutes >= 0:
+                            reminder_time = (dt - timedelta(minutes=offset_minutes)).isoformat()
+                    except ValueError:
+                        pass
 
                 tasks = storage.load_tasks()
                 manager = models.TaskManager(tasks)
@@ -517,6 +651,11 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
                     duration=duration,
                     deadline=deadline,
                     deadline_type=deadline_type,
+                    mission_type=mission_type,
+                    date=date,
+                    start_time=start_time,
+                    end_time=end_time,
+                    reminder_time=reminder_time
                 )
                 new_id = manager.add_task(new_task)
                 storage.save_tasks(manager.tasks)

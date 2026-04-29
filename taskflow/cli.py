@@ -91,14 +91,14 @@ from task_manager.storage import storage
 import colorama
 
 APP_NAME = "TaskFlow"
-APP_VERSION = "v7.0.0"
+APP_VERSION = "v7.5.0"
 APP_TAGLINE = "The Temporal Engine"
 
 
 def show_help() -> None:
     """Show comprehensive help with premium formatting."""
     print(f"""
-  TaskFlow v7.0.0 — The Temporal Engine
+  TaskFlow v7.5.0 — The Temporal Engine
   {"─" * 60}
 
   CORE COMMANDS:
@@ -150,11 +150,11 @@ def show_version():
     """Show version information."""
     print(f"\n  🌊 \033[1;36mTaskFlow {APP_VERSION}\033[0m — {APP_TAGLINE}")
     print(f"  \033[90m{'─' * 60}\033[0m")
-    print("  \033[1mWHAT'S NEW IN v7.0.0:\033[0m")
-    print("  • \033[33mLive Temporal Pressure\033[0m: Real-time UI updates as deadlines approach")
-    print("  • \033[31mRecovery Protocol\033[0m: Automated UI dampening for collapsed schedules")
-    print("  • \033[32mNLP Deadline Engine\033[0m: Frictionless natural language parsing")
-    print("  • \033[36mGlassmorphism HUD\033[0m: Premium browser-based command center")
+    print("  \033[1mWHAT'S NEW IN v7.5.0:\033[0m")
+    print("  • \033[33mDual-Mode Reality Engine\033[0m: Rigid Events vs Flexible Tasks")
+    print("  • \033[31mVisual Timeline Selector\033[0m: Intuitive drag-to-schedule UI")
+    print("  • \033[32mNative Deadline Fallback\033[0m: Robust NLP paired with visual date picking")
+    print("  • \033[36mLive Event Metrics\033[0m: Automated duration & strict deadlines")
     print(f"  \033[90m{'─' * 60}\033[0m")
     print("  \033[3mBuilt for deep work. Engineered for execution.\033[0m\n")
 

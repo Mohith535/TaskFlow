@@ -34,6 +34,12 @@ class Task:
     reminder_fired_2: bool = False
     reminder_dismissed: bool = False
     
+    # NEW EVENT FIELDS
+    mission_type: str = "Task"
+    date: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    
     def __post_init__(self):
         """Validate task after initialization."""
         self._validate()
@@ -54,9 +60,7 @@ class Task:
             
         if self.duration:
             self.duration = self.duration.lower()
-            if self.duration not in ["15m", "30m", "1h", "2h", "3h", "4h+"]:
-                self.duration = None  # Graceful handling if invalid is somehow passed
-    
+            
     def mark_complete(self):
         """Mark task as completed."""
         self.completed = True
@@ -108,7 +112,11 @@ class Task:
             "reminder_time_2": self.reminder_time_2,
             "reminder_fired": self.reminder_fired,
             "reminder_fired_2": self.reminder_fired_2,
-            "reminder_dismissed": self.reminder_dismissed
+            "reminder_dismissed": self.reminder_dismissed,
+            "mission_type": self.mission_type,
+            "date": self.date,
+            "start_time": self.start_time,
+            "end_time": self.end_time
         }
     
     @classmethod
@@ -139,6 +147,11 @@ class Task:
         data["reminder_fired"] = data.get("reminder_fired", False)
         data["reminder_fired_2"] = data.get("reminder_fired_2", False)
         data["reminder_dismissed"] = data.get("reminder_dismissed", False)
+        
+        data["mission_type"] = data.get("mission_type", "Task")
+        data["date"] = data.get("date")
+        data["start_time"] = data.get("start_time")
+        data["end_time"] = data.get("end_time")
         
         return cls(**data)
     

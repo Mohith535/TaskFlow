@@ -40,3 +40,9 @@ EXECUTION_PHASE_1.md
 phase_1_c.md
 activity_diagram.mmd
 sequence_diagram.mmd
+
+# Additional dev scripts
+fix_parser.py
+fix_timeline.py
+patch2.py
+patch_all.py

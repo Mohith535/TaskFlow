@@ -5,7 +5,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TaskFlow | Mission Control</title>
     <script src="/static/three.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         /* ─── RESET ─────────────────────────────── */
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -45,7 +45,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             --emerald-glow:  rgba(74, 222, 128, 0.15);
 
             --font-mono: Consolas, 'Courier New', monospace;
-            --font-body: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Ubuntu, 'Helvetica Neue', sans-serif;
+            --font-body: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Ubuntu, 'Helvetica Neue', sans-serif;
 
             /* System States */
             --system-blur: 12px;
@@ -373,16 +373,16 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             transform: scale(1) translateY(0) rotateX(0deg); opacity: 1;
         }
         .close-modal {
-            position: absolute; top: -16px; right: -16px; width: 44px; height: 44px;
+            position: absolute; top: 18px; right: 18px; width: 42px; height: 42px;
             border-radius: 50%; display: flex; align-items: center; justify-content: center;
-            background: var(--bg-surface); color: var(--text-disabled); border: 1px solid var(--border-neutral);
-            font-size: 24px; cursor: pointer; transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-            z-index: 100; box-shadow: 0 8px 16px rgba(0,0,0,0.5);
+            background: rgba(255,255,255,0.06); color: var(--text-muted); border: 1px solid rgba(255,255,255,0.12);
+            font-size: 20px; cursor: pointer; transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+            z-index: 100; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
         }
         .close-modal:hover { 
-            background: rgba(248, 81, 73, 1); color: #fff; 
-            transform: rotate(180deg) scale(1.1); border-color: transparent;
-            box-shadow: 0 0 24px rgba(248, 81, 73, 0.6);
+            background: rgba(248, 81, 73, 0.9); color: #fff; 
+            transform: rotate(90deg) scale(1.1); border-color: transparent;
+            box-shadow: 0 0 24px rgba(248, 81, 73, 0.5), 0 0 60px rgba(248, 81, 73, 0.15);
         }
         .pill-btn:hover { border-color: var(--blue); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
 
@@ -851,17 +851,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             border-left: 1px solid rgba(88,166,255,0.1);
         }
         .edge-signal-right {
-            /* Adaptive Header System (No Overlap & Non-Selectable) */
-        .day-label { 
-            font-size: 11px; font-weight: 700; color: var(--text-disabled); 
-            letter-spacing: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-            min-width: 0; flex: 1; pointer-events: none; user-select: none;
-        }
-        .date-number { 
-            font-size: 14px; color: var(--text-hero); font-weight: 700; 
-            font-family: var(--font-mono); opacity: 1; margin: 0 0 0 8px; position: static;
-            text-shadow: 0 0 10px rgba(88,166,255,0.4); flex-shrink: 0;
-            user-select: none; -webkit-user-select: none; pointer-events: none;
+            right: 0;
+            background: linear-gradient(270deg, rgba(88,166,255,0.08) 0%, transparent 100%);
+            box-shadow: inset -10px 0 20px rgba(88,166,255,0.03);
+            border-right: 1px solid rgba(88,166,255,0.1);
         }
 
         /* Month View Grid Modifiers */
@@ -893,25 +886,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         }
         .header-cell.weekend { color: var(--amber); opacity: 0.7; }
         .header-cell.active { color: var(--blue); border-bottom-color: var(--blue); }
-
-        @keyframes todayBreath {
-            0%, 100% { border-color: rgba(88,166,255,0.4); }
-            50% { border-color: rgba(88,166,255,1); box-shadow: inset 0 0 30px rgba(88,166,255,0.2); }
-        }
-        .timeline-day.other-month { opacity: 0.15; filter: grayscale(1); }
-        .timeline-day.weekend-col { background: rgba(255,255,255,0.01); }
-            animation: todayBreath 3s infinite ease-in-out;
-        }
-        @keyframes todayBreath {
-            0%, 100% { border-color: rgba(88,166,255,0.4); }
-            50% { border-color: rgba(88,166,255,1); box-shadow: inset 0 0 30px rgba(88,166,255,0.2); }
-        }
-        .timeline-day.other-month { opacity: 0.15; }
-        .timeline-day.weekend-col { background: rgba(255,255,255,0.01); }
-
-        .timeline-day.today { border-color: var(--blue); background: rgba(88,166,255,0.03); }
-        .timeline-day.today .date-number { color: var(--blue); opacity: 1; }
-        .timeline-day.other-month { opacity: 0.3; filter: grayscale(1); }
 
         .unscheduled-pool {
             margin-top: 24px; padding: 24px; background: rgba(22, 27, 34, 0.4);
@@ -950,7 +924,18 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             transform: scale(1) translateY(0);
             clip-path: circle(150% at var(--origin-x, 50%) var(--origin-y, 50%));
         }
-        .modal-close { position: absolute; top: 24px; right: 24px; font-size: 24px; cursor: pointer; color: var(--text-disabled); }
+        .modal-close {
+            position: absolute; top: 18px; right: 18px; width: 42px; height: 42px;
+            border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            background: rgba(255,255,255,0.06); color: var(--text-muted); border: 1px solid rgba(255,255,255,0.12);
+            font-size: 20px; cursor: pointer; transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+            backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 10;
+        }
+        .modal-close:hover {
+            background: rgba(248, 81, 73, 0.9); color: #fff;
+            transform: rotate(90deg) scale(1.1); border-color: transparent;
+            box-shadow: 0 0 24px rgba(248, 81, 73, 0.5), 0 0 60px rgba(248, 81, 73, 0.15);
+        }
 
         /* ─ ADVISOR ─ */
         .advisor-badge { display: flex; align-items: center; gap: 8px; font-size: 10px; font-weight: 700; letter-spacing: 2px; color: var(--blue); margin-bottom: 24px; }
@@ -1183,6 +1168,251 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         .dl-type-pill.hard.selected { background: rgba(248,81,73,0.08); border-color: #F85149; color: #F85149; box-shadow: 0 0 12px rgba(248,81,73,0.15); }
         .hard-warning { font-size: 11px; color: #F85149; opacity: 0.7; margin-top: 6px; display: none; }
         .hard-warning.visible { display: block; }
+
+        /* ─── EPDO COMMAND MATRIX ─────────────── */
+        .epdo-section {
+            margin: 20px 0 0; padding: 20px; border-radius: 16px;
+            background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
+        }
+        .epdo-label {
+            font-size: 9px; font-weight: 800; letter-spacing: 2.5px;
+            color: var(--text-disabled); margin-bottom: 14px;
+        }
+        .epdo-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+        }
+        .epdo-btn {
+            display: flex; align-items: center; gap: 10px;
+            padding: 14px 16px; border-radius: 12px; cursor: pointer;
+            font-size: 12px; font-weight: 700; letter-spacing: 1px;
+            border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02);
+            color: var(--text-muted); transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative; overflow: hidden;
+        }
+        .epdo-btn::before {
+            content: ''; position: absolute; inset: 0; opacity: 0;
+            transition: opacity 0.3s; border-radius: inherit;
+        }
+        .epdo-btn:hover { transform: translateY(-2px); }
+        .epdo-btn:active { transform: translateY(0) scale(0.98); }
+        .epdo-icon { font-size: 16px; flex-shrink: 0; }
+        .epdo-text { flex: 1; }
+        .epdo-key {
+            font-size: 9px; font-family: var(--font-mono); padding: 2px 6px;
+            border-radius: 4px; background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.1); color: var(--text-disabled);
+            line-height: 1;
+        }
+        .epdo-btn.execute {
+            border-color: rgba(74,222,128,0.2); color: var(--emerald);
+        }
+        .epdo-btn.execute::before { background: rgba(74,222,128,0.08); }
+        .epdo-btn.execute:hover {
+            border-color: var(--emerald); background: rgba(74,222,128,0.1);
+            box-shadow: 0 0 24px rgba(74,222,128,0.15), 0 8px 20px rgba(0,0,0,0.3);
+        }
+        .epdo-btn.postpone {
+            border-color: rgba(210,153,34,0.2); color: var(--amber);
+        }
+        .epdo-btn.postpone::before { background: rgba(210,153,34,0.08); }
+        .epdo-btn.postpone:hover {
+            border-color: var(--amber); background: rgba(210,153,34,0.1);
+            box-shadow: 0 0 24px rgba(210,153,34,0.15), 0 8px 20px rgba(0,0,0,0.3);
+        }
+        .epdo-btn.postpone.disabled {
+            opacity: 0.3; cursor: not-allowed; pointer-events: none;
+        }
+        .epdo-btn.drop {
+            border-color: rgba(248,81,73,0.15); color: var(--red);
+        }
+        .epdo-btn.drop::before { background: rgba(248,81,73,0.08); }
+        .epdo-btn.drop:hover {
+            border-color: var(--red); background: rgba(248,81,73,0.1);
+            box-shadow: 0 0 24px rgba(248,81,73,0.15), 0 8px 20px rgba(0,0,0,0.3);
+        }
+        .epdo-btn.offload {
+            border-color: rgba(163,113,247,0.2); color: var(--ai-purple);
+        }
+        .epdo-btn.offload::before { background: rgba(163,113,247,0.08); }
+        .epdo-btn.offload:hover {
+            border-color: var(--ai-purple); background: rgba(163,113,247,0.1);
+            box-shadow: 0 0 24px rgba(163,113,247,0.15), 0 8px 20px rgba(0,0,0,0.3);
+        }
+        .epdo-sub-panel {
+            margin-top: 12px; padding: 16px; border-radius: 12px;
+            background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
+            animation: subPanelIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @keyframes subPanelIn {
+            0% { opacity: 0; transform: translateY(-8px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+        .epdo-sub-label {
+            font-size: 9px; font-weight: 700; letter-spacing: 1.5px;
+            color: var(--text-disabled); margin-bottom: 10px;
+        }
+        .postpone-options { display: flex; gap: 8px; flex-wrap: wrap; }
+        .postpone-opt {
+            flex: 1; min-width: 80px; padding: 10px 12px; border-radius: 10px;
+            background: rgba(210,153,34,0.05); border: 1px solid rgba(210,153,34,0.15);
+            color: var(--amber); font-size: 12px; font-weight: 600; cursor: pointer;
+            font-family: 'DM Mono', monospace;
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .postpone-opt:hover {
+            background: rgba(210,153,34,0.15); border-color: var(--amber);
+            transform: translateY(-2px); box-shadow: 0 4px 16px rgba(210,153,34,0.2);
+        }
+        .postpone-opt:active { transform: translateY(0) scale(0.97); }
+        .epdo-btn-util {
+            flex: 1; padding: 12px; border-radius: 10px; font-size: 12px; font-weight: 600;
+            cursor: pointer; transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02);
+            color: var(--text-muted);
+        }
+        .epdo-btn-util.complete {
+            border-color: rgba(74,222,128,0.2); color: var(--emerald);
+        }
+        .epdo-btn-util.complete:hover {
+            background: rgba(74,222,128,0.1); border-color: var(--emerald);
+            box-shadow: 0 0 16px rgba(74,222,128,0.15);
+        }
+        .epdo-btn-util.ai {
+            border-color: rgba(163,113,247,0.2); color: var(--ai-purple);
+        }
+        .epdo-btn-util.ai:hover {
+            background: rgba(163,113,247,0.1); border-color: var(--ai-purple);
+            box-shadow: 0 0 16px rgba(163,113,247,0.15);
+        }
+        .modal-deadline {
+            margin-bottom: 16px; font-family: 'DM Mono', monospace; font-size: 13px;
+            padding: 10px 14px; border-radius: 10px;
+            background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);
+        }
+        .modal-meta-row {
+            display: flex; justify-content: space-between; margin-top: 16px;
+            font-size: 11px; color: var(--text-disabled); font-family: 'DM Mono', monospace;
+            padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.04);
+        }
+
+        /* ─── OMNIBAR DEADLINE TYPE ──────────── */
+        .omni-dl-type-row { display: flex; gap: 6px; margin-top: 8px; }
+        .omni-dl-type {
+            flex: 1; height: 30px; border-radius: 6px; font-size: 10px; font-weight: 600;
+            cursor: pointer; border: 1px solid #30363D; background: transparent;
+            color: #8B949E; transition: all 150ms ease-out;
+        }
+        .omni-dl-type.soft.selected { background: rgba(88,166,255,0.08); border-color: var(--blue); color: var(--blue); }
+        .omni-dl-type.hard.selected { background: rgba(248,81,73,0.08); border-color: #F85149; color: #F85149; }
+
+        /* ─── PREMIUM MODAL ENHANCEMENTS ─────── */
+        .modal-card {
+            background: linear-gradient(165deg, rgba(13, 17, 23, 0.92), rgba(6, 10, 15, 0.98));
+            backdrop-filter: blur(40px) saturate(150%); -webkit-backdrop-filter: blur(40px) saturate(150%);
+            border: 1px solid rgba(88, 166, 255, 0.12);
+            box-shadow: 0 64px 128px rgba(0,0,0,0.8), 0 0 80px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
+        }
+        .modal-card::before {
+            content: ''; position: absolute; top: -1px; left: 15%; right: 15%; height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(88,166,255,0.4), transparent);
+            pointer-events: none;
+        }
+        .deploy-modal {
+            box-shadow: 0 0 80px rgba(0,0,0,0.9), 0 0 120px rgba(88,166,255,0.05), inset 0 1px 1px rgba(255,255,255,0.08);
+        }
+
+        /* ─── DROP CONFIRMATION MODAL ────────── */
+        .drop-overlay {
+            position: fixed; inset: 0; z-index: 999999;
+            background: rgba(0,0,0,0.7); backdrop-filter: blur(8px);
+            display: flex; align-items: center; justify-content: center;
+            opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
+        }
+        .drop-overlay.active { opacity: 1; pointer-events: all; }
+        .drop-modal {
+            background: linear-gradient(165deg, rgba(20, 14, 14, 0.98), rgba(10, 6, 6, 0.99));
+            border: 1px solid rgba(248, 81, 73, 0.25); border-radius: 20px;
+            padding: 36px; max-width: 420px; width: 90%;
+            box-shadow: 0 0 80px rgba(248,81,73,0.1), 0 40px 80px rgba(0,0,0,0.8);
+            transform: scale(0.9) translateY(20px); transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .drop-overlay.active .drop-modal { transform: scale(1) translateY(0); }
+        .drop-modal::before {
+            content: ''; position: absolute; top: -1px; left: 20%; right: 20%; height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(248,81,73,0.5), transparent);
+        }
+        .drop-modal-icon { font-size: 40px; text-align: center; margin-bottom: 16px; }
+        .drop-modal-title { font-size: 18px; font-weight: 700; color: var(--red); text-align: center; margin-bottom: 8px; letter-spacing: 1px; }
+        .drop-modal-msg { font-size: 13px; color: var(--text-body); text-align: center; line-height: 1.6; margin-bottom: 24px; }
+        .drop-modal-task { font-size: 15px; font-weight: 600; color: var(--text-hero); text-align: center; margin-bottom: 16px; padding: 12px; background: rgba(255,255,255,0.03); border-radius: 10px; border: 1px solid rgba(255,255,255,0.06); }
+        .drop-modal-actions { display: flex; gap: 10px; }
+        .drop-btn-confirm {
+            flex: 1; padding: 14px; border-radius: 12px; font-size: 13px; font-weight: 700;
+            cursor: pointer; border: 1px solid rgba(248,81,73,0.4); background: rgba(248,81,73,0.1);
+            color: var(--red); letter-spacing: 1px; transition: all 0.25s;
+        }
+        .drop-btn-confirm:hover { background: rgba(248,81,73,0.25); box-shadow: 0 0 20px rgba(248,81,73,0.2); }
+        .drop-btn-cancel {
+            flex: 1; padding: 14px; border-radius: 12px; font-size: 13px; font-weight: 600;
+            cursor: pointer; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.03);
+            color: var(--text-muted); transition: all 0.25s;
+        }
+        .drop-btn-cancel:hover { background: rgba(255,255,255,0.06); color: var(--text-body); }
+
+        /* ─── CUSTOM POSTPONE INPUT ──────────── */
+        .postpone-custom-row {
+            margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.04);
+        }
+        .postpone-reason {
+            width: 100%; margin-top: 10px; padding: 10px 14px; border-radius: 10px;
+            background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
+            color: var(--text-body); font-size: 12px; font-family: var(--font-body);
+            resize: none; outline: none; transition: border-color 0.2s;
+        }
+        .postpone-reason:focus { border-color: rgba(210,153,34,0.3); }
+        .postpone-reason::placeholder { color: var(--text-disabled); }
+
+        /* ─── MISSION TYPE SWITCHER ──────────── */
+        .mission-type-switcher {
+            display: flex; background: rgba(0,0,0,0.3); border-radius: 12px;
+            padding: 4px; margin-bottom: 24px; border: 1px solid rgba(255,255,255,0.05);
+        }
+        .type-btn {
+            flex: 1; padding: 10px; text-align: center; font-size: 11px; font-weight: 700;
+            color: var(--text-muted); cursor: pointer; border-radius: 8px; transition: all 0.3s;
+            letter-spacing: 1px; user-select: none;
+        }
+        .type-btn.active { background: rgba(88,166,255,0.15); color: var(--blue); box-shadow: 0 0 12px rgba(88,166,255,0.2); }
+        
+        /* ─── EVENT UI ──────────── */
+        .event-mode-only { display: none; }
+        .task-mode-only { display: block; }
+        
+        .timeline-slider-wrap {
+            position: relative; height: 36px; background: rgba(255,255,255,0.03);
+            border-radius: 8px; margin-top: 12px; border: 1px solid rgba(255,255,255,0.05);
+            user-select: none; touch-action: none; cursor: crosshair;
+        }
+        .timeline-slider-track {
+            position: absolute; left: 0; top: 0; bottom: 0; width: 100%;
+            display: flex; pointer-events: none; opacity: 0.2;
+        }
+        .timeline-slider-tick { flex: 1; border-right: 1px solid var(--text-muted); }
+        .timeline-slider-selection {
+            position: absolute; top: 0; bottom: 0; background: rgba(163,113,247,0.3);
+            border: 1px solid var(--ai-purple); border-radius: 4px; pointer-events: none;
+            display: none; box-shadow: inset 0 0 10px rgba(163,113,247,0.4);
+        }
+        .time-labels {
+            display: flex; justify-content: space-between; margin-top: 6px;
+            font-size: 9px; color: var(--text-disabled); font-family: var(--font-mono);
+        }
+        .fallback-date {
+            margin-top: 8px; padding: 10px; border-radius: 8px; font-family: var(--font-mono);
+            background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
+            color: var(--text-body); font-size: 12px; width: 100%; box-sizing: border-box; outline: none;
+        }
+        .fallback-date::-webkit-calendar-picker-indicator { filter: invert(1); cursor: pointer; opacity: 0.6; }
     </style>
 </head>
 <body class="state-idle">
@@ -1192,10 +1422,43 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <div id="hud-scanlines"></div>
     <div id="toast">Protocol Offline</div>
 
+    <!-- DROP CONFIRMATION MODAL -->
+    <div id="drop-overlay" class="drop-overlay">
+        <div class="drop-modal">
+            <div class="drop-modal-icon">✕</div>
+            <div class="drop-modal-title">DROP MISSION</div>
+            <div class="drop-modal-msg">This action is permanent and cannot be undone. Are you sure you want to drop this mission?</div>
+            <div id="drop-modal-task-name" class="drop-modal-task">Mission Name</div>
+            <div class="drop-modal-actions">
+                <button id="drop-btn-cancel" class="drop-btn-cancel">CANCEL</button>
+                <button id="drop-btn-confirm" class="drop-btn-confirm">PURGE</button>
+            </div>
+        </div>
+    </div>
+
     <!-- FLOATING OMNIBAR OVERLAY (Ctrl+K from any view) -->
     <div id="omnibar-overlay" class="omnibar-overlay">
         <div class="omnibar-container">
+            <button id="omnibar-close" onclick="document.getElementById('omnibar-overlay').classList.remove('active')" style="position:absolute;top:-14px;right:-14px;width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:var(--text-muted);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;transition:all 0.3s;backdrop-filter:blur(8px);" onmouseover="this.style.background='rgba(248,81,73,0.9)';this.style.color='#fff';this.style.borderColor='transparent';this.style.boxShadow='0 0 20px rgba(248,81,73,0.4)';this.style.transform='rotate(90deg) scale(1.1)'" onmouseout="this.style.background='rgba(255,255,255,0.06)';this.style.color='var(--text-muted)';this.style.borderColor='rgba(255,255,255,0.15)';this.style.boxShadow='none';this.style.transform='scale(1)'">&times;</button>
             <input type="text" id="omnibar-input" placeholder="Capture a thought..." autocomplete="off">
+            <div id="omnibar-time-section" style="margin-top:12px;padding:14px 16px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:12px;">
+                <div style="font-size:9px;font-weight:700;color:var(--text-disabled);letter-spacing:1.5px;margin-bottom:8px;">TIME BLOCK</div>
+                <div style="display:flex;gap:6px;" id="omni-dur-grid">
+                    <button class="dur-pill omni-dur" data-dur="15m" style="flex:1;height:32px;font-size:11px;">15m</button>
+                    <button class="dur-pill omni-dur" data-dur="30m" style="flex:1;height:32px;font-size:11px;">30m</button>
+                    <button class="dur-pill omni-dur" data-dur="1h" style="flex:1;height:32px;font-size:11px;">1h</button>
+                    <button class="dur-pill omni-dur" data-dur="2h" style="flex:1;height:32px;font-size:11px;">2h</button>
+                </div>
+                <div style="margin-top:10px;">
+                    <div style="font-size:9px;font-weight:700;color:var(--text-disabled);letter-spacing:1.5px;margin-bottom:6px;">DEADLINE</div>
+                    <input type="text" id="omni-deadline" class="deadline-input" style="height:36px;font-size:12px;border-radius:8px;" placeholder="e.g. tomorrow 3pm, Friday, in 2 hours" autocomplete="off">
+                    <div id="omni-dl-parsed" style="font-size:11px;margin-top:4px;opacity:0;transition:opacity 0.2s;"></div>
+                    <div class="omni-dl-type-row" id="omni-dl-type-row" style="display:none;">
+                        <button class="omni-dl-type soft selected" id="omni-dl-soft" onclick="setOmniDeadlineType('soft')">Soft</button>
+                        <button class="omni-dl-type hard" id="omni-dl-hard" onclick="setOmniDeadlineType('hard')">Hard ⚠</button>
+                    </div>
+                </div>
+            </div>
             <div class="omnibar-hints">
                 <span class="omnibar-hint">Use <kbd>#tag</kbd> and <kbd>!h</kbd> <kbd>!m</kbd> <kbd>!l</kbd> for priority</span>
                 <span class="omnibar-hint"><kbd>Enter</kbd> to save &middot; <kbd>Esc</kbd> to close</span>
@@ -1677,14 +1940,20 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <div id="deploy-modal-overlay" class="deploy-modal-overlay">
         <div class="deploy-modal">
             <div class="close-modal" onclick="toggleCreateMission()">×</div>
-            <div class="section-label" style="margin-bottom:24px;">NEW MISSION DEPLOYMENT</div>
+            <div class="section-label" style="margin-bottom:16px;">NEW MISSION DEPLOYMENT</div>
+            
+            <div class="mission-type-switcher">
+                <div class="type-btn active" id="btn-type-task" onclick="setMissionType('Task')">🧩 TASK (FLEXIBLE)</div>
+                <div class="type-btn" id="btn-type-event" onclick="setMissionType('Event')">📅 EVENT (TIME-LOCKED)</div>
+            </div>
+            
             <div class="flex-row">
                 <div class="mission-field">
                     <label class="section-label" style="font-size:9px;">OBJECTIVE</label>
                     <input type="text" id="mission-title" class="input-system" placeholder="Enter tactical objective..." autocomplete="off">
                 </div>
             </div>
-            <div class="flex-row" style="margin-top:24px;">
+            <div class="flex-row task-mode-only" style="margin-top:24px;">
                 <div class="mission-field">
                     <label class="section-label" style="font-size:9px;">PRIORITY PROTOCOL</label>
                     <div class="priority-grid">
@@ -1701,29 +1970,27 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 </div>
             </div>
 
-            <!-- PHASE 1: DURATION -->
-            <div class="flex-row" style="margin-top:24px;">
+            <!-- TASK MODE: DURATION -->
+            <div class="flex-row task-mode-only" style="margin-top:24px;">
                 <div class="mission-field">
                     <label class="section-label" style="font-size:9px;">ESTIMATED DURATION</label>
-                    <div class="duration-grid">
-                        <button class="dur-pill" data-dur="15m">15m</button>
-                        <button class="dur-pill" data-dur="30m">30m</button>
-                        <button class="dur-pill" data-dur="1h">1h</button>
-                        <button class="dur-pill" data-dur="2h">2h</button>
-                        <button class="dur-pill" data-dur="3h">3h</button>
-                        <button class="dur-pill" data-dur="4h+">4h+</button>
-                    </div>
+                    <input type="text" id="mission-duration" class="input-system" placeholder="e.g. 45m, 2h, 1h 30m" autocomplete="off">
                 </div>
             </div>
 
-            <!-- PHASE 1: DEADLINE -->
-            <div class="flex-row" style="margin-top:24px;">
+            <!-- TASK MODE: DEADLINE -->
+            <div class="flex-row task-mode-only" style="margin-top:24px;">
                 <div class="mission-field">
-                    <label class="section-label" style="font-size:9px;">DEADLINE</label>
-                    <input type="text" id="mission-deadline" class="deadline-input"
-                           placeholder="e.g. tomorrow 3pm, Friday, in 2 hours" autocomplete="off">
+                    <label class="section-label" style="font-size:9px;">DEADLINE (OPTIONAL)</label>
+                    <div style="display:flex; gap:8px; align-items:center;">
+                        <input type="text" id="mission-deadline" class="deadline-input"
+                               placeholder="e.g. tomorrow 3pm, Friday, in 2 hours" autocomplete="off" style="flex:1;">
+                        <div style="position:relative; width:42px; height:42px; background:rgba(255,255,255,0.05); border:1px solid var(--border-neutral); border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer;" title="Pick a date manually">
+                            <span style="font-size:16px;">📅</span>
+                            <input type="date" id="mission-deadline-fallback" style="position:absolute; top:0; left:0; width:100%; height:100%; opacity:0; cursor:pointer;" onchange="document.getElementById('mission-deadline').value = this.value; document.getElementById('mission-deadline').dispatchEvent(new Event('input'));">
+                        </div>
+                    </div>
                     <div class="deadline-parsed" id="deadline-parsed-display"></div>
-                    <!-- DEADLINE TYPE — shown only after deadline parsed -->
                     <div id="deadline-type-section" style="display:none;">
                         <div class="deadline-type-row">
                             <button class="dl-type-pill soft selected" id="dl-soft" onclick="setDeadlineType('soft')">🔵 Soft — flexible</button>
@@ -1731,6 +1998,64 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                         </div>
                         <div class="hard-warning" id="hard-warning">⚠ Hard deadlines trigger strong alerts if missed.</div>
                     </div>
+                </div>
+            </div>
+
+            <!-- EVENT MODE: DATE & TIME SELECTOR -->
+            <div class="flex-row event-mode-only" style="margin-top:24px;">
+                <div class="mission-field">
+                    <label class="section-label" style="font-size:9px;">EVENT DATE</label>
+                    <input type="date" id="event-date" class="fallback-date">
+                </div>
+            </div>
+            <div class="flex-row event-mode-only" style="margin-top:16px;">
+                <div class="mission-field" style="width:100%;">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-end;">
+                        <label class="section-label" style="font-size:9px;">TIMELINE BLOCK</label>
+                        <div id="event-time-display" style="font-family:var(--font-mono); font-size:11px; color:var(--ai-purple); font-weight:700;">Drag to select</div>
+                    </div>
+                    <div class="timeline-slider-wrap" id="timeline-slider">
+                        <div class="timeline-slider-track">
+                            <div class="timeline-slider-tick"></div><div class="timeline-slider-tick"></div>
+                            <div class="timeline-slider-tick"></div><div class="timeline-slider-tick"></div>
+                            <div class="timeline-slider-tick"></div><div class="timeline-slider-tick"></div>
+                            <div class="timeline-slider-tick"></div><div class="timeline-slider-tick"></div>
+                            <div class="timeline-slider-tick"></div><div class="timeline-slider-tick"></div>
+                            <div class="timeline-slider-tick"></div><div class="timeline-slider-tick"></div>
+                        </div>
+                        <div class="timeline-slider-selection" id="timeline-selection"></div>
+                    </div>
+                    <div class="time-labels">
+                        <span>8 AM</span><span>11 AM</span><span>2 PM</span><span>5 PM</span><span>8 PM</span>
+                    </div>
+                    <div style="display:flex; gap:12px; margin-top:12px; align-items:center;">
+                        <div style="flex:1;">
+                            <label class="section-label" style="font-size:8px; margin-bottom:4px;">START TIME</label>
+                            <input type="text" id="event-start-time" class="input-system" placeholder="e.g. 8:45 AM" autocomplete="off" style="font-family:var(--font-mono); font-size:13px; text-align:center;">
+                        </div>
+                        <div style="color:var(--text-disabled); font-size:16px; margin-top:16px;">→</div>
+                        <div style="flex:1;">
+                            <label class="section-label" style="font-size:8px; margin-bottom:4px;">END TIME</label>
+                            <input type="text" id="event-end-time" class="input-system" placeholder="e.g. 2:10 PM" autocomplete="off" style="font-family:var(--font-mono); font-size:13px; text-align:center;">
+                        </div>
+                    </div>
+                    <div id="event-duration-display" style="margin-top:10px; padding:8px 12px; background:rgba(163,113,247,0.08); border:1px solid rgba(163,113,247,0.15); border-radius:8px; font-family:var(--font-mono); font-size:12px; color:var(--ai-purple); text-align:center; display:none;">
+                        <span style="opacity:0.6;">DURATION:</span> <span id="event-duration-value">—</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- REMINDER (EVENT ONLY) -->
+            <div class="flex-row event-mode-only" style="margin-top:20px;">
+                <div class="mission-field">
+                    <label class="section-label" style="font-size:9px;">REMINDER</label>
+                    <select id="event-reminder" class="input-system" style="padding:10px; border-radius:8px; width:100%;">
+                        <option value="60" selected>1 hour before (Default)</option>
+                        <option value="30">30 minutes before</option>
+                        <option value="10">10 minutes before</option>
+                        <option value="0">At time of event</option>
+                        <option value="-1">No reminder</option>
+                    </select>
                 </div>
             </div>
 
@@ -1803,40 +2128,92 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         const s = str.trim().toLowerCase();
         const now = new Date();
         let d = null;
-        const timeMatch = s.match(/(\\d{1,2})(?::(\\d{2}))?\\s*(am|pm)?/i);
-        function applyTime(date, h, m, ampm) {
-            if (ampm === 'pm' && h < 12) h += 12;
-            if (ampm === 'am' && h === 12) h = 0;
-            date.setHours(h, m || 0, 0, 0);
+
+        function applyTimeOrDefault(date, text) {
+            const m = text.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i);
+            if (m) {
+                let h = parseInt(m[1]);
+                const min = m[2] ? parseInt(m[2]) : 0;
+                const ap = m[3].toLowerCase();
+                if (ap === 'pm' && h < 12) h += 12;
+                if (ap === 'am' && h === 12) h = 0;
+                date.setHours(h, min, 0, 0);
+            } else {
+                date.setHours(23, 59, 0, 0);
+            }
             return date;
         }
+
+        // 1. "today" / "tomorrow"
         if (s.startsWith('today')) {
             d = new Date(now);
-            if (timeMatch) applyTime(d, parseInt(timeMatch[1]), parseInt(timeMatch[2]||0), timeMatch[3]);
-            else d.setHours(23, 59, 0, 0);
-        } else if (s.startsWith('tomorrow')) {
+            return applyTimeOrDefault(d, s);
+        }
+        if (s.startsWith('tomorrow')) {
             d = new Date(now); d.setDate(d.getDate() + 1);
-            if (timeMatch) applyTime(d, parseInt(timeMatch[1]), parseInt(timeMatch[2]||0), timeMatch[3]);
-            else d.setHours(23, 59, 0, 0);
-        } else if (s.match(/^in\\s+(\\d+)\\s*h/)) {
-            const hrs = parseInt(s.match(/^in\\s+(\\d+)/)[1]);
-            d = new Date(now.getTime() + hrs * 3600000);
-        } else if (s.match(/^in\\s+(\\d+)\\s*m/)) {
-            const mins = parseInt(s.match(/^in\\s+(\\d+)/)[1]);
-            d = new Date(now.getTime() + mins * 60000);
-        } else {
-            const days = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
-            for (let i = 0; i < days.length; i++) {
-                if (s.startsWith(days[i]) || s.startsWith(days[i].slice(0,3))) {
-                    d = new Date(now);
-                    let diff = i - now.getDay(); if (diff <= 0) diff += 7;
-                    d.setDate(d.getDate() + diff);
-                    if (timeMatch) applyTime(d, parseInt(timeMatch[1]), parseInt(timeMatch[2]||0), timeMatch[3]);
-                    else d.setHours(23, 59, 0, 0);
-                    break;
-                }
+            return applyTimeOrDefault(d, s);
+        }
+
+        // 2. Relative: "in 2h", "in 30m"
+        const relH = s.match(/^in\s+(\d+)\s*h/);
+        if (relH) return new Date(now.getTime() + parseInt(relH[1]) * 3600000);
+        const relM = s.match(/^in\s+(\d+)\s*m/);
+        if (relM) return new Date(now.getTime() + parseInt(relM[1]) * 60000);
+
+        // 3. Day names: "friday", "fri 3pm"
+        const dayNames = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+        for (let i = 0; i < dayNames.length; i++) {
+            if (s.startsWith(dayNames[i]) || s.startsWith(dayNames[i].slice(0,3))) {
+                d = new Date(now);
+                let diff = i - now.getDay(); if (diff <= 0) diff += 7;
+                d.setDate(d.getDate() + diff);
+                return applyTimeOrDefault(d, s);
             }
         }
+
+        // 4. Month names: "may 7", "7 may", "may 7 3pm", "jun 15 8:45am"
+        const monthNames = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+        const monthFull = ['january','february','march','april','may','june','july','august','september','october','november','december'];
+        for (let mi = 0; mi < 12; mi++) {
+            const r1 = new RegExp('\\b(' + monthFull[mi] + '|' + monthNames[mi] + ')\\s+(\\d{1,2})');
+            const r2 = new RegExp('(\\d{1,2})(?:st|nd|rd|th)?\\s+(' + monthFull[mi] + '|' + monthNames[mi] + ')');
+            let match = s.match(r1);
+            if (match) {
+                d = new Date(now.getFullYear(), mi, parseInt(match[2]));
+                if (d < now) d.setFullYear(d.getFullYear() + 1);
+                return applyTimeOrDefault(d, s);
+            }
+            match = s.match(r2);
+            if (match) {
+                d = new Date(now.getFullYear(), mi, parseInt(match[1]));
+                if (d < now) d.setFullYear(d.getFullYear() + 1);
+                return applyTimeOrDefault(d, s);
+            }
+        }
+
+        // 5. Numeric: "5/7", "5/7/2026"
+        const numDate = s.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/);
+        if (numDate) {
+            const mo = parseInt(numDate[1]) - 1;
+            const dy = parseInt(numDate[2]);
+            const yr = numDate[3] ? (numDate[3].length === 2 ? 2000 + parseInt(numDate[3]) : parseInt(numDate[3])) : now.getFullYear();
+            d = new Date(yr, mo, dy);
+            return applyTimeOrDefault(d, s);
+        }
+
+        // 6. ISO: "2026-05-07"
+        const isoDate = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (isoDate) {
+            d = new Date(parseInt(isoDate[1]), parseInt(isoDate[2]) - 1, parseInt(isoDate[3]));
+            return applyTimeOrDefault(d, s);
+        }
+
+        // 7. Native Date.parse fallback
+        try {
+            const attempt = new Date(str.trim());
+            if (!isNaN(attempt.getTime()) && attempt.getFullYear() > 2000) return attempt;
+        } catch(e) {}
+
         return d;
     }
 
@@ -1917,13 +2294,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     const missionTitle = document.getElementById('mission-title');
     const btnDeploy = document.getElementById('btn-deploy');
 
-    if (missionTitle) {
-        missionTitle.addEventListener('input', () => {
-            btnDeploy.disabled = !missionTitle.value.trim();
-            btnDeploy.classList.toggle('active', !!missionTitle.value.trim());
-        });
-    }
-
     document.querySelectorAll('.pill-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             document.querySelectorAll('.pill-btn').forEach(b => b.classList.remove('selected'));
@@ -1936,9 +2306,156 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         const p = document.getElementById('deploy-modal-overlay');
         p.classList.toggle('active');
         if (p.classList.contains('active')) {
+            // Reset to Task mode on open
+            setMissionType('Task');
+            document.getElementById('event-date').valueAsDate = new Date();
+            tSelection.style.display = 'none';
+            tDisplay.textContent = 'Drag to select';
             setTimeout(() => document.getElementById('mission-title').focus(), 100);
         }
     }
+
+    let currentMissionType = 'Task';
+    let eventStartMinutes = 8 * 60; // 8 AM
+    let eventEndMinutes = 9 * 60;   // 9 AM
+
+    window.setMissionType = function(type) {
+        currentMissionType = type;
+        document.getElementById('btn-type-task').classList.toggle('active', type === 'Task');
+        document.getElementById('btn-type-event').classList.toggle('active', type === 'Event');
+        document.querySelectorAll('.task-mode-only').forEach(el => el.style.display = type === 'Task' ? 'block' : 'none');
+        document.querySelectorAll('.event-mode-only').forEach(el => el.style.display = type === 'Event' ? 'block' : 'none');
+        validateMissionInput();
+    }
+
+    function formatTimeFromMinutes(mins) {
+        let h = Math.floor(mins / 60);
+        let m = mins % 60;
+        let ampm = h >= 12 ? 'PM' : 'AM';
+        h = h % 12;
+        if (h === 0) h = 12;
+        return `${h}:${m.toString().padStart(2, '0')} ${ampm}`;
+    }
+
+    // Timeline Slider Logic
+    const tSlider = document.getElementById('timeline-slider');
+    const tSelection = document.getElementById('timeline-selection');
+    const tDisplay = document.getElementById('event-time-display');
+    let isDraggingTimeline = false;
+    let dragStartMins = 0;
+
+    function getMinutesFromEvent(e) {
+        const rect = tSlider.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        let x = clientX - rect.left;
+        x = Math.max(0, Math.min(x, rect.width));
+        const pct = x / rect.width;
+        const totalMins = 720; // 8 AM to 8 PM (12 hours)
+        let mins = Math.round((pct * totalMins) / 15) * 15; // snap to 15 min
+        return (8 * 60) + mins;
+    }
+
+    function updateTimelineUI() {
+        const totalMins = 720;
+        const startPct = Math.max(0, (eventStartMinutes - 8 * 60) / totalMins) * 100;
+        const endPct = Math.min(100, (eventEndMinutes - 8 * 60) / totalMins) * 100;
+        tSelection.style.display = 'block';
+        tSelection.style.left = startPct + '%';
+        tSelection.style.width = Math.max(1, endPct - startPct) + '%';
+        tDisplay.textContent = `${formatTimeFromMinutes(eventStartMinutes)} - ${formatTimeFromMinutes(eventEndMinutes)}`;
+        // Sync manual time inputs
+        const startInput = document.getElementById('event-start-time');
+        const endInput = document.getElementById('event-end-time');
+        if (startInput && !startInput._userTyping) startInput.value = formatTimeFromMinutes(eventStartMinutes);
+        if (endInput && !endInput._userTyping) endInput.value = formatTimeFromMinutes(eventEndMinutes);
+        // Show duration
+        const durMins = eventEndMinutes - eventStartMinutes;
+        const durDisplay = document.getElementById('event-duration-display');
+        const durValue = document.getElementById('event-duration-value');
+        if (durDisplay && durValue && durMins > 0) {
+            const dh = Math.floor(durMins / 60);
+            const dm = durMins % 60;
+            durValue.textContent = (dh > 0 ? dh + 'h ' : '') + (dm > 0 ? dm + 'm' : '');
+            durDisplay.style.display = 'block';
+        } else if (durDisplay) {
+            durDisplay.style.display = 'none';
+        }
+        validateMissionInput();
+    }
+
+    tSlider.addEventListener('mousedown', (e) => {
+        isDraggingTimeline = true;
+        dragStartMins = getMinutesFromEvent(e);
+        eventStartMinutes = dragStartMins;
+        eventEndMinutes = dragStartMins + 30; // default 30 min duration
+        updateTimelineUI();
+    });
+    window.addEventListener('mousemove', (e) => {
+        if (!isDraggingTimeline) return;
+        const currentMins = getMinutesFromEvent(e);
+        if (currentMins >= dragStartMins) {
+            eventStartMinutes = dragStartMins;
+            eventEndMinutes = currentMins;
+        } else {
+            eventStartMinutes = currentMins;
+            eventEndMinutes = dragStartMins;
+        }
+        if (eventEndMinutes === eventStartMinutes) eventEndMinutes += 15; // minimum 15m
+        updateTimelineUI();
+    });
+    window.addEventListener('mouseup', () => isDraggingTimeline = false);
+
+    // Manual time input parsing
+    function parseTimeInput(str) {
+        if (!str) return null;
+        const m = str.trim().match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+        if (!m) return null;
+        let h = parseInt(m[1]);
+        const min = m[2] ? parseInt(m[2]) : 0;
+        const ap = m[3] ? m[3].toLowerCase() : null;
+        if (ap === 'pm' && h < 12) h += 12;
+        if (ap === 'am' && h === 12) h = 0;
+        if (!ap && h < 8) h += 12; // assume PM for small numbers
+        return h * 60 + min;
+    }
+
+    const eventStartInput = document.getElementById('event-start-time');
+    const eventEndInput = document.getElementById('event-end-time');
+    function handleTimeInputChange() {
+        const startMins = parseTimeInput(eventStartInput.value);
+        const endMins = parseTimeInput(eventEndInput.value);
+        if (startMins !== null) eventStartMinutes = startMins;
+        if (endMins !== null) eventEndMinutes = endMins;
+        if (eventEndMinutes <= eventStartMinutes) eventEndMinutes = eventStartMinutes + 15;
+        eventStartInput._userTyping = false;
+        eventEndInput._userTyping = false;
+        updateTimelineUI();
+    }
+    if (eventStartInput) {
+        eventStartInput.addEventListener('focus', () => eventStartInput._userTyping = true);
+        eventStartInput.addEventListener('change', handleTimeInputChange);
+        eventStartInput.addEventListener('blur', handleTimeInputChange);
+    }
+    if (eventEndInput) {
+        eventEndInput.addEventListener('focus', () => eventEndInput._userTyping = true);
+        eventEndInput.addEventListener('change', handleTimeInputChange);
+        eventEndInput.addEventListener('blur', handleTimeInputChange);
+    }
+
+    // Validation logic for Deploy button
+    function validateMissionInput() {
+        let valid = missionTitle.value.trim().length > 0;
+        if (currentMissionType === 'Event') {
+            const dt = document.getElementById('event-date').value;
+            if (!dt || tSelection.style.display === 'none') valid = false;
+        }
+        if (btnDeploy) {
+            btnDeploy.disabled = !valid;
+            btnDeploy.classList.toggle('active', valid);
+        }
+    }
+    missionTitle.addEventListener('input', validateMissionInput);
+    document.getElementById('event-date').addEventListener('input', validateMissionInput);
 
     if (btnDeploy) {
         btnDeploy.addEventListener('click', async () => {
@@ -1947,27 +2464,63 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             const tags = tagStr.split(',').map(s=>s.trim()).filter(s=>s.length > 0);
             if (!title) return;
             setSystemState('thinking');
-            const payload = { title, priority: selectedPriority, tags };
-            if (selectedDuration) payload.duration = selectedDuration;
-            if (parsedDeadlineISO) { payload.deadline = parsedDeadlineISO; payload.deadline_type = selectedDeadlineType; }
-            const res = await fetch('/api/tasks/create-full', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(payload)
-            });
-            if (res.ok) {
-                missionTitle.value = '';
-                if(document.getElementById('mission-tags')) document.getElementById('mission-tags').value = '';
-                if(document.getElementById('mission-deadline')) document.getElementById('mission-deadline').value = '';
-                btnDeploy.disabled = true;
-                btnDeploy.classList.remove('active');
-                selectedDuration = null; parsedDeadlineISO = null; selectedDeadlineType = 'soft';
-                document.querySelectorAll('.dur-pill').forEach(p => p.classList.remove('selected'));
-                const dts = document.getElementById('deadline-type-section'); if(dts) dts.style.display='none';
-                const dp = document.getElementById('deadline-parsed-display'); if(dp){dp.textContent='';dp.classList.remove('visible');}
-                showToast('Mission deployed.', 'var(--green)');
-                toggleCreateMission();
-                await loadTasks();
+            
+            const payload = { title, priority: selectedPriority, tags, mission_type: currentMissionType };
+            
+            if (currentMissionType === 'Task') {
+                const durVal = document.getElementById('mission-duration').value.trim();
+                if (durVal) payload.duration = durVal;
+                if (parsedDeadlineISO) { payload.deadline = parsedDeadlineISO; payload.deadline_type = selectedDeadlineType; }
+            } else if (currentMissionType === 'Event') {
+                const dateVal = document.getElementById('event-date').value; // YYYY-MM-DD
+                const startTimeStr = formatTimeFromMinutes(eventStartMinutes);
+                const endTimeStr = formatTimeFromMinutes(eventEndMinutes);
+                
+                payload.date = dateVal;
+                payload.start_time = startTimeStr;
+                payload.end_time = endTimeStr;
+                
+                // Auto-calculate duration string (e.g. "1h 15m")
+                const durationMins = eventEndMinutes - eventStartMinutes;
+                const dh = Math.floor(durationMins / 60);
+                const dm = durationMins % 60;
+                payload.duration = (dh > 0 ? dh + 'h ' : '') + (dm > 0 ? dm + 'm' : '').trim();
+                
+                // Auto-calculate strict deadline
+                const d = new Date(dateVal);
+                d.setHours(Math.floor(eventEndMinutes / 60), eventEndMinutes % 60, 0, 0);
+                payload.deadline = d.toISOString();
+                payload.deadline_type = 'hard'; // Events are reality constraints
+                payload.reminder_offset = parseInt(document.getElementById('event-reminder').value);
+            }
+            try {
+                const res = await fetch('/api/tasks/create-full', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    missionTitle.value = '';
+                    if(document.getElementById('mission-tags')) document.getElementById('mission-tags').value = '';
+                    if(document.getElementById('mission-deadline')) document.getElementById('mission-deadline').value = '';
+                    if(document.getElementById('mission-duration')) document.getElementById('mission-duration').value = '';
+                    btnDeploy.disabled = true;
+                    btnDeploy.classList.remove('active');
+                    parsedDeadlineISO = null; selectedDeadlineType = 'soft';
+                    const dts = document.getElementById('deadline-type-section'); if(dts) dts.style.display='none';
+                    const dp = document.getElementById('deadline-parsed-display'); if(dp){dp.textContent='';dp.classList.remove('visible');}
+                    showToast('Mission deployed.', 'var(--green)');
+                    toggleCreateMission();
+                    await loadTasks();
+                    setSystemState('idle');
+                } else {
+                    const errData = await res.json().catch(()=>({}));
+                    showToast('Failed to deploy: ' + (errData.error || res.statusText), 'var(--red)');
+                    setSystemState('idle');
+                }
+            } catch (err) {
+                showToast('Error deploying mission', 'var(--red)');
+                console.error(err);
                 setSystemState('idle');
             }
         });
@@ -2192,6 +2745,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 if (dl) {
                     const hardTag = t.deadline_type === 'hard' ? '<span class="hard-tag">⚠ HARD</span>' : '';
                     deadlineRow = `<div class="deadline-row" style="color:${dl.color}">⏰ ${dl.text} ${hardTag}</div>`;
+                }
+
+                // Event badge
+                let eventBadge = '';
+                if (t.mission_type === 'Event') {
+                    const timeRange = (t.start_time && t.end_time) ? ` · ${t.start_time} – ${t.end_time}` : '';
+                    const dateStr = t.date ? ` · ${t.date}` : '';
+                    eventBadge = `<span class="badge" style="background:rgba(163,113,247,0.15);color:var(--ai-purple);border:1px solid rgba(163,113,247,0.3);">📅 EVENT${dateStr}${timeRange}</span>`;
                 }
 
                 // Pressure + overdue CSS classes
@@ -2812,6 +3373,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     // ── MODAL SYSTEM ──────────────────────────────────────────────────────
     const modal = document.getElementById('modal-overlay');
+    let _modalKeyHandler = null;
+
     function openModal(id, el) {
         const task = allTasks.find(t => t.id === id);
         if (!task) return;
@@ -2819,26 +3382,260 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         const mc = document.getElementById('mission-brief-modal');
         mc.style.setProperty('--origin-x', `${r.left + r.width/2}px`);
         mc.style.setProperty('--origin-y', `${r.top + r.height/2}px`);
+
+        const np = normalizePriority(task.priority);
+        const dl = formatDeadline(task.deadline);
+        const dlInfo = dl ? `<div class="modal-deadline" style="color:${dl.color}">⏰ ${dl.text}${task.deadline_type==='hard'?' <span class="hard-tag">⚠ HARD</span>':''}</div>` : '';
+        const durBadge = task.duration ? `<span class="duration-badge">${task.duration}</span>` : '';
+        const postponeBadge = (task.postpone_count||0) >= 2 ? `<span class="postpone-badge ${task.postpone_count>=3?'warn':'mild'}">postponed ×${task.postpone_count}</span>` : '';
+        const tagBadges = (task.tags||[]).map(tg => `<span class="badge tag">#${tg}</span>`).join('');
+        const pc = task.postpone_count || 0;
+        const canPostpone = pc < 5;
+        let postponeWarn = '';
+        if (pc >= 5) postponeWarn = '<div style="color:#F85149;font-size:11px;margin-top:8px;padding:6px 10px;background:rgba(248,81,73,0.06);border-radius:6px;">⚠ Maximum postpones reached. Execute or Drop this mission.</div>';
+        else if (pc >= 3) postponeWarn = '<div style="color:#D29922;font-size:11px;margin-top:8px;padding:6px 10px;background:rgba(210,153,34,0.06);border-radius:6px;">⚠ Postponed ' + pc + '× — the mirror doesn\\'t lie. Consider dropping.</div>';
+        else if (pc >= 2) postponeWarn = '<div style="color:#8B949E;font-size:11px;margin-top:8px;">Postponed ' + pc + '× — be honest with yourself.</div>';
+
+        const createdDate = task.created_at ? new Date(task.created_at).toLocaleDateString([], {day:'numeric', month:'short', year:'numeric'}) : 'Unknown';
+
         document.getElementById('modal-content').innerHTML = `
-            <div class="section-label" style="margin-bottom:8px;">MISSION BRIEFING</div>
-            <h2 style="font-size:28px; font-weight:700; color:var(--text-hero); margin-bottom:20px;">${task.title}</h2>
-            <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:20px;">
-                <span class="badge ${normalizePriority(task.priority)}">${(task.priority||'MEDIUM').toUpperCase()} PROTOCOL</span>
-                ${task.duration ? '<span class="duration-badge">'+task.duration+'</span>' : ''}
-                ${(task.tags||[]).map(tg => `<span class="badge tag">${tg}</span>`).join('')}
-                ${(task.postpone_count||0) >= 2 ? '<span class="postpone-badge '+(task.postpone_count>=3?'warn':'mild')+'">postponed ×'+task.postpone_count+'</span>' : ''}
+            <div class="section-label" style="margin-bottom:8px;letter-spacing:3px;">MISSION BRIEFING</div>
+            <h2 style="font-size:24px; font-weight:700; color:var(--text-hero); margin-bottom:14px; line-height:1.3; padding-right:40px;">${task.title}</h2>
+            <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; align-items:center;">
+                <span class="badge ${np}">${(task.priority||'MEDIUM').toUpperCase()}</span>
+                ${durBadge}
+                ${tagBadges}
+                ${postponeBadge}
             </div>
-            ${task.deadline ? '<div style="margin-bottom:20px;font-family:DM Mono,monospace;font-size:13px;color:'+(formatDeadline(task.deadline)||{}).color+'">⏰ '+(formatDeadline(task.deadline)||{}).text+(task.deadline_type==='hard'?' <span class="hard-tag">⚠ HARD</span>':'')+'</div>' : ''}
-            <div style="background:rgba(255,255,255,0.02); padding:32px; border-radius:16px; border:1px solid var(--border-neutral); text-align:center;">
-                <div style="font-size:48px; font-family:var(--font-mono); margin-bottom:20px; color:var(--text-hero);">25:00</div>
-                <button class="btn-execute" style="width:100%; margin-bottom:12px;" onclick="startFocus(${task.id})">START FOCUS PROTOCOL</button>
-                <button class="btn-execute" style="width:100%; background:transparent; border:1px solid var(--ai-purple); color:var(--ai-purple);" onclick="showToast('Querying Intelligence Core...', 'var(--ai-purple)')">ASK AI ABOUT THIS</button>
+            ${dlInfo}
+
+            <div class="epdo-section">
+                <div class="epdo-label">COMMAND MATRIX</div>
+                <div class="epdo-grid">
+                    <button class="epdo-btn execute" onclick="startFocus(${task.id}); closeModal();" title="Start Focus Protocol">
+                        <span class="epdo-icon">▶</span>
+                        <span class="epdo-text">EXECUTE</span>
+                        <span class="epdo-key">E</span>
+                    </button>
+                    <button class="epdo-btn postpone${!canPostpone?' disabled':''}" onclick="togglePostponePanel(${task.id})" title="Postpone deadline"${!canPostpone?' disabled':''}>
+                        <span class="epdo-icon">⏳</span>
+                        <span class="epdo-text">POSTPONE</span>
+                        <span class="epdo-key">P</span>
+                    </button>
+                    <button class="epdo-btn drop" onclick="dropTaskFromModal(${task.id})" title="Purge mission">
+                        <span class="epdo-icon">✕</span>
+                        <span class="epdo-text">DROP</span>
+                        <span class="epdo-key">D</span>
+                    </button>
+                    <button class="epdo-btn offload" onclick="toggleOffloadPanel(${task.id})" title="Delegate to someone">
+                        <span class="epdo-icon">→</span>
+                        <span class="epdo-text">OFFLOAD</span>
+                        <span class="epdo-key">O</span>
+                    </button>
+                </div>
+                ${postponeWarn}
+            </div>
+
+            <div class="epdo-sub-panel" id="postpone-panel" style="display:none;">
+                <div class="epdo-sub-label">PUSH DEADLINE →</div>
+                <div class="postpone-options">
+                    <button class="postpone-opt" onclick="executePostpone(${task.id}, '+15m')">+15 min</button>
+                    <button class="postpone-opt" onclick="executePostpone(${task.id}, '+1h')">+1 hour</button>
+                    <button class="postpone-opt" onclick="executePostpone(${task.id}, '+3h')">+3 hours</button>
+                    <button class="postpone-opt" onclick="executePostpone(${task.id}, 'tomorrow')">Tomorrow 9AM</button>
+                </div>
+                <div class="postpone-custom-row">
+                    <input type="text" id="postpone-custom-input" class="input-system" style="width:100%;" placeholder="Custom time (e.g. 'next fri 3pm')" autocomplete="off">
+                    <textarea id="postpone-reason" class="postpone-reason" rows="2" placeholder="Why are we postponing this? Be honest..."></textarea>
+                    <button class="epdo-btn postpone" style="width:100%; margin-top:8px; padding:10px;" onclick="executePostpone(${task.id}, 'custom')">
+                        <span class="epdo-icon">⏳</span> CONFIRM DELAY
+                    </button>
+                </div>
+            </div>
+
+            <div class="epdo-sub-panel" id="offload-panel" style="display:none;">
+                <div class="epdo-sub-label">DELEGATE TO →</div>
+                <div style="display:flex;gap:8px;">
+                    <input type="text" id="offload-note-input" class="input-system" style="flex:1;" placeholder="Who takes ownership?" autocomplete="off">
+                    <button class="epdo-btn offload" style="width:auto;padding:10px 20px;" onclick="executeOffload(${task.id})">
+                        <span class="epdo-icon">→</span> CONFIRM
+                    </button>
+                </div>
+            </div>
+
+            <div style="background:rgba(255,255,255,0.02); padding:20px; border-radius:14px; border:1px solid rgba(255,255,255,0.05); margin-top:14px;">
+                <div class="section-label" style="margin-bottom:12px;font-size:9px;">FOCUS PROTOCOL</div>
+                <div style="font-size:36px; font-family:var(--font-mono); margin-bottom:14px; color:var(--text-hero); text-align:center; opacity:0.8;">25:00</div>
+                <button class="btn-execute" style="width:100%; margin-bottom:10px; padding:13px;" onclick="startFocus(${task.id})">DEPLOY FOCUS SESSION</button>
+                <div style="display:flex;gap:8px;">
+                    <button class="epdo-btn-util complete" onclick="completeTaskFromModal(${task.id})">✓ COMPLETE</button>
+                    <button class="epdo-btn-util ai" onclick="showToast('Querying Intelligence Core...', 'var(--ai-purple)')">✦ ASK AI</button>
+                </div>
+            </div>
+
+            <div class="modal-meta-row">
+                <span>ID: #${task.id}</span>
+                <span>Created: ${createdDate}</span>
             </div>
         `;
         modal.classList.add('show');
+
+        // Keyboard shortcuts for EPDO
+        if (_modalKeyHandler) document.removeEventListener('keydown', _modalKeyHandler);
+        const _taskId = task.id;
+        const _canPostpone = canPostpone;
+        _modalKeyHandler = (e) => {
+            if (!modal.classList.contains('show')) return;
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+            const key = e.key.toUpperCase();
+            if (key === 'E') { startFocus(_taskId); closeModal(); }
+            else if (key === 'P' && _canPostpone) { e.preventDefault(); togglePostponePanel(_taskId); }
+            else if (key === 'D') { e.preventDefault(); dropTaskFromModal(_taskId); }
+            else if (key === 'O') { e.preventDefault(); toggleOffloadPanel(_taskId); }
+            else if (key === 'ESCAPE') { closeModal(); }
+        };
+        document.addEventListener('keydown', _modalKeyHandler);
     }
-    function closeModal() { modal.classList.remove('show'); }
+
+    function closeModal() {
+        modal.classList.remove('show');
+        if (_modalKeyHandler) { document.removeEventListener('keydown', _modalKeyHandler); _modalKeyHandler = null; }
+    }
     document.getElementById('btn-modal-close').onclick = closeModal;
+
+    // ── EPDO HANDLERS ──────────────────────────────────────────────────
+    window.togglePostponePanel = function(taskId) {
+        const pp = document.getElementById('postpone-panel');
+        const op = document.getElementById('offload-panel');
+        if (op) op.style.display = 'none';
+        if (pp) pp.style.display = pp.style.display === 'none' ? 'block' : 'none';
+    };
+
+    window.toggleOffloadPanel = function(taskId) {
+        const op = document.getElementById('offload-panel');
+        const pp = document.getElementById('postpone-panel');
+        if (pp) pp.style.display = 'none';
+        if (op) {
+            op.style.display = op.style.display === 'none' ? 'block' : 'none';
+            if (op.style.display === 'block') {
+                setTimeout(() => { const inp = document.getElementById('offload-note-input'); if(inp) inp.focus(); }, 100);
+            }
+        }
+    };
+
+    window.executePostpone = async function(taskId, increment) {
+        const reasonInput = document.getElementById('postpone-reason');
+        const reason = reasonInput ? reasonInput.value.trim() : '';
+        
+        let finalIncrement = increment;
+        if (increment === 'custom') {
+            const customInput = document.getElementById('postpone-custom-input');
+            const customVal = customInput ? customInput.value.trim() : '';
+            if (!customVal) { showToast('Enter a custom time to postpone.', 'var(--amber)'); return; }
+            const parsed = parseDeadlineInput(customVal);
+            if (!parsed) { showToast('Could not parse custom time.', 'var(--red)'); return; }
+            finalIncrement = parsed.toISOString();
+        }
+
+        try {
+            const res = await fetch(`/api/tasks/${taskId}/postpone`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ increment: finalIncrement, reason: reason })
+            });
+            if (res.ok) {
+                const data = await res.json();
+                const pc = data.postpone_count || 0;
+                let msg = `Mission postponed. `;
+                if (pc >= 5) msg += `⚠ Postponed ${pc}× — no more delays.`;
+                else if (pc >= 3) msg += `⚠ Postponed ${pc}× — the mirror speaks.`;
+                else msg += `Postponed ${pc}×.`;
+                showToast(msg, pc >= 3 ? 'var(--red)' : 'var(--amber)');
+                closeModal();
+                await loadTasks();
+            } else { showToast('Failed to postpone.', 'var(--red)'); }
+        } catch(e) { console.error(e); showToast('Postpone error.', 'var(--red)'); }
+    };
+
+    window.dropTaskFromModal = function(taskId) {
+        const task = allTasks.find(t => t.id === taskId);
+        if (!task) return;
+        
+        const overlay = document.getElementById('drop-overlay');
+        const taskName = document.getElementById('drop-modal-task-name');
+        const btnCancel = document.getElementById('drop-btn-cancel');
+        const btnConfirm = document.getElementById('drop-btn-confirm');
+        
+        if (overlay && taskName && btnCancel && btnConfirm) {
+            taskName.textContent = task.title;
+            overlay.classList.add('active');
+            
+            const cleanup = () => {
+                overlay.classList.remove('active');
+                btnCancel.removeEventListener('click', onCancel);
+                btnConfirm.removeEventListener('click', onConfirm);
+            };
+            
+            const onCancel = () => { cleanup(); };
+            const onConfirm = async () => {
+                cleanup();
+                try {
+                    await fetch(`/api/tasks/${taskId}/delete`, {method: 'POST'});
+                    showToast('Mission dropped. Sometimes letting go is the right call.', 'var(--red)');
+                    closeModal();
+                    await loadTasks();
+                } catch(e) { console.error(e); showToast('Drop failed.', 'var(--red)'); }
+            };
+            
+            btnCancel.addEventListener('click', onCancel);
+            btnConfirm.addEventListener('click', onConfirm);
+        }
+    };
+
+    window.executeOffload = async function(taskId) {
+        const noteInput = document.getElementById('offload-note-input');
+        const note = noteInput ? noteInput.value.trim() : '';
+        if (!note) { showToast('Enter who takes ownership.', 'var(--amber)'); if(noteInput) noteInput.focus(); return; }
+        try {
+            const res = await fetch(`/api/tasks/${taskId}/offload`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ note })
+            });
+            if (res.ok) {
+                showToast(`Mission offloaded → ${note}. Ownership transferred.`, 'var(--ai-purple)');
+                closeModal();
+                await loadTasks();
+            } else { showToast('Offload failed.', 'var(--red)'); }
+        } catch(e) { console.error(e); showToast('Offload error.', 'var(--red)'); }
+    };
+
+    window.completeTaskFromModal = async function(taskId) {
+        try {
+            const res = await fetch(`/api/tasks/${taskId}/complete`, {method: 'POST'});
+            if (res.ok) {
+                const data = await res.json();
+                if (data.velocity) {
+                    const dayWord = data.streak === 1 ? 'Day' : 'Days';
+                    showToast(`✦ MISSION SUCCESS  +${data.velocity}% Velocity | Streak: ${data.streak} ${dayWord}`, 'var(--green)');
+                } else {
+                    showToast('Mission execution successful.', 'var(--green)');
+                }
+            }
+        } catch(e) { console.error(e); showToast('Complete failed.', 'var(--red)'); }
+        closeModal();
+        setTimeout(loadTasks, 400);
+    };
+
+    // ── OMNIBAR DEADLINE TYPE ─────────────────────────────────────────
+    let omniDeadlineType = 'soft';
+    window.setOmniDeadlineType = function(type) {
+        omniDeadlineType = type;
+        const soft = document.getElementById('omni-dl-soft');
+        const hard = document.getElementById('omni-dl-hard');
+        if (soft) soft.classList.toggle('selected', type === 'soft');
+        if (hard) hard.classList.toggle('selected', type === 'hard');
+    };
 
     function startFocusFromCard(taskId, btnEl) {
         // High-fidelity feedback pulse
@@ -3031,39 +3828,69 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 if (e.target === omniOverlay) closeOmnibar();
             });
 
-            // Enter key — fire capture with loading state
+            // Enter key — fire capture with time management
             omniInput.addEventListener('keydown', async (e) => {
                 if (e.key === 'Enter') {
                     e.preventDefault();
                     const text = omniInput.value.trim();
                     if (!text) return;
-                    
-                    // Disable input to prevent duplicates  
                     omniInput.disabled = true;
-                    
+                    // Gather time management data
+                    const omniDurSel = document.querySelector('.omni-dur.selected');
+                    const omniDur = omniDurSel ? omniDurSel.dataset.dur : null;
+                    const omniDlInput = document.getElementById('omni-deadline');
+                    const omniDlVal = omniDlInput ? omniDlInput.value.trim() : '';
+                    let omniDlISO = null;
+                    if (omniDlVal) { const p = parseDeadlineInput(omniDlVal); if (p) omniDlISO = p.toISOString(); }
+                    const payload = { title: text };
+                    if (omniDur) payload.duration = omniDur;
+                    if (omniDlISO) { payload.deadline = omniDlISO; payload.deadline_type = omniDeadlineType || 'soft'; }
                     try {
-                        const res = await fetch('/api/tasks/dump', {
+                        const res = await fetch('/api/tasks/create-full', {
                             method: 'POST',
                             headers: {'Content-Type': 'application/json'},
-                            body: JSON.stringify({title: text})
+                            body: JSON.stringify(payload)
                         });
-                        
                         if (res.ok) {
                             const data = await res.json();
                             const savedTitle = (data.task && data.task.title) ? data.task.title : text;
                             closeOmnibar();
+                            if (omniDurSel) omniDurSel.classList.remove('selected');
+                            if (omniDlInput) omniDlInput.value = '';
+                            omniDeadlineType = 'soft'; setOmniDeadlineType('soft');
+                            const dlTypeRow = document.getElementById('omni-dl-type-row'); if(dlTypeRow) dlTypeRow.style.display='none';
                             loadTasks();
                             showToast(`Captured: "${savedTitle}"`, "var(--ai-purple)");
-                        } else {
-                            omniInput.disabled = false;
-                            showToast("Failed to capture thought", "var(--red)");
-                        }
-                    } catch (err) {
-                        console.error(err);
-                        omniInput.disabled = false;
-                        showToast("Capture transmission failed", "var(--red)");
-                    }
+                        } else { omniInput.disabled = false; showToast("Failed to capture thought", "var(--red)"); }
+                    } catch (err) { console.error(err); omniInput.disabled = false; showToast("Capture transmission failed", "var(--red)"); }
                 }
+            });
+        }
+        // Omnibar duration pill clicks
+        document.querySelectorAll('.omni-dur').forEach(pill => {
+            pill.addEventListener('click', () => {
+                document.querySelectorAll('.omni-dur').forEach(p => p.classList.remove('selected'));
+                pill.classList.add('selected');
+            });
+        });
+        // Omnibar deadline live parse
+        const omniDlIn = document.getElementById('omni-deadline');
+        if (omniDlIn) {
+            let omniDlTimer = null;
+            omniDlIn.addEventListener('input', () => {
+                clearTimeout(omniDlTimer);
+                omniDlTimer = setTimeout(() => {
+                    const disp = document.getElementById('omni-dl-parsed');
+                    const typeRow = document.getElementById('omni-dl-type-row');
+                    const val = omniDlIn.value.trim();
+                    if (!val) { if(disp){disp.style.opacity='0';} if(typeRow) typeRow.style.display='none'; return; }
+                    const parsed = parseDeadlineInput(val);
+                    if (parsed && disp) {
+                        const nice = parsed.toLocaleDateString([], {weekday:'short',day:'numeric',month:'short'}) + ' ' + parsed.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
+                        disp.textContent = '→ ' + nice; disp.style.color = '#3FB950'; disp.style.opacity = '1';
+                        if (typeRow) typeRow.style.display = 'flex';
+                    } else if (disp) { disp.textContent = '→ Could not parse'; disp.style.color = '#F85149'; disp.style.opacity = '1'; if(typeRow) typeRow.style.display='none'; }
+                }, 600);
             });
         }
     };

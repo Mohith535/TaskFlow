@@ -1,10 +1,10 @@
 <div align="center">
-  <h1>🌊 TaskFlow v7.0.0</h1>
+  <h1>🌊 TaskFlow v7.5.0</h1>
   <p><strong>The Temporal Engine — Engineered for Human Psychology</strong></p>
   <p><em>More than a task manager. A premium, high-fidelity productivity framework built to hack motivation, reduce cognitive friction, and force deep execution.</em></p>
   
   <p>
-    <img src="https://img.shields.io/badge/Version-7.0.0-blue?style=for-the-badge&logo=appveyor" alt="Version" />
+    <img src="https://img.shields.io/badge/Version-7.5.0-blue?style=for-the-badge&logo=appveyor" alt="Version" />
     <img src="https://img.shields.io/badge/Python-3.8%2B-green?style=for-the-badge&logo=python" alt="Python Version" />
     <img src="https://img.shields.io/badge/License-MIT-purple?style=for-the-badge&logo=open-source-initiative" alt="License" />
   </p>
@@ -17,7 +17,7 @@ TaskFlow was built as a premium startup-grade application to solve the fundament
 
 Every pixel, terminal command, and background process in TaskFlow is engineered around human psychology. We don't just store tasks; we manipulate visual tension, eliminate choice paralysis, and trigger dopamine pathways to make high-output execution the path of least resistance. 
 
-Version 7.0.0 introduces the **Temporal Pressure Engine** and the **Mission Control Web HUD**, an elite, cinematic interface that translates your raw tasks into a visceral, time-aware command center.
+Version 7.5.0 introduces the **Temporal Pressure Engine** and the **Mission Control Web HUD**, an elite, cinematic interface that translates your raw tasks into a visceral, time-aware command center.
 
 ---
 
@@ -28,12 +28,13 @@ TaskFlow acts as a **Tactical Command Center** that forces you to confront reali
 * **Eisenhower Matrix Native**: Priorities aren't numbers; they are weight-classed as `[CRITICAL]`, `[STRATEGIC]`, `[NOISE]`, and `[PURGE]`. 
 * **The "One Frog" Protocol**: The `[★ PRIME TARGET]` mechanic mathematically limits you to *one* primary objective per day. No over-planning, just execution.
 * **Temporal Pressure System**: As deadlines approach, the UI shifts. Soft deadlines rest in calm blue, while hard deadlines escalate visually—eventually pulsing with a red warning beam that leverages your subconscious urgency response.
+* **Dual-Mode Reality Engine**: Time is not just a property of a task; it's the structure of reality. Missions are ruthlessly split into flexible **Tasks** (execution discipline) and fixed **Events** (reality constraints).
 
 ---
 
 ## 🚀 The Three Phases of Execution
 
-TaskFlow v7.0.0 brings three robust "Execution Phases" that work in concert to protect your flow state:
+TaskFlow v7.5.0 brings three robust "Execution Phases" that work in concert to protect your flow state:
 
 ### 🎯 Phase 1: Prioritization & The Live Dashboard
 We prevent procrastination by hiding the noise and weaponizing urgency:
@@ -46,10 +47,11 @@ When you trigger a focus session, TaskFlow immerses you in a distraction-free en
 - **Intentional Friction**: There is no "X" to close the focus window. You must click a translucent red `ABORT PROTOCOL` button and explicitly confirm a warning to break your focus.
 - **System-Level Defense**: Focus sessions physically sever digital distractions by modifying the Windows `hosts` file and terminating unauthorized background apps.
 
-### ⚡ Phase 3: Frictionless Capture
-The greatest threat to deep work is the sudden interruption of a new idea. The Frictionless Capture system lets you dump thoughts instantly.
-- **NLP Deadline Parsing**: Type `tomorrow 3pm` or `in 2 hours` and the engine natively maps it. No strict date formats; just pure, frictionless input.
-- **The Web Omnibar**: Hit `Ctrl + K` from anywhere in the Web dashboard to instantly deploy the Capture Bar. Press `Enter` to inject the thought with zero page reloads.
+### ⚡ Phase 3: The Reality-Aware Engine
+The greatest threat to deep work is the sudden interruption of a new idea. TaskFlow features a highly structured, dual-mode deployment system that differentiates between what you *want* to do and what you *have* to do.
+- **Task vs Event Segregation**: **Tasks** are execution-based and flexible. **Events** are time-locked, immutable blocks of reality. Deploying an Event visually locks out the timeline and calculates its own duration.
+- **Visual Timeline Selection**: Skip the keyboard entirely. Drag horizontally across a clean UI timeline to block out 8:45 AM to 2:10 PM. The engine instantly computes the duration, sets strict deadlines, and deploys intelligent reminders.
+- **Zero-Friction NLP Parsing**: For flexible tasks, type `tomorrow 3pm` or `May 7` and the engine natively maps it. No strict date formats; just pure, frictionless input (backed by a native calendar UI fallback).
 
 ---
 
