@@ -1,154 +1,398 @@
 <div align="center">
-  <h1>🌊 TaskFlow v7.5.0</h1>
-  <p><strong>The Temporal Engine — Engineered for Human Psychology</strong></p>
-  <p><em>More than a task manager. A premium, high-fidelity productivity framework built to hack motivation, reduce cognitive friction, and force deep execution.</em></p>
-  
-  <p>
-    <img src="https://img.shields.io/badge/Version-7.5.0-blue?style=for-the-badge&logo=appveyor" alt="Version" />
-    <img src="https://img.shields.io/badge/Python-3.8%2B-green?style=for-the-badge&logo=python" alt="Python Version" />
-    <img src="https://img.shields.io/badge/License-MIT-purple?style=for-the-badge&logo=open-source-initiative" alt="License" />
-  </p>
+
+# 🌊 TaskFlow v8.0.0
+
+### The Execution Engine for Deep Work
+
+<br/>
+
+**A CLI-first productivity framework that uses behavioral psychology<br/>to turn your task list into an execution system.**
+
+<br/>
+
+<p>
+  <img src="https://img.shields.io/badge/Version-8.0.0-0d1117?style=for-the-badge&labelColor=161b22" alt="Version" />
+  <img src="https://img.shields.io/badge/Python-3.8+-3776ab?style=for-the-badge&logo=python&logoColor=white" alt="Python" />
+  <img src="https://img.shields.io/badge/100%25_Offline-Local_First-2ea043?style=for-the-badge" alt="Offline" />
+  <img src="https://img.shields.io/badge/License-MIT-8b5cf6?style=for-the-badge" alt="License" />
+</p>
+
+<br/>
+
+<p>
+  <a href="#-quick-start">Quick Start</a> · 
+  <a href="#-what-makes-taskflow-different">Why TaskFlow</a> · 
+  <a href="#-the-system">The System</a> · 
+  <a href="#-command-reference">Commands</a> · 
+  <a href="docs/deep-dive.md">Psychology Deep-Dive →</a>
+</p>
+
 </div>
 
----
-
-## 🌟 The Product Vision: A Psychological Edge
-TaskFlow was built as a premium startup-grade application to solve the fundamental flaw of modern to-do lists: **they cause anxiety instead of driving action.** 
-
-Every pixel, terminal command, and background process in TaskFlow is engineered around human psychology. We don't just store tasks; we manipulate visual tension, eliminate choice paralysis, and trigger dopamine pathways to make high-output execution the path of least resistance. 
-
-Version 7.5.0 introduces the **Temporal Pressure Engine** and the **Mission Control Web HUD**, an elite, cinematic interface that translates your raw tasks into a visceral, time-aware command center.
+<br/>
 
 ---
 
-## 💎 The Execution Philosophy
+<br/>
 
-TaskFlow acts as a **Tactical Command Center** that forces you to confront reality, commit to timeblocks, and execute relentlessly.
+## ⚡ Quick Start
 
-* **Eisenhower Matrix Native**: Priorities aren't numbers; they are weight-classed as `[CRITICAL]`, `[STRATEGIC]`, `[NOISE]`, and `[PURGE]`. 
-* **The "One Frog" Protocol**: The `[★ PRIME TARGET]` mechanic mathematically limits you to *one* primary objective per day. No over-planning, just execution.
-* **Temporal Pressure System**: As deadlines approach, the UI shifts. Soft deadlines rest in calm blue, while hard deadlines escalate visually—eventually pulsing with a red warning beam that leverages your subconscious urgency response.
-* **Dual-Mode Reality Engine**: Time is not just a property of a task; it's the structure of reality. Missions are ruthlessly split into flexible **Tasks** (execution discipline) and fixed **Events** (reality constraints).
+```bash
+# Install (requires Python 3.8+ and Git)
+pip install --upgrade git+https://github.com/Mohith535/TaskFlow.git
+```
 
----
+```bash
+# Capture your first mission
+taskflow dump "Finish project report by Friday #work !h"
 
-## 🚀 The Three Phases of Execution
+# See your mission board
+taskflow list --todo
 
-TaskFlow v7.5.0 brings three robust "Execution Phases" that work in concert to protect your flow state:
+# Set your one non-negotiable target for today
+taskflow prime 1
 
-### 🎯 Phase 1: Prioritization & The Live Dashboard
-We prevent procrastination by hiding the noise and weaponizing urgency:
-- **Dynamic Pressure Rendering**: Unscheduled missions exist calmly, but approaching deadlines trigger real-time CSS animations. A task missing its window isn't just "overdue"—it actively demands interception (Execute, Postpone, Drop, or Offload).
-- **Recovery Mode Protocol**: When your day collapses under too many missed targets, the system detects it. The UI darkens, non-essential tasks blur out to 25% opacity, and a massive `RECOVERY MODE ACTIVE` gradient locks you into salvaging the day with 1-2 critical missions.
+# Enter deep focus — 45 min, zero distractions
+taskflow focus --id 1 --minutes 45
 
-### 🛡️ Phase 2: The Soft Lock Focus Protocol
-When you trigger a focus session, TaskFlow immerses you in a distraction-free environment that syncs your OS and your browser.
-- **Visual Lockdown**: The Web HUD background instantly blurs via Glassmorphism, removing the cognitive load of *"what's next?"*.
-- **Intentional Friction**: There is no "X" to close the focus window. You must click a translucent red `ABORT PROTOCOL` button and explicitly confirm a warning to break your focus.
-- **System-Level Defense**: Focus sessions physically sever digital distractions by modifying the Windows `hosts` file and terminating unauthorized background apps.
+# Launch the visual Mission Control dashboard
+taskflow ui
+```
 
-### ⚡ Phase 3: The Reality-Aware Engine
-The greatest threat to deep work is the sudden interruption of a new idea. TaskFlow features a highly structured, dual-mode deployment system that differentiates between what you *want* to do and what you *have* to do.
-- **Task vs Event Segregation**: **Tasks** are execution-based and flexible. **Events** are time-locked, immutable blocks of reality. Deploying an Event visually locks out the timeline and calculates its own duration.
-- **Visual Timeline Selection**: Skip the keyboard entirely. Drag horizontally across a clean UI timeline to block out 8:45 AM to 2:10 PM. The engine instantly computes the duration, sets strict deadlines, and deploys intelligent reminders.
-- **Zero-Friction NLP Parsing**: For flexible tasks, type `tomorrow 3pm` or `May 7` and the engine natively maps it. No strict date formats; just pure, frictionless input (backed by a native calendar UI fallback).
+> **💡 If `taskflow` isn't recognized**, use `python -m taskflow` as a drop-in replacement:
+> ```bash
+> python -m taskflow list
+> python -m taskflow ui
+> ```
 
----
-
-## 🧠 The Dopamine & Momentum Engine
-
-TaskFlow actively rewires behavioral persistence by making progress undeniably visible:
-- **The Completion Horizon**: A live, animated progress bar measuring your integrity for the day. Watching the bar fill up provides an immediate, tangible dopamine reward.
-- **Postpone Mirrors**: If you defer a task too many times, a stark `postponed ×3 ⚠` badge appears. The UI holds a mirror to your avoidance, prompting you to act or drop it.
-- **Intelligent Next Targets**: Completing a mission triggers a curated, 3-task deployment modal based on priority, locking you into a continuous flow state.
+<br/>
 
 ---
 
-## 🛠️ Tactical Command Guide
+<br/>
 
-### 🧱 Core Orchestration
-| Command | Action |
-| :--- | :--- |
-| `taskflow add` | Initiate an interactive mission entry sequence |
-| `taskflow dump <text>`| Frictionless capture. Bypasses menus via NLP (e.g. `!h #tag`) |
-| `taskflow list` | Query the mission board (`--todo`, `--priority`, `--tag`) |
-| `taskflow view <id>`| Access a detailed mission brief and intel |
-| `taskflow complete <id>`| Confirm mission `[V] SUCCESS` |
-| `taskflow delete <id>` | Purge mission from the local database |
+## 🧠 What Makes TaskFlow Different
 
-### ⚡ Execution & Strategy (Web + CLI Sync)
-| Command | Action |
-| :--- | :--- |
-| `taskflow focus --id <id>` | Trigger Deep Work (Flags: `--minutes`, `--block-sites`, `--mode`) |
-| `taskflow timeline` | Render a 7-day tactical strategy directly in stdout |
-| `taskflow prime <id>` | Lock in your day's single `[★ PRIME TARGET]` |
-| `taskflow schedule <id>`| Deploy a secondary mission to the timeline (YYYY-MM-DD) |
-| `taskflow today` | Review today's Prime Target and secondary tactical assignments |
-| `taskflow ui` | Deploy the **Mission Control** Web HUD |
+Most task managers are **passive lists** — they store what you type and wait. TaskFlow is an **active execution system** that uses proven psychology to structure how you commit, focus, and finish.
 
-### 🛰️ Intelligence & Ops
-| Command | Action |
-| :--- | :--- |
-| `taskflow stats` | Deep analytical performance telemetry |
-| `taskflow summary` | Human-readable executive mission overview |
-| `taskflow blocklist`| Manage persistent website distraction targets |
-| `taskflow backup` | Synchronize mission database with local backup |
+<table>
+<tr>
+<td width="50%">
+
+### 🐸 The One Frog Protocol
+One `[★ PRIME TARGET]` per day. Not two. Not five. One.<br/><br/>
+Based on Mark Twain's "Eat the Frog" principle and research on willpower depletion — your strongest cognitive resources exist in the first hours of your day. TaskFlow forces you to choose the one thing that matters most.
+
+</td>
+<td width="50%">
+
+### 🔥 Priority as Psychology
+No "1-5" scales. Priorities are **behavioral categories**:<br/><br/>
+`[🔥 CRITICAL]` — Do now<br/>
+`[📅 STRATEGIC]` — The 20% that drives 80% of results<br/>
+`[⚡ NOISE]` — Delegate or bypass<br/>
+`[❌ PURGE]` — System suggests removal<br/><br/>
+Mapped to the Eisenhower Matrix. Forces real triage.
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### 🛡️ Focus Protocol
+Launch a focus session and TaskFlow builds a **multi-layered defense** around your attention:<br/><br/>
+**Visual** — Dashboard blurs. Only your task exists.<br/>
+**Friction** — No "X" button. Quitting requires explicit confirmation.<br/>
+**System** — Optional strict mode blocks websites at the OS level.
+
+</td>
+<td width="50%">
+
+### ⏱️ Temporal Pressure
+Deadlines aren't just dates — they're **visual states**:<br/><br/>
+🔵 Calm blue → comfortable timeline<br/>
+🟡 Amber pulse → approaching deadline<br/>
+🔴 Red warning → demands action now<br/><br/>
+Missed a deadline? You must explicitly Execute, Postpone, Drop, or Offload. No silent failures.
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### 📥 2-Second Capture
+The `dump` command captures thoughts faster than any app:<br/><br/>
+```bash
+taskflow dump "Call dentist #personal !h"
+```
+NLP extracts priority, tags, and deadlines automatically. Based on the Zeigarnik Effect — unwritten thoughts leak cognitive bandwidth.
+
+</td>
+<td width="50%">
+
+### 📈 Momentum Engine
+Progress isn't just tracked — it's **felt**:<br/><br/>
+• Live completion progress bar<br/>
+• Premium completion animations<br/>
+• Postpone mirrors (`postponed ×3 ⚠`) that hold you accountable<br/>
+• Intelligent next-target suggestions after each completion
+
+</td>
+</tr>
+</table>
+
+<br/>
+
+> **📖 Want the full psychology breakdown?** Every feature is backed by published research — from Csíkszentmihályi's Flow State to Cialdini's Commitment Principle.
+> 
+> **[Read the Deep-Dive →](docs/deep-dive.md)**
+
+<br/>
 
 ---
 
-## 🧬 Technical Architecture
+<br/>
+
+## ⚙️ The System
+
+### Dual-Mode Reality Engine
+
+TaskFlow splits all work into two temporal modes:
+
+| Mode | Behavior | Example |
+|:---|:---|:---|
+| **📋 Task** | Flexible. Can be scheduled, postponed, re-prioritized | "Finish the API refactor this week" |
+| **📅 Event** | Fixed. Time-locked, duration auto-calculated, immutable | "Team standup at 9:00 AM" |
+
+This mirrors how reality actually works — some things bend, some don't. Mixing them in one flat list creates cognitive noise.
+
+### Recovery Mode
+
+When too many deadlines collapse in a single day, TaskFlow detects the overload and triggers **Recovery Mode**:
+
+- Non-essential tasks blur to 25% opacity
+- A `RECOVERY MODE ACTIVE` banner locks the interface
+- Only 1-2 critical missions remain visible
+- Forces triage instead of panic
+
+### Mission Control — Web HUD
+
+Run `taskflow ui` to launch a local web dashboard with:
+
+- Real-time task board with drag-and-drop scheduling
+- Visual timeline with hour-block selection
+- Focus session overlay with glassmorphism lockdown
+- Priority-based color coding and pressure animations
+- Full keyboard shortcut support
+
+**100% offline. No accounts. No cloud. Runs on `localhost`.**
+
+<br/>
+
+---
+
+<br/>
+
+## 📟 Command Reference
+
+### Core Operations
+
+| Command | What It Does |
+|:---|:---|
+| `taskflow add` | Interactive mission creation with guided prompts |
+| `taskflow dump <text>` | Instant capture with NLP — `"task #tag !h"` for priority + tags |
+| `taskflow list` | Mission board view — filter with `--todo`, `--done`, `--priority`, `--tag` |
+| `taskflow view <id>` | Full mission brief with history and metadata |
+| `taskflow edit <id>` | Modify mission parameters |
+| `taskflow complete <id>` | Mark as done ✓ |
+| `taskflow undo <id>` | Re-open a completed mission |
+| `taskflow delete <id>` | Remove from database |
+
+### Execution & Focus
+
+| Command | What It Does |
+|:---|:---|
+| `taskflow focus --id <id>` | Start a focus session (flags: `--minutes`, `--mode`, `--block-sites`) |
+| `taskflow prime <id>` | Set today's single Prime Target |
+| `taskflow schedule <id> <date>` | Assign mission to timeline |
+| `taskflow today` | Review today's Prime Target and assignments |
+| `taskflow timeline` | Render 7-day tactical view in terminal |
+| `taskflow ui` | Launch the Mission Control web dashboard |
+
+### Intelligence & Maintenance
+
+| Command | What It Does |
+|:---|:---|
+| `taskflow stats` | Performance analytics |
+| `taskflow summary` | Human-readable overview |
+| `taskflow search <keyword>` | Query mission database |
+| `taskflow tag <id> <tags>` | Categorize missions |
+| `taskflow note <id>` | Append notes to a mission |
+| `taskflow backup` | Manual backup to `~/.taskflow/backups/` |
+| `taskflow version` | System info — Python version, data path, mission count |
+
+<br/>
+
+---
+
+<br/>
+
+## 🏗️ Architecture
 
 ```mermaid
 graph TD
-    CLI[Tactical CLI Router] --> Engine[Deep Focus Core]
-    CLI --> UI_TUI[Momentum Cascade TUI]
-    CLI --> UI_WEB[Mission Control Web HUD]
-    UI_WEB --> API[Server API]
-    API --> IPC[Disk-Based IPC Relay]
-    IPC --> Storage[(Local JSON Mainframe)]
-    Engine --> System[Windows OS Distraction Blocker]
-    Storage --> CLI
+    CLI["CLI Router<br/>(argparse)"] --> CMD["Command Engine<br/>(3200+ lines)"]
+    CLI --> WEB["Web HUD Server<br/>(ThreadingHTTPServer)"]
+    
+    CMD --> DB["Storage Layer<br/>(JSON + atomic writes)"]
+    WEB --> DB
+    
+    CMD --> FM["Focus Manager"]
+    FM --> BLK["System Blocker<br/>(hosts + process control)"]
+    
+    WEB --> UI["Mission Control UI<br/>(4500 lines · Glassmorphism)"]
+    
+    DB --> FS[("~/.taskflow/<br/>Local data")]
 ```
+
+**Design principles:**
+- **Local-first** — All data in `~/.taskflow/`. Zero cloud. Zero telemetry.
+- **Atomic writes** — Saves to `.tmp` then replaces. No corruption on crash.
+- **Auto-backup** — Last 10 states preserved. One-command restore.
+- **CLI-first** — Every feature works from terminal. Web HUD is a visual accelerator.
+
+<br/>
 
 ---
 
-## 🚀 Deployment & Installation
+<br/>
 
-### Rapid Install
-Clone and install the environment directly from GitHub:
+## 🚀 Installation
+
+### Prerequisites
+- **Python 3.8+** — [python.org](https://www.python.org/downloads/) — ⚠️ tick **"Add Python to PATH"** during install
+- **Git** — [git-scm.com](https://git-scm.com/download/win) *(or use Method 2 below for no-Git install)*
+
+### Method 1 — From GitHub *(recommended)*
 ```bash
 pip install --upgrade git+https://github.com/Mohith535/TaskFlow.git
 ```
 
-### Protocol Launch
+### Method 2 — From ZIP *(no Git required)*
+1. [Download the ZIP](https://github.com/Mohith535/TaskFlow/archive/refs/heads/main.zip)
+2. Extract it
+3. Open a terminal in the extracted folder:
 ```bash
-# Register a new mission rapidly
-taskflow dump "Configure AWS servers #devops !h"
-
-# Start a 25-minute Strict Focus session on Task ID 1
-taskflow focus --id 1 --minutes 25 --mode strict --block-sites youtube.com
-
-# Launch the Web HUD
-taskflow ui
+pip install .
 ```
 
+### Method 3 — Development
+```bash
+git clone https://github.com/Mohith535/TaskFlow.git
+cd TaskFlow
+pip install -e .
+```
+
+### Verify
+```bash
+taskflow version
+```
+
+<br/>
+
 ---
 
-## 🔒 Privacy & Sovereignty
+<br/>
 
-> [!IMPORTANT]
-> TaskFlow is a **100% Offline** system. 
-> 
-> ❌ **No Cloud Synchronization**  
-> ❌ **No External Telemetry**  
-> ❌ **No Background Surveillance**  
-> 
-> **Your productivity data is your own. It never leaves your machine.**
+## 🔧 Troubleshooting
+
+<details>
+<summary><b>⚠️ <code>pip</code> is not recognized</b></summary>
+<br/>
+
+Python's `pip` isn't in your PATH. Use this instead:
+```bash
+python -m pip install --upgrade git+https://github.com/Mohith535/TaskFlow.git
+```
+If that also fails:
+```bash
+python -m ensurepip --upgrade
+```
+</details>
+
+<details>
+<summary><b>⚠️ <code>git</code> is not recognized</b></summary>
+<br/>
+
+Either install Git from [git-scm.com](https://git-scm.com/download/win) and restart your terminal, or use **Method 2** (ZIP install) — no Git required.
+</details>
+
+<details>
+<summary><b>⚠️ <code>taskflow</code> not recognized after install</b></summary>
+<br/>
+
+Python's `Scripts` folder isn't in your PATH. Two options:
+
+**Option A** — Use the module runner (works immediately):
+```bash
+python -m taskflow list
+python -m taskflow ui
+```
+
+**Option B** — Add Scripts to PATH:
+1. Find the path from pip's install warning (e.g. `C:\Users\YourName\...\Scripts`)
+2. Search Windows for **"Environment Variables"**
+3. Edit **Path** → Add the Scripts folder
+4. Restart your terminal
+</details>
+
+<details>
+<summary><b>⚠️ <code>python -m taskflow</code> module error</b></summary>
+<br/>
+
+Update to the latest version:
+```bash
+pip install --upgrade git+https://github.com/Mohith535/TaskFlow.git
+```
+</details>
+
+<br/>
 
 ---
 
-## 📄 License
+<br/>
 
-**MIT License**
-Copyright (c) 2026 **K Mohith Kannan**. 
-*Built for those who demand clarity within the terminal.*
+## 🔒 Privacy
+
+> TaskFlow is **100% offline**. Your data lives in `~/.taskflow/` on your machine.
+> 
+> ❌ No cloud sync · ❌ No telemetry · ❌ No accounts · ❌ No tracking
+> 
+> **Your productivity data never leaves your machine.**
+
+<br/>
+
+---
+
+<br/>
+
+## 📖 Documentation
+
+| Document | Description |
+|:---|:---|
+| **[Psychology Deep-Dive](docs/deep-dive.md)** | The research behind every feature — Eisenhower Matrix, Zeigarnik Effect, Flow State, and 15+ other frameworks |
+| **[README](README.md)** | You're reading it |
+
+<br/>
+
+---
+
+<br/>
+
+<div align="center">
+
+**MIT License** · Copyright © 2026 [K Mohith Kannan](https://github.com/Mohith535)
+
+*Built for those who ship.*
+
+</div>

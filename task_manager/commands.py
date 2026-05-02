@@ -1403,7 +1403,7 @@ def open_web_ui(force=False):
             webbrowser.open(url)
             return
 
-    print("🚀 Initializing Quantum Resolve HUD...")
+    print("⚡ Deploying Mission Control...")
     # Get server path
     server_path = Path(__file__).parent / "server.py"
     
@@ -1421,7 +1421,7 @@ def open_web_ui(force=False):
         # Success delay
         time.sleep(1.5)
         webbrowser.open(url)
-        print(f"✅ Mission Dashboard live at {url}")
+        print(f"🌊 Mission Control HUD live → {url}")
     except Exception as e:
         print(f"❌ Failed to reach Mission Control: {e}")
 

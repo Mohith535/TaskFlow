@@ -91,7 +91,7 @@ from task_manager.storage import storage
 import colorama
 
 APP_NAME = "TaskFlow"
-APP_VERSION = "v7.5.0"
+APP_VERSION = "v8.0.0"
 APP_TAGLINE = "The Temporal Engine"
 
 
@@ -146,15 +146,61 @@ def show_help() -> None:
     • Regular backups ensure mission data integrity
   {"─" * 60}
 """)
+
+def show_welcome() -> None:
+    """Show first-run welcome message for new users."""
+    print(f"""
+  \033[1;36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m
+  \033[1m🌊 Welcome to TaskFlow {APP_VERSION}\033[0m
+  \033[90m{APP_TAGLINE}\033[0m
+  \033[1;36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m
+
+  \033[1mLet's set up your first day.\033[0m
+
+  \033[36m1.\033[0m Add your first mission         →  \033[1mtaskflow add\033[0m
+  \033[36m2.\033[0m Quick capture a thought         →  \033[1mtaskflow dump "your task here"\033[0m
+  \033[36m3.\033[0m Launch the visual dashboard     →  \033[1mtaskflow ui\033[0m
+
+  \033[90mTip: Use 'taskflow help' anytime for the full command list.\033[0m
+  \033[90mAlt: You can also run commands with 'python -m taskflow <command>'\033[0m
+  \033[1;36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m
+""")
+
+def is_first_run() -> bool:
+    """Check if this is the user's first time running TaskFlow."""
+    try:
+        tasks = storage.load_tasks()
+        return len(tasks) == 0
+    except Exception:
+        return True
+
 def show_version():
-    """Show version information."""
+    """Show version information with system details."""
+    from pathlib import Path
+    
     print(f"\n  🌊 \033[1;36mTaskFlow {APP_VERSION}\033[0m — {APP_TAGLINE}")
     print(f"  \033[90m{'─' * 60}\033[0m")
-    print("  \033[1mWHAT'S NEW IN v7.5.0:\033[0m")
-    print("  • \033[33mDual-Mode Reality Engine\033[0m: Rigid Events vs Flexible Tasks")
-    print("  • \033[31mVisual Timeline Selector\033[0m: Intuitive drag-to-schedule UI")
-    print("  • \033[32mNative Deadline Fallback\033[0m: Robust NLP paired with visual date picking")
-    print("  • \033[36mLive Event Metrics\033[0m: Automated duration & strict deadlines")
+    
+    # System info
+    print(f"  \033[1mSYSTEM INFO:\033[0m")
+    print(f"  • Python:         {sys.version.split()[0]}")
+    print(f"  • Platform:       {sys.platform}")
+    data_dir = Path.home() / '.taskflow'
+    print(f"  • Data directory:  {data_dir}")
+    try:
+        tasks = storage.load_tasks()
+        total = len(tasks)
+        done = sum(1 for t in tasks if t.completed)
+        print(f"  • Missions:       {total} total, {done} completed")
+    except Exception:
+        print(f"  • Missions:       (unable to read)")
+    
+    print(f"\n  \033[1mWHAT'S NEW IN {APP_VERSION}:\033[0m")
+    print("  • \033[33mModern Infrastructure\033[0m: Full pyproject.toml migration")
+    print("  • \033[31mNew Install Pathway\033[0m: Native 'python -m taskflow' support")
+    print("  • \033[32mGuided Onboarding\033[0m: Intelligent first-run welcome experience")
+    print("  • \033[36mPremium Docs\033[0m: New Psychology Deep-Dive & README overhaul")
+    print("  • \033[35mUX Refinement\033[0m: Enriched telemetry and premium HUD launching")
     print(f"  \033[90m{'─' * 60}\033[0m")
     print("  \033[3mBuilt for deep work. Engineered for execution.\033[0m\n")
 
@@ -355,9 +401,12 @@ def main():
         
     parser = create_parser()
     
-    # Show help if no arguments
+    # Show help if no arguments (or welcome for first-run)
     if len(sys.argv) == 1:
-        show_help()
+        if is_first_run():
+            show_welcome()
+        else:
+            show_help()
         return
     
     # Special case: help command
