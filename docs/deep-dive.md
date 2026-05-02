@@ -266,19 +266,19 @@ For flexible tasks, the **NLP Parser** accepts natural language: `tomorrow 3pm`,
 
 ```mermaid
 graph TD
-    A[<b>CLI Router</b><br/>argparse + custom parser] --> B[<b>Command Engine</b><br/>3200+ lines of logic]
-    A --> C[<b>Web HUD Server</b><br/>ThreadingHTTPServer]
+    A["CLI Router (argparse)"] --> B["Command Engine (3200+ lines)"]
+    A --> C["Web HUD Server (ThreadingHTTPServer)"]
     
-    B --> D[<b>Storage Layer</b><br/>JSON + atomic writes + backups]
+    B --> D["Storage Layer (JSON + Atomic Writes)"]
     C --> D
     
-    B --> E[<b>Focus Manager</b><br/>Session tracking + timers]
-    E --> F[<b>System Blocker</b><br/>hosts file + process control]
+    B --> E["Focus Manager"]
+    E --> F["System Blocker (Hosts + Process Control)"]
     
-    C --> G[<b>Mission Control UI</b><br/>4500 lines · Glassmorphism · Real-time]
+    C --> G["Mission Control UI (4500 lines)"]
     
-    D --> H[(~/.taskflow/<br/>Local-first data)]
-    
+    D --> H[("Local Storage (~/.taskflow/)")]
+
     style A fill:#1a1a2e,stroke:#16213e,color:#e94560
     style B fill:#1a1a2e,stroke:#16213e,color:#e94560
     style C fill:#1a1a2e,stroke:#16213e,color:#0f3460

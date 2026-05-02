@@ -241,18 +241,18 @@ Run `taskflow ui` to launch a local web dashboard with:
 
 ```mermaid
 graph TD
-    CLI["CLI Router<br/>(argparse)"] --> CMD["Command Engine<br/>(3200+ lines)"]
-    CLI --> WEB["Web HUD Server<br/>(ThreadingHTTPServer)"]
+    CLI["CLI Router (argparse)"] --> CMD["Command Engine (3200+ lines)"]
+    CLI --> WEB["Web HUD Server (ThreadingHTTPServer)"]
     
-    CMD --> DB["Storage Layer<br/>(JSON + atomic writes)"]
+    CMD --> DB["Storage Layer (JSON + Atomic Writes)"]
     WEB --> DB
     
     CMD --> FM["Focus Manager"]
-    FM --> BLK["System Blocker<br/>(hosts + process control)"]
+    FM --> BLK["System Blocker (Hosts + Process Control)"]
     
-    WEB --> UI["Mission Control UI<br/>(4500 lines · Glassmorphism)"]
+    WEB --> UI["Mission Control UI (4500 lines)"]
     
-    DB --> FS[("~/.taskflow/<br/>Local data")]
+    DB --> FS[("Local Storage (~/.taskflow/)")]
 ```
 
 **Design principles:**
