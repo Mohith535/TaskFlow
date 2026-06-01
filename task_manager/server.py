@@ -16,9 +16,38 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
 
     def do_OPTIONS(self):
         self.send_response(200)
-        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.send_header('Access-Control-Allow-Origin', '*')
         self.end_headers()
+
+    # --- Enrichment helpers (E13) ---
+    def _send_json(self, code, payload):
+        self.send_response(code)
+        self.end_headers_json()
+        self.wfile.write(json.dumps(payload).encode('utf-8'))
+
+    def _read_body(self):
+        try:
+            content_length = int(self.headers.get('Content-Length', 0))
+        except (TypeError, ValueError):
+            content_length = 0
+        raw = self.rfile.read(content_length).decode('utf-8') if content_length > 0 else "{}"
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            return {}
+
+    def _find_task(self, tasks, task_id):
+        return next((t for t in tasks if t.id == task_id), None)
+
+    def _sync_counters(self, task):
+        """Keep links_count / checklist_total / checklist_done in sync (Rule #2)."""
+        task.links = getattr(task, 'links', None) or []
+        task.checklist = getattr(task, 'checklist', None) or []
+        task.links_count = len(task.links)
+        task.checklist_total = len(task.checklist)
+        task.checklist_done = sum(1 for x in task.checklist if x.get('done'))
 
     def do_GET(self):
         parsed = urlparse(self.path)
@@ -67,6 +96,14 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
                     "start_time": getattr(t, 'start_time', None),
                     "end_time": getattr(t, 'end_time', None),
                     "status": getattr(t, 'status', None),
+                    # Enrichment fields (E13)
+                    "description": getattr(t, 'description', None),
+                    "links": getattr(t, 'links', []) or [],
+                    "checklist": getattr(t, 'checklist', []) or [],
+                    "description_updated_at": getattr(t, 'description_updated_at', None),
+                    "links_count": getattr(t, 'links_count', 0),
+                    "checklist_total": getattr(t, 'checklist_total', 0),
+                    "checklist_done": getattr(t, 'checklist_done', 0),
                 }
                 for t in tasks if getattr(t, 'dropped_at', None) is None and getattr(t, 'offloaded_at', None) is None
             ]
@@ -657,6 +694,52 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
                     end_time=end_time,
                     reminder_time=reminder_time
                 )
+
+                # Enrichment on creation (E12/E13): description, links, checklist
+                from datetime import datetime as _dt
+                from task_manager.commands import detect_link_type
+                desc = data.get("description")
+                if desc:
+                    new_task.description = desc
+                    new_task.description_updated_at = _dt.now().isoformat()
+                norm_links = []
+                for ln in (data.get("links") or [])[:10]:
+                    if isinstance(ln, str):
+                        url, title, ltype = ln.strip(), None, None
+                    else:
+                        url = (ln.get("url") or "").strip()
+                        title = ln.get("title") or None
+                        ltype = ln.get("type")
+                    if not url:
+                        continue
+                    norm_links.append({
+                        "id": f"lnk_{len(norm_links)+1:03d}",
+                        "type": ltype or detect_link_type(url),
+                        "url": url,
+                        "title": title,
+                        "added_at": _dt.now().isoformat()
+                    })
+                new_task.links = norm_links
+                new_task.links_count = len(norm_links)
+                norm_chk = []
+                for it in (data.get("checklist") or [])[:20]:
+                    if isinstance(it, str):
+                        text, done = it.strip(), False
+                    else:
+                        text = (it.get("text") or "").strip()
+                        done = bool(it.get("done"))
+                    if not text:
+                        continue
+                    norm_chk.append({
+                        "id": f"chk_{len(norm_chk)+1:03d}",
+                        "text": text,
+                        "done": done,
+                        "done_at": _dt.now().isoformat() if done else None
+                    })
+                new_task.checklist = norm_chk
+                new_task.checklist_total = len(norm_chk)
+                new_task.checklist_done = sum(1 for x in norm_chk if x.get("done"))
+
                 new_id = manager.add_task(new_task)
                 storage.save_tasks(manager.tasks)
 
@@ -668,9 +751,185 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
                 self.end_headers_json()
                 self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
 
+        elif path.startswith("/api/tasks/") and path.endswith("/links") and self.command == 'POST':
+            # POST /api/tasks/<id>/links  (E13)
+            from datetime import datetime as _dt
+            from task_manager.commands import detect_link_type
+            parts = [p for p in path.split('/') if p]
+            try:
+                task_id = int(parts[2])
+            except (ValueError, IndexError):
+                self._send_json(400, {"error": "Invalid task id"})
+                return
+            tasks = storage.load_tasks()
+            task = self._find_task(tasks, task_id)
+            if not task:
+                self._send_json(404, {"error": "Task not found"})
+                return
+            url = (data.get("url") or "").strip()
+            if not url:
+                self._send_json(400, {"error": "Missing 'url'"})
+                return
+            links = getattr(task, 'links', None) or []
+            if len(links) >= 10:
+                self._send_json(400, {"error": "Maximum 10 links reached"})
+                return
+            max_num = 0
+            for l in links:
+                try:
+                    max_num = max(max_num, int(str(l.get('id', 'lnk_000')).replace('lnk_', '')))
+                except ValueError:
+                    pass
+            links.append({
+                "id": f"lnk_{max_num + 1:03d}",
+                "type": data.get("type") or detect_link_type(url),
+                "url": url,
+                "title": data.get("title") or None,
+                "added_at": _dt.now().isoformat()
+            })
+            task.links = links
+            self._sync_counters(task)
+            storage.save_tasks(tasks)
+            self._send_json(200, task.to_dict())
+            return
+
+        elif path.startswith("/api/tasks/") and path.endswith("/checklist") and self.command == 'POST':
+            # POST /api/tasks/<id>/checklist  (E13)
+            parts = [p for p in path.split('/') if p]
+            try:
+                task_id = int(parts[2])
+            except (ValueError, IndexError):
+                self._send_json(400, {"error": "Invalid task id"})
+                return
+            tasks = storage.load_tasks()
+            task = self._find_task(tasks, task_id)
+            if not task:
+                self._send_json(404, {"error": "Task not found"})
+                return
+            text = (data.get("text") or "").strip()
+            if not text:
+                self._send_json(400, {"error": "Missing 'text'"})
+                return
+            chk = getattr(task, 'checklist', None) or []
+            if len(chk) >= 20:
+                self._send_json(400, {"error": "Maximum 20 checklist items reached"})
+                return
+            max_num = 0
+            for c in chk:
+                try:
+                    max_num = max(max_num, int(str(c.get('id', 'chk_000')).replace('chk_', '')))
+                except ValueError:
+                    pass
+            chk.append({
+                "id": f"chk_{max_num + 1:03d}",
+                "text": text,
+                "done": False,
+                "done_at": None
+            })
+            task.checklist = chk
+            self._sync_counters(task)
+            storage.save_tasks(tasks)
+            self._send_json(200, task.to_dict())
+            return
+
         else:
             self.send_response(404)
             self.end_headers()
+
+    def do_PATCH(self):
+        parsed = urlparse(self.path)
+        parts = [p for p in parsed.path.split('/') if p]
+        if len(parts) >= 4 and parts[0] == 'api' and parts[1] == 'tasks':
+            from datetime import datetime as _dt
+            try:
+                task_id = int(parts[2])
+            except ValueError:
+                self._send_json(400, {"error": "Invalid task id"})
+                return
+            tasks = storage.load_tasks()
+            task = self._find_task(tasks, task_id)
+            if not task:
+                self._send_json(404, {"error": "Task not found"})
+                return
+
+            # PATCH /api/tasks/<id>/description
+            if len(parts) == 4 and parts[3] == 'description':
+                body = self._read_body()
+                if 'description' not in body:
+                    self._send_json(400, {"error": "Missing 'description'"})
+                    return
+                desc = body.get('description')
+                task.description = desc if desc else None
+                task.description_updated_at = _dt.now().isoformat()
+                self._sync_counters(task)
+                storage.save_tasks(tasks)
+                self._send_json(200, task.to_dict())
+                return
+
+            # PATCH /api/tasks/<id>/checklist/<chk_id>/toggle
+            if len(parts) == 6 and parts[3] == 'checklist' and parts[5] == 'toggle':
+                chk_id = parts[4]
+                item = next((c for c in (getattr(task, 'checklist', None) or []) if c.get('id') == chk_id), None)
+                if not item:
+                    self._send_json(404, {"error": "Checklist item not found"})
+                    return
+                if item.get('done'):
+                    item['done'] = False
+                    item['done_at'] = None
+                else:
+                    item['done'] = True
+                    item['done_at'] = _dt.now().isoformat()
+                self._sync_counters(task)
+                storage.save_tasks(tasks)
+                self._send_json(200, task.to_dict())
+                return
+
+        self._send_json(404, {"error": "Not found"})
+
+    def do_DELETE(self):
+        parsed = urlparse(self.path)
+        parts = [p for p in parsed.path.split('/') if p]
+        if len(parts) == 5 and parts[0] == 'api' and parts[1] == 'tasks':
+            try:
+                task_id = int(parts[2])
+            except ValueError:
+                self._send_json(400, {"error": "Invalid task id"})
+                return
+            tasks = storage.load_tasks()
+            task = self._find_task(tasks, task_id)
+            if not task:
+                self._send_json(404, {"error": "Task not found"})
+                return
+
+            # DELETE /api/tasks/<id>/links/<link_id>  (IDs are permanent; no re-index, Rule #3)
+            if parts[3] == 'links':
+                link_id = parts[4]
+                links = getattr(task, 'links', None) or []
+                new_links = [l for l in links if l.get('id') != link_id]
+                if len(new_links) == len(links):
+                    self._send_json(404, {"error": "Link not found"})
+                    return
+                task.links = new_links
+                self._sync_counters(task)
+                storage.save_tasks(tasks)
+                self._send_json(200, task.to_dict())
+                return
+
+            # DELETE /api/tasks/<id>/checklist/<chk_id>
+            if parts[3] == 'checklist':
+                chk_id = parts[4]
+                chk = getattr(task, 'checklist', None) or []
+                new_chk = [c for c in chk if c.get('id') != chk_id]
+                if len(new_chk) == len(chk):
+                    self._send_json(404, {"error": "Checklist item not found"})
+                    return
+                task.checklist = new_chk
+                self._sync_counters(task)
+                storage.save_tasks(tasks)
+                self._send_json(200, task.to_dict())
+                return
+
+        self._send_json(404, {"error": "Not found"})
 
     def log_message(self, format, *args):
         # Suppress logging to keep CLI clean

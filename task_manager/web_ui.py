@@ -337,6 +337,26 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         .pill-btn.selected[data-priority="medium"] { background: rgba(210,153,34,0.1); color: var(--amber); border-color: var(--amber); }
         .pill-btn.selected[data-priority="low"] { background: rgba(88,166,255,0.1); color: var(--blue); border-color: var(--blue); }
 
+        .pill-btn-small {
+            border: 1px solid var(--border-neutral); background: transparent;
+            padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 500;
+            cursor: pointer; color: var(--text-muted); transition: all 150ms;
+        }
+        .pill-btn-small:hover { border-color: var(--text-disabled); color: var(--text-body); }
+        .pill-btn-small.selected {
+            background: rgba(88,166,255,0.1);
+            border-color: #58A6FF;
+            color: #58A6FF;
+            transform: translateY(-1px);
+            box-shadow: 0 0 12px rgba(88,166,255,0.15);
+            animation: pillBounce 200ms ease-out;
+        }
+        @keyframes pillBounce {
+            0%   { transform: translateY(-1px) scale(1); }
+            40%  { transform: translateY(-3px) scale(1.04); }
+            100% { transform: translateY(-1px) scale(1); }
+        }
+
         .btn-deploy {
             width: 100%; margin-top: 16px; height: 44px; background: var(--bg-surface);
             border: 1px solid var(--border-neutral); border-radius: 8px;
@@ -347,30 +367,67 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
         /* ─── DEPLOYMENT MODAL (PREMIUM) ───────── */
         .deploy-modal-overlay {
-            position: fixed; inset: 0; background: rgba(2, 6, 23, 0.85);
-            backdrop-filter: blur(40px); -webkit-backdrop-filter: blur(40px); z-index: 10000;
-            display: none; align-items: center; justify-content: center;
-            opacity: 0; pointer-events: none; transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+            position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); z-index: 10000;
+            display: flex; align-items: stretch; justify-content: flex-end;
+            opacity: 0; pointer-events: none; transition: opacity 200ms ease-out;
         }
-        .deploy-modal-overlay.active { display: flex; opacity: 1; pointer-events: auto; }
-        
+        .deploy-modal-overlay.active { opacity: 1; pointer-events: auto; }
+
+        /* Create Mission = right side panel, never overflows the viewport */
         .deploy-modal {
-            background: linear-gradient(165deg, rgba(22, 27, 34, 0.95), rgba(13, 17, 23, 1));
+            background: linear-gradient(180deg, #0D1117, #0A0E13);
             box-sizing: border-box;
-            border: 1px solid rgba(88, 166, 255, 0.25);
-            box-shadow: 0 0 64px rgba(0, 0, 0, 0.9), inset 0 1px 1px rgba(255,255,255,0.1);
-            border-radius: 28px; width: 100%; max-width: 580px; padding: 48px;
-            transform: scale(0.85) translateY(60px) rotateX(-10deg); opacity: 0;
-            transition: all 0.7s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            position: relative; overflow: visible;
+            border-left: 1px solid var(--border-subtle);
+            box-shadow: -24px 0 64px rgba(0, 0, 0, 0.6);
+            width: 480px; max-width: 100%; height: 100vh; max-height: 100vh;
+            padding: 0; display: flex; flex-direction: column; overflow: hidden;
+            position: relative;
+            transform: translateX(100%); opacity: 0;
+            transition: transform 280ms cubic-bezier(0.16, 1, 0.3, 1), opacity 200ms ease-out;
         }
-        .deploy-modal::before {
-            content: ''; position: absolute; top: -1px; left: 50%; width: 60%; height: 1px;
-            transform: translateX(-50%);
-            background: linear-gradient(90deg, transparent, rgba(88,166,255,0.6), transparent);
-        }
-        .deploy-modal-overlay.active .deploy-modal {
-            transform: scale(1) translateY(0) rotateX(0deg); opacity: 1;
+        .deploy-modal-overlay.active .deploy-modal { transform: translateX(0); opacity: 1; }
+
+        /* Zone A — header (fixed) */
+        .dm-header { flex-shrink: 0; padding: 16px 24px 12px; border-bottom: 1px solid var(--border-subtle); background: #0D1117; }
+        .dm-header-top { display: flex; align-items: center; justify-content: space-between; }
+        .dm-title-label { font-size: 11px; font-weight: 500; letter-spacing: 2px; color: var(--text-disabled); text-transform: uppercase; }
+        .dm-dots { display: flex; gap: 6px; margin-top: 12px; }
+        .dm-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border-neutral); transition: background 200ms ease, box-shadow 200ms ease; }
+        .dm-dot.filled { background: var(--blue); box-shadow: 0 0 8px rgba(88,166,255,0.5); }
+
+        /* Zone B — scrollable content */
+        .dm-body { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 24px 24px 16px; -webkit-overflow-scrolling: touch; transition: box-shadow 150ms ease; }
+        .dm-body::-webkit-scrollbar { width: 4px; }
+        .dm-body::-webkit-scrollbar-track { background: transparent; }
+        .dm-body::-webkit-scrollbar-thumb { background: var(--border-neutral); border-radius: 4px; }
+        .dm-body::-webkit-scrollbar-thumb:hover { background: var(--text-disabled); }
+
+        /* Zone C — footer (fixed) */
+        .dm-footer { flex-shrink: 0; height: 72px; display: flex; align-items: center; gap: 12px; padding: 0 24px; border-top: 1px solid var(--border-subtle); background: #0D1117; }
+        .dm-footer .btn-deploy { flex: 1; margin: 0; height: 44px; border-radius: 10px; }
+        .btn-deploy.active { background: linear-gradient(135deg, #1F6FEB, #388BFD); color: #fff; border-color: transparent; animation: deployPulse 2.5s ease-in-out infinite; }
+        @keyframes deployPulse { 0%,100% { box-shadow: 0 4px 16px rgba(31,111,235,0.35); } 50% { box-shadow: 0 6px 28px rgba(31,111,235,0.6); } }
+        .btn-deploy.active:hover { transform: translateY(-1px); box-shadow: 0 8px 32px rgba(31,111,235,0.6); }
+        .dm-cancel { width: 90px; height: 44px; background: transparent; border: 1px solid var(--border-neutral); border-radius: 10px; color: var(--text-muted); font-size: 13px; font-weight: 600; cursor: pointer; transition: all 150ms ease; }
+        .dm-cancel:hover { border-color: var(--text-disabled); color: var(--text-body); }
+
+        /* Section 4 — collapsible enrichment */
+        .dm-enrich { margin-top: 8px; }
+        .dm-enrich-toggle { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; height: 38px; background: #161B22; border: 1px dashed var(--border-neutral); border-radius: 8px; font-size: 12px; color: var(--text-disabled); cursor: pointer; transition: all 150ms ease; }
+        .dm-enrich-toggle:hover { border-color: var(--text-disabled); color: var(--text-muted); background: #1C2128; }
+        .dm-enrich.open .dm-enrich-toggle { border-style: solid; color: var(--text-muted); }
+        .dm-enrich-body { max-height: 0; overflow: hidden; transition: max-height 400ms cubic-bezier(0.4, 0, 0.2, 1); }
+        .dm-enrich.open .dm-enrich-body { max-height: 1000px; }
+        .dm-enrich-body .flex-row { margin-top: 14px !important; }
+
+        /* Mobile — bottom sheet */
+        @media (max-width: 768px) {
+            .deploy-modal-overlay { align-items: flex-end; justify-content: center; }
+            .deploy-modal { width: 100%; height: 90vh; max-height: 90vh; border-left: none;
+                border-top-left-radius: 20px; border-top-right-radius: 20px;
+                transform: translateY(100%); }
+            .deploy-modal-overlay.active .deploy-modal { transform: translateY(0); }
         }
         .close-modal {
             position: absolute; top: 18px; right: 18px; width: 42px; height: 42px;
@@ -890,8 +947,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         .unscheduled-pool {
             margin-top: 24px; padding: 24px; background: rgba(22, 27, 34, 0.4);
             border: 1px solid var(--border-subtle); border-radius: 16px; min-height: 120px;
-            display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-start; align-content: flex-start;
+            display: flex; gap: 12px; flex-wrap: nowrap; overflow-x: auto; align-items: center;
             transition: all 0.3s;
+        }
+        .unscheduled-pool::-webkit-scrollbar {
+            height: 6px;
+        }
+        .unscheduled-pool::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
         }
         .unscheduled-pool.drag-over { background: rgba(88,166,255,0.05); border-color: var(--blue); }
 
@@ -904,6 +968,191 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         .badge.low { color: var(--blue); background: rgba(88,166,255,0.1); border: 1px solid rgba(88,166,255,0.2); }
         .badge.tag { color: var(--ai-purple); background: rgba(163,113,247,0.1); border: 1px solid rgba(163,113,247,0.2); }
 
+        /* ═══════════════════════════════════════════════════════════
+           TASK ENRICHMENT — card row (E10) + inline expand (E11) + create panel (E12)
+           ═══════════════════════════════════════════════════════════ */
+        .enrich-zone { padding-left: 28px; margin-top: 8px; }
+
+        /* ── E10: enrichment row of pills ── */
+        .enrich-row {
+            display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+            cursor: pointer; user-select: none;
+        }
+        .enrich-pill {
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 2px 8px; border-radius: 20px; font-size: 10px; font-weight: 600;
+            background: rgba(139,148,158,0.08); border: 1px solid rgba(139,148,158,0.15);
+            color: var(--text-muted); transition: all 160ms ease; line-height: 1.6;
+        }
+        .enrich-pill .ep-ico { font-size: 11px; line-height: 1; }
+        .enrich-pill:hover { transform: translateY(-1px); }
+        .enrich-pill.ep-links { color: var(--blue); background: rgba(88,166,255,0.08); border-color: rgba(88,166,255,0.18); }
+        .enrich-pill.ep-map   { color: var(--green); background: rgba(63,185,80,0.08); border-color: rgba(63,185,80,0.2); }
+        .enrich-pill.ep-check { color: var(--text-muted); background: rgba(139,148,158,0.08); border-color: rgba(139,148,158,0.15); }
+        .enrich-pill.ep-check.in-progress { color: var(--amber); background: rgba(210,153,34,0.08); border-color: rgba(210,153,34,0.2); }
+        .enrich-pill.ep-check.all-done { color: var(--green); background: rgba(63,185,80,0.1); border-color: rgba(63,185,80,0.25); }
+        .enrich-pill .ep-bar {
+            position: relative; width: 40px; height: 2px; border-radius: 2px;
+            background: rgba(255,255,255,0.1); overflow: hidden; margin-left: 2px;
+        }
+        .enrich-pill .ep-bar > i {
+            position: absolute; left: 0; top: 0; bottom: 0; border-radius: 2px;
+            background: var(--amber); transition: width 300ms ease-out;
+        }
+        .enrich-pill.ep-check.all-done .ep-bar > i { background: var(--green); }
+        .enrich-row .enrich-hint {
+            margin-left: auto; font-size: 10px; color: var(--text-disabled);
+            opacity: 0; transition: opacity 160ms ease; white-space: nowrap;
+        }
+        .task-card-wrap:hover .enrich-row .enrich-hint { opacity: 1; }
+        .enrich-hint .chev { display: inline-block; transition: transform 280ms cubic-bezier(0.16,1,0.3,1); }
+        .enrich-zone.open .enrich-hint .chev { transform: rotate(180deg); }
+
+        /* ── E11: inline expand ── */
+        .enrich-expand {
+            max-height: 0; overflow: hidden;
+            transition: max-height 300ms ease-out, opacity 220ms ease, margin 300ms ease-out;
+            opacity: 0;
+        }
+        .enrich-expand.open {
+            opacity: 1; margin-top: 12px; padding-top: 12px;
+            border-top: 1px solid var(--border-subtle);
+        }
+        .enrich-sub { margin-bottom: 16px; }
+        .enrich-sub:last-of-type { margin-bottom: 6px; }
+        .enrich-sub-label {
+            font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px;
+            color: var(--text-disabled); font-weight: 700; margin-bottom: 8px; display: block;
+        }
+        .enrich-notes-text {
+            font-size: 13px; color: var(--text-body); line-height: 1.7;
+            white-space: pre-wrap; max-height: 120px; overflow-y: auto;
+            padding-right: 6px;
+        }
+        .enrich-notes-text.clamped { max-height: 60px; }
+        .enrich-showmore { font-size: 11px; color: var(--blue); cursor: pointer; margin-top: 4px; display: inline-block; }
+
+        .enrich-link-row {
+            display: flex; align-items: center; gap: 10px; padding: 6px 8px;
+            border-radius: 8px; transition: background 140ms ease;
+        }
+        .enrich-link-row:hover { background: rgba(255,255,255,0.03); }
+        .enrich-link-row .elr-ico { font-size: 14px; width: 18px; text-align: center; flex-shrink: 0; }
+        .enrich-link-row .elr-ico.t-url { color: var(--blue); }
+        .enrich-link-row .elr-ico.t-map { color: var(--green); }
+        .enrich-link-row .elr-ico.t-reference, .enrich-link-row .elr-ico.t-file { color: var(--text-muted); }
+        .enrich-link-row .elr-label {
+            flex: 1; font-size: 12px; color: var(--text-body);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .enrich-link-row .elr-id { font-size: 9px; color: var(--text-disabled); font-family: var(--font-mono); flex-shrink: 0; }
+        .enrich-link-btn {
+            background: none; border: none; cursor: pointer; font-size: 11px;
+            font-weight: 600; padding: 2px 6px; border-radius: 6px; flex-shrink: 0;
+            transition: all 140ms ease;
+        }
+        .enrich-link-btn.open { color: var(--blue); }
+        .enrich-link-btn.open:hover { background: rgba(88,166,255,0.12); }
+        .enrich-link-btn.copy { color: var(--text-muted); }
+        .enrich-link-btn.copy:hover { background: rgba(139,148,158,0.12); color: var(--text-body); }
+
+        .enrich-prog-track {
+            height: 3px; background: #21262D; border-radius: 3px; margin-bottom: 10px; overflow: hidden;
+        }
+        .enrich-prog-fill {
+            height: 100%; border-radius: 3px; background: var(--amber);
+            transition: width 320ms cubic-bezier(0.16,1,0.3,1); width: 0%;
+        }
+        .enrich-prog-fill.complete { background: var(--green); }
+        .enrich-chk-row { display: flex; align-items: center; gap: 10px; padding: 5px 0; }
+        .enrich-cbx {
+            width: 16px; height: 16px; border-radius: 4px; border: 1.5px solid var(--border-neutral);
+            background: transparent; flex-shrink: 0; cursor: pointer; position: relative;
+            transition: all 160ms ease; display: flex; align-items: center; justify-content: center;
+        }
+        .enrich-cbx:hover { border-color: var(--green); }
+        .enrich-cbx svg { width: 11px; height: 11px; opacity: 0; transform: scale(0.2); transition: none; }
+        .enrich-cbx.checked { background: var(--green); border-color: var(--green); }
+        .enrich-cbx.checked svg { opacity: 1; transform: scale(1); animation: cbxPop 220ms cubic-bezier(0.34,1.56,0.64,1); }
+        @keyframes cbxPop { 0% { transform: scale(0.2); } 60% { transform: scale(1.25); } 100% { transform: scale(1); } }
+        .enrich-chk-text { font-size: 13px; color: var(--text-body); transition: color 200ms ease; }
+        .enrich-chk-row.done .enrich-chk-text {
+            color: var(--text-disabled);
+            text-decoration: line-through; text-decoration-color: var(--text-disabled);
+            animation: strikethrough 320ms ease-out forwards;
+        }
+        @keyframes strikethrough { from { text-decoration-color: transparent; } to { text-decoration-color: var(--text-disabled); } }
+        .enrich-collapse {
+            display: block; width: 100%; text-align: center; margin-top: 10px;
+            background: none; border: none; color: var(--text-disabled);
+            font-size: 11px; cursor: pointer; transition: color 140ms ease;
+        }
+        .enrich-collapse:hover { color: var(--text-muted); }
+        .enrich-flash { animation: enrichFlash 380ms ease-out; }
+        @keyframes enrichFlash { 0% { background: rgba(63,185,80,0); } 40% { background: rgba(63,185,80,0.14); } 100% { background: rgba(63,185,80,0); } }
+        .enrich-confetti-piece {
+            position: absolute; width: 6px; height: 6px; border-radius: 1px;
+            pointer-events: none; z-index: 50; will-change: transform, opacity;
+        }
+        @keyframes enrichConfetti {
+            0%   { transform: translate(0,0) rotate(0deg); opacity: 1; }
+            100% { transform: translate(var(--cx), var(--cy)) rotate(var(--cr)); opacity: 0; }
+        }
+
+        /* ── E12: create-mission enrichment fields ── */
+        .enrich-textarea {
+            width: 100%; min-height: 72px; max-height: 200px; resize: none;
+            line-height: 1.6; font-family: var(--font-body);
+        }
+        .enrich-textarea::placeholder { color: var(--text-disabled); }
+        .enrich-textarea:focus { border-color: var(--blue-mid); box-shadow: 0 0 0 3px rgba(56,139,253,0.08); }
+        .enrich-counter { font-size: 10px; color: var(--text-disabled); text-align: right; min-height: 12px; opacity: 0; transition: opacity 200ms ease; }
+        .enrich-counter.show { opacity: 1; }
+        .enrich-link-input-row { display: flex; gap: 8px; align-items: center; }
+        .enrich-type-selector { display: flex; gap: 4px; }
+        .enrich-type-btn {
+            width: 32px; height: 32px; border-radius: 6px; cursor: pointer; font-size: 14px;
+            background: transparent; border: 1px solid var(--border-neutral); color: var(--text-disabled);
+            display: flex; align-items: center; justify-content: center; transition: all 150ms ease;
+        }
+        .enrich-type-btn:hover { border-color: var(--text-disabled); }
+        .enrich-type-btn.active { background: rgba(88,166,255,0.1); border-color: var(--blue); color: var(--blue); }
+        .enrich-link-input { flex: 1; height: 36px; padding: 0 12px !important; font-size: 13px !important; }
+        .enrich-link-title { height: 32px; padding: 0 12px !important; font-size: 12px !important; margin-top: 8px; }
+        .enrich-add-btn {
+            height: 36px; padding: 0 14px; border-radius: 8px; cursor: pointer; white-space: nowrap;
+            background: rgba(88,166,255,0.08); border: 1px solid rgba(88,166,255,0.2);
+            color: var(--blue); font-size: 12px; font-weight: 600; transition: all 150ms ease;
+        }
+        .enrich-add-btn:hover { background: rgba(88,166,255,0.16); }
+        .enrich-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+        .enrich-chip {
+            display: inline-flex; align-items: center; gap: 8px; padding: 4px 10px; border-radius: 6px;
+            background: rgba(88,166,255,0.06); border: 1px solid rgba(88,166,255,0.12);
+            font-size: 12px; color: var(--text-body); animation: chipIn 150ms ease-out;
+        }
+        .enrich-chip .ec-ico.t-map { color: var(--green); }
+        .enrich-chip .ec-ico.t-url { color: var(--blue); }
+        .enrich-chip .ec-ico.t-reference, .enrich-chip .ec-ico.t-file { color: var(--text-muted); }
+        .enrich-chip .ec-val { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .enrich-chip .ec-x { color: var(--text-disabled); cursor: pointer; font-size: 14px; line-height: 1; }
+        .enrich-chip .ec-x:hover { color: var(--red); }
+        .enrich-chip.removing { animation: chipOut 150ms ease-in forwards; }
+        @keyframes chipIn { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        @keyframes chipOut { from { transform: scale(1); opacity: 1; } to { transform: scale(0.8); opacity: 0; } }
+        .enrich-build-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+        .enrich-build-item {
+            display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 8px;
+            background: rgba(255,255,255,0.02); border: 1px solid var(--border-subtle);
+            animation: chipIn 150ms ease-out;
+        }
+        .enrich-build-item.drag-over { border-color: var(--blue); background: rgba(88,166,255,0.06); }
+        .enrich-build-item .ebi-grip { cursor: grab; color: var(--text-disabled); font-size: 12px; line-height: 1; }
+        .enrich-build-item .ebi-box { width: 14px; height: 14px; border-radius: 4px; border: 1.5px solid var(--border-neutral); flex-shrink: 0; }
+        .enrich-build-item .ebi-text { flex: 1; font-size: 13px; color: var(--text-body); }
+        .enrich-build-item .ebi-x { color: var(--text-disabled); cursor: pointer; font-size: 14px; }
+        .enrich-build-item .ebi-x:hover { color: var(--red); }
+
         /* ─── MODAL EXPANSION ───────────────────── */
         #modal-overlay {
             position: fixed; inset: 0; background: rgba(6, 10, 15, 0.4);
@@ -915,7 +1164,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         
         .modal-card {
             background: rgba(13, 17, 23, 0.85); border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 24px; padding: 48px; width: 640px; max-width: 90%;
+            border-radius: 20px; padding: 0; width: 600px; max-width: calc(100vw - 48px);
+            max-height: calc(100vh - 80px);
+            display: flex; flex-direction: column; overflow: hidden;
             position: relative; box-shadow: 0 64px 128px rgba(0,0,0,0.8);
             transform: scale(0.9) translateY(20px); transition: all 600ms cubic-bezier(0.16, 1, 0.3, 1);
             clip-path: circle(0% at var(--origin-x, 50%) var(--origin-y, 50%));
@@ -925,10 +1176,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             clip-path: circle(150% at var(--origin-x, 50%) var(--origin-y, 50%));
         }
         .modal-close {
-            position: absolute; top: 18px; right: 18px; width: 42px; height: 42px;
+            position: absolute; top: 16px; right: 16px; width: 34px; height: 34px;
             border-radius: 50%; display: flex; align-items: center; justify-content: center;
             background: rgba(255,255,255,0.06); color: var(--text-muted); border: 1px solid rgba(255,255,255,0.12);
-            font-size: 20px; cursor: pointer; transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+            font-size: 18px; cursor: pointer; transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
             backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 10;
         }
         .modal-close:hover {
@@ -936,6 +1187,23 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             transform: rotate(90deg) scale(1.1); border-color: transparent;
             box-shadow: 0 0 24px rgba(248, 81, 73, 0.5), 0 0 60px rgba(248, 81, 73, 0.15);
         }
+
+        /* Mission Briefing — viewport-safe three-zone layout */
+        #modal-content { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+        .brief-header { flex-shrink: 0; padding: 22px 56px 14px 26px; border-bottom: 1px solid var(--border-subtle); }
+        .brief-h-label { font-size: 10px; font-weight: 500; letter-spacing: 2px; color: var(--text-disabled); text-transform: uppercase; }
+        .brief-title { font-size: 21px; font-weight: 600; color: var(--text-hero); letter-spacing: -0.4px; margin: 8px 0 0; line-height: 1.3; word-break: break-word;
+            display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+        .brief-badges { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 10px; }
+        .brief-deadline { margin-top: 10px; }
+        .brief-body { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 18px 24px; -webkit-overflow-scrolling: touch; transition: box-shadow 150ms ease; }
+        .brief-body::-webkit-scrollbar { width: 4px; }
+        .brief-body::-webkit-scrollbar-track { background: transparent; }
+        .brief-body::-webkit-scrollbar-thumb { background: var(--border-neutral); border-radius: 4px; }
+        .brief-body::-webkit-scrollbar-thumb:hover { background: var(--text-disabled); }
+        .brief-footer { flex-shrink: 0; padding: 14px 24px 16px; border-top: 1px solid var(--border-subtle); background: rgba(13,17,23,0.6); }
+        .brief-meta { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-disabled); margin-top: 14px; }
+        .brief-enrich-block { margin-bottom: 6px; }
 
         /* ─ ADVISOR ─ */
         .advisor-badge { display: flex; align-items: center; gap: 8px; font-size: 10px; font-weight: 700; letter-spacing: 2px; color: var(--blue); margin-bottom: 24px; }
@@ -1058,6 +1326,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         .alert-card.missed  { background: rgba(248,81,73,0.06); border-left-color: #F85149; }
         .alert-card.urgent  { background: rgba(248,81,73,0.04); border-left-color: #D29922; }
         .alert-card.deferred{ background: rgba(210,153,34,0.04); border-left-color: #D29922; }
+        .alert-card.deferred-severe{ background: rgba(248,81,73,0.06); border-left-color: #F85149; }
+        .alert-card.soft { background: rgba(139,148,158,0.04); border-left-color: #8B949E; }
 
         /* ─── RECOVERY MODE ───────────────────────── */
         #recovery-banner {
@@ -1318,7 +1588,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             pointer-events: none;
         }
         .deploy-modal {
-            box-shadow: 0 0 80px rgba(0,0,0,0.9), 0 0 120px rgba(88,166,255,0.05), inset 0 1px 1px rgba(255,255,255,0.08);
+            box-shadow: -24px 0 64px rgba(0,0,0,0.6), inset 1px 0 0 rgba(255,255,255,0.04);
         }
 
         /* ─── DROP CONFIRMATION MODAL ────────── */
@@ -1697,6 +1967,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     
                     <!-- 2. UPCOMING MISSIONS -->
                     <div class="mission-panel" style="padding: 24px;">
+                        <div id="cc-approaching-banner" style="margin-bottom: 12px; padding: 10px; border-radius: 8px; font-weight: 700; font-size: 12px; display: none; align-items: center; gap: 8px;"></div>
                         <div class="section-label">UPCOMING MISSIONS</div>
                         <div id="cc-upcoming" style="min-height: 120px; color: var(--text-muted); font-size: 12px; display: flex; flex-direction: column; gap: 8px; margin-top: 16px;">
                             <!-- Filled by JS -->
@@ -1939,9 +2210,19 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     <div id="deploy-modal-overlay" class="deploy-modal-overlay">
         <div class="deploy-modal">
-            <div class="close-modal" onclick="toggleCreateMission()">×</div>
-            <div class="section-label" style="margin-bottom:16px;">NEW MISSION DEPLOYMENT</div>
-            
+            <div class="dm-header">
+                <div class="dm-header-top">
+                    <span class="dm-title-label">New Mission</span>
+                    <div class="close-modal" onclick="toggleCreateMission()">×</div>
+                </div>
+                <div class="dm-dots">
+                    <span class="dm-dot filled" id="dm-dot-1"></span>
+                    <span class="dm-dot" id="dm-dot-2"></span>
+                    <span class="dm-dot" id="dm-dot-3"></span>
+                </div>
+            </div>
+            <div class="dm-body" id="dm-body">
+
             <div class="mission-type-switcher">
                 <div class="type-btn active" id="btn-type-task" onclick="setMissionType('Task')">🧩 TASK (FLEXIBLE)</div>
                 <div class="type-btn" id="btn-type-event" onclick="setMissionType('Event')">📅 EVENT (TIME-LOCKED)</div>
@@ -1973,8 +2254,16 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             <!-- TASK MODE: DURATION -->
             <div class="flex-row task-mode-only" style="margin-top:24px;">
                 <div class="mission-field">
-                    <label class="section-label" style="font-size:9px;">ESTIMATED DURATION</label>
-                    <input type="text" id="mission-duration" class="input-system" placeholder="e.g. 45m, 2h, 1h 30m" autocomplete="off">
+                    <label class="section-label" style="font-size:9px; font-weight:500; letter-spacing:2px; text-transform:uppercase;">ESTIMATED DURATION</label>
+                    <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:8px;">
+                        <button class="pill-btn-small" data-dur="15m" onclick="selectDurationPill(this,'15m')">15m</button>
+                        <button class="pill-btn-small" data-dur="30m" onclick="selectDurationPill(this,'30m')">30m</button>
+                        <button class="pill-btn-small" data-dur="1h"  onclick="selectDurationPill(this,'1h')">1h</button>
+                        <button class="pill-btn-small" data-dur="2h"  onclick="selectDurationPill(this,'2h')">2h</button>
+                        <button class="pill-btn-small" data-dur="3h"  onclick="selectDurationPill(this,'3h')">3h</button>
+                        <button class="pill-btn-small" data-dur="4h+" onclick="selectDurationPill(this,'4h+')">4h+</button>
+                    </div>
+                    <input type="hidden" id="mission-duration" value="">
                 </div>
             </div>
 
@@ -1989,6 +2278,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                             <span style="font-size:16px;">📅</span>
                             <input type="date" id="mission-deadline-fallback" style="position:absolute; top:0; left:0; width:100%; height:100%; opacity:0; cursor:pointer;" onchange="document.getElementById('mission-deadline').value = this.value; document.getElementById('mission-deadline').dispatchEvent(new Event('input'));">
                         </div>
+                    </div>
+                    <div style="display:flex; gap:8px; margin-top:8px; margin-bottom:8px; flex-wrap:wrap;">
+                        <button class="pill-btn-small" data-dl-preset="Today 6pm" onclick="selectDeadlinePill(this,'Today 6pm')">Today 6pm</button>
+                        <button class="pill-btn-small" data-dl-preset="Tomorrow 9am" onclick="selectDeadlinePill(this,'Tomorrow 9am')">Tomorrow 9am</button>
+                        <button class="pill-btn-small" data-dl-preset="Friday" onclick="selectDeadlinePill(this,'Friday')">Friday</button>
                     </div>
                     <div class="deadline-parsed" id="deadline-parsed-display"></div>
                     <div id="deadline-type-section" style="display:none;">
@@ -2059,9 +2353,55 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 </div>
             </div>
 
-            <div style="display:flex; gap:12px; margin-top:32px;">
-                <button class="btn-deploy" id="btn-deploy" disabled style="margin:0;">DEPLOY MISSION</button>
-                <button class="btn-execute" onclick="toggleCreateMission()" style="margin:0; background:transparent; border-color:var(--border-neutral); color:var(--text-muted); width:auto; padding:0 24px;">CANCEL</button>
+            <!-- SECTION 4: ENRICHMENT (collapsible, last — progressive disclosure) -->
+            <div class="dm-enrich" id="dm-enrich">
+                <div class="dm-enrich-toggle" onclick="tfToggleEnrichSection()">
+                    <span id="dm-enrich-text">+ Add notes, links &amp; checklist</span>
+                </div>
+                <div class="dm-enrich-body" id="dm-enrich-body">
+                    <div class="flex-row">
+                        <div class="mission-field">
+                            <label class="section-label" style="font-size:9px;">NOTES</label>
+                            <textarea id="mission-notes" class="input-system enrich-textarea"
+                                      placeholder="Context, approach, what to watch for..."
+                                      oninput="tfAutoGrow(this); tfNotesCounter(this); tfUpdateProgressDots();"></textarea>
+                            <div id="mission-notes-counter" class="enrich-counter"></div>
+                        </div>
+                    </div>
+                    <div class="flex-row">
+                        <div class="mission-field">
+                            <label class="section-label" style="font-size:9px;">LINKS &amp; REFERENCES</label>
+                            <div class="enrich-link-input-row">
+                                <div class="enrich-type-selector">
+                                    <button type="button" class="enrich-type-btn active" data-ltype="url" onclick="tfSelectLinkType(this,'url')" title="URL">🔗</button>
+                                    <button type="button" class="enrich-type-btn" data-ltype="map" onclick="tfSelectLinkType(this,'map')" title="Map / location">📍</button>
+                                    <button type="button" class="enrich-type-btn" data-ltype="reference" onclick="tfSelectLinkType(this,'reference')" title="Reference">📄</button>
+                                    <button type="button" class="enrich-type-btn" data-ltype="file" onclick="tfSelectLinkType(this,'file')" title="File">📁</button>
+                                </div>
+                                <input type="text" id="mission-link-input" class="input-system enrich-link-input" placeholder="https://..." autocomplete="off"
+                                       onkeydown="if(event.key==='Enter'){event.preventDefault(); tfAddLink();}">
+                                <button type="button" class="enrich-add-btn" onclick="tfAddLink()">+ Add</button>
+                            </div>
+                            <input type="text" id="mission-link-title" class="input-system enrich-link-title" placeholder="Label (optional, e.g. Design doc)" autocomplete="off"
+                                   onkeydown="if(event.key==='Enter'){event.preventDefault(); tfAddLink();}">
+                            <div id="mission-links-list" class="enrich-chips"></div>
+                        </div>
+                    </div>
+                    <div class="flex-row">
+                        <div class="mission-field">
+                            <label class="section-label" style="font-size:9px;">CHECKLIST (OPTIONAL)</label>
+                            <input type="text" id="mission-checklist-input" class="input-system" placeholder="Add a sub-task, then press Enter..." autocomplete="off"
+                                   onkeydown="if(event.key==='Enter'){event.preventDefault(); tfAddChecklistItem();}">
+                            <div id="mission-checklist-list" class="enrich-build-list"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            </div><!-- /dm-body -->
+            <div class="dm-footer">
+                <button class="btn-deploy" id="btn-deploy" disabled>DEPLOY MISSION</button>
+                <button class="dm-cancel" onclick="toggleCreateMission()">CANCEL</button>
             </div>
         </div>
     </div>
@@ -2305,15 +2645,56 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     function toggleCreateMission() {
         const p = document.getElementById('deploy-modal-overlay');
         p.classList.toggle('active');
-        if (p.classList.contains('active')) {
+        const isOpen = p.classList.contains('active');
+        document.body.style.overflow = isOpen ? 'hidden' : '';
+        if (isOpen) {
             // Reset to Task mode on open
             setMissionType('Task');
             document.getElementById('event-date').valueAsDate = new Date();
             tSelection.style.display = 'none';
             tDisplay.textContent = 'Drag to select';
-            setTimeout(() => document.getElementById('mission-title').focus(), 100);
+            // Progressive disclosure: enrichment collapsed by default
+            const en = document.getElementById('dm-enrich');
+            if (en) en.classList.remove('open');
+            const et = document.getElementById('dm-enrich-text');
+            if (et) et.textContent = '+ Add notes, links & checklist';
+            if (window.tfUpdateProgressDots) tfUpdateProgressDots();
+            const body = document.getElementById('dm-body');
+            if (body) { body.scrollTop = 0; body.style.boxShadow = 'none'; }
+            setTimeout(() => { const ti = document.getElementById('mission-title'); if (ti) ti.focus(); }, 280);
         }
     }
+    // Backdrop click closes the panel + scroll-shadow on the body zone (run once)
+    (function(){
+        const ov = document.getElementById('deploy-modal-overlay');
+        if (ov && !ov._tfBackdrop) {
+            ov._tfBackdrop = true;
+            ov.addEventListener('click', e => { if (e.target === ov) toggleCreateMission(); });
+            const body = document.getElementById('dm-body');
+            if (body) body.addEventListener('scroll', () => {
+                body.style.boxShadow = body.scrollTop > 8 ? 'inset 0 8px 16px rgba(0,0,0,0.25)' : 'none';
+            });
+        }
+    })();
+    window.tfToggleEnrichSection = function() {
+        const en = document.getElementById('dm-enrich');
+        if (!en) return;
+        const open = en.classList.toggle('open');
+        const txt = document.getElementById('dm-enrich-text');
+        if (txt) txt.textContent = open ? '▲ Collapse details' : '+ Add notes, links & checklist';
+        if (window.tfUpdateProgressDots) tfUpdateProgressDots();
+        if (open) setTimeout(() => { const n = document.getElementById('mission-notes'); if (n) n.focus(); }, 300);
+    };
+    window.tfUpdateProgressDots = function() {
+        const d2 = document.getElementById('dm-dot-2');
+        const d3 = document.getElementById('dm-dot-3');
+        if (d2) d2.classList.toggle('filled', !!parsedDeadlineISO);
+        if (d3) {
+            const notes = document.getElementById('mission-notes');
+            const hasNotes = notes && notes.value.trim().length > 0;
+            d3.classList.toggle('filled', hasNotes || (window.pendingLinks||[]).length > 0 || (window.pendingChecklist||[]).length > 0);
+        }
+    };
 
     let currentMissionType = 'Task';
     let eventStartMinutes = 8 * 60; // 8 AM
@@ -2466,7 +2847,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             setSystemState('thinking');
             
             const payload = { title, priority: selectedPriority, tags, mission_type: currentMissionType };
-            
+
+            // Enrichment (E12): description / links / checklist
+            const enrichNotes = (document.getElementById('mission-notes') ? document.getElementById('mission-notes').value : '').trim();
+            if (enrichNotes) payload.description = enrichNotes;
+            if (window.pendingLinks && window.pendingLinks.length) payload.links = window.pendingLinks.slice(0, 10);
+            if (window.pendingChecklist && window.pendingChecklist.length) payload.checklist = window.pendingChecklist.slice(0, 20).map(txt => ({ text: txt }));
+
             if (currentMissionType === 'Task') {
                 const durVal = document.getElementById('mission-duration').value.trim();
                 if (durVal) payload.duration = durVal;
@@ -2502,6 +2889,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 if (res.ok) {
                     missionTitle.value = '';
                     if(document.getElementById('mission-tags')) document.getElementById('mission-tags').value = '';
+                    tfResetEnrichmentPanel();
                     if(document.getElementById('mission-deadline')) document.getElementById('mission-deadline').value = '';
                     if(document.getElementById('mission-duration')) document.getElementById('mission-duration').value = '';
                     btnDeploy.disabled = true;
@@ -2567,7 +2955,36 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     function updateControlCenter() {
         const now = new Date();
-        const activeTasks = allTasks.filter(t => !t.completed && t.status !== 'completed' && t.status !== 'done');
+        const activeTasks = allTasks.filter(t => !t.completed && t.status !== 'completed' && t.status !== 'done' && !t.dropped_at && !t.offloaded_at);
+
+        // Calculate pressure levels for Approaching banner
+        let p2Count = 0;
+        let p3Count = 0;
+        activeTasks.forEach(t => {
+            const pl = getPressureLevel(t);
+            if (pl === 2) p2Count++;
+            else if (pl === 3) p3Count++;
+        });
+        const totalPressure = p2Count + p3Count;
+        const banner = document.getElementById('cc-approaching-banner');
+        if (banner) {
+            if (totalPressure > 0) {
+                banner.style.display = 'flex';
+                if (p3Count > 0) {
+                    banner.style.background = 'rgba(248,81,73,0.1)';
+                    banner.style.border = '1px solid var(--red)';
+                    banner.style.color = 'var(--red)';
+                    banner.innerHTML = `<span style="animation: glowPulse 1.5s infinite;">⚡</span> ${totalPressure} task(s) need attention now.`;
+                } else {
+                    banner.style.background = 'rgba(210,153,34,0.1)';
+                    banner.style.border = '1px solid var(--amber)';
+                    banner.style.color = 'var(--amber)';
+                    banner.innerHTML = `⚡ ${totalPressure} task(s) need attention now.`;
+                }
+            } else {
+                banner.style.display = 'none';
+            }
+        }
 
         // ── PRIORITY ALERTS (Phase 1: Real alerts from data) ──
         const alertsContainer = document.getElementById('cc-alerts');
@@ -2580,7 +2997,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 } else if (dl && dl.pressureLevel >= 2 && t.deadline_type === 'hard') {
                     alerts.push({type:'urgent', title:t.title, meta:dl.text, sort:1});
                 } else if ((t.postpone_count||0) >= 3) {
-                    alerts.push({type:'deferred', title:t.title, meta:'Postponed ' + t.postpone_count + '×', sort:2});
+                    const isSevere = t.postpone_count >= 5;
+                    alerts.push({
+                        type: isSevere ? 'deferred-severe' : 'deferred',
+                        title: t.title,
+                        meta: 'Postponed ' + t.postpone_count + '×' + (isSevere ? ' ⚠⚠' : ' ⚠'),
+                        sort: isSevere ? 0.5 : 2
+                    });
+                } else if (dl && dl.isOverdue) {
+                    alerts.push({type:'soft-passed', title:t.title, meta:'Soft deadline passed · '+dl.text.replace('OVERDUE · ',''), sort:2.5});
                 }
             });
             alerts.sort((a,b) => a.sort - b.sort);
@@ -2588,9 +3013,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
             if (alerts.length > 0) {
                 alertsContainer.innerHTML = alerts.map(a => {
-                    const cls = a.type === 'missed' ? 'missed' : a.type === 'urgent' ? 'urgent' : 'deferred';
-                    const icon = a.type === 'missed' ? '⚠ HARD DEADLINE MISSED' : a.type === 'urgent' ? '⚡ DEADLINE APPROACHING' : '↩ REPEATEDLY DEFERRED';
-                    const iconColor = a.type === 'deferred' ? '#D29922' : (a.type === 'missed' ? '#F85149' : '#D29922');
+                    const cls = a.type === 'missed' ? 'missed' : (a.type === 'deferred-severe' ? 'deferred-severe' : (a.type === 'urgent' ? 'urgent' : (a.type === 'soft-passed' ? 'soft' : 'deferred')));
+                    const icon = a.type === 'missed' ? '⚠ HARD DEADLINE MISSED' : (a.type === 'deferred-severe' ? '🚨 REPEATEDLY DEFERRED (5+ TIMES)' : (a.type === 'urgent' ? '⚡ DEADLINE APPROACHING' : (a.type === 'soft-passed' ? 'ℹ SOFT DEADLINE PASSED' : '↩ REPEATEDLY DEFERRED')));
+                    const iconColor = a.type === 'deferred' ? '#D29922' : (a.type === 'deferred-severe' ? '#F85149' : (a.type === 'missed' ? '#F85149' : (a.type === 'soft-passed' ? '#8B949E' : '#D29922')));
                     return `<div class="alert-card ${cls}">
                         <div class="alert-type" style="color:${iconColor}">${icon}</div>
                         <div class="alert-title">${a.title}</div>
@@ -2605,14 +3030,62 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         // ── UPCOMING MISSIONS ──
         const upcomingContainer = document.getElementById('cc-upcoming');
         if (upcomingContainer) {
-            const upcoming = activeTasks.slice(0, 4);
+            const upcomingTasks = [...activeTasks];
+            upcomingTasks.sort((a, b) => {
+                if (a.deadline && b.deadline) {
+                    return new Date(a.deadline) - new Date(b.deadline);
+                }
+                if (a.deadline) return -1;
+                if (b.deadline) return 1;
+                const pOrder = {critical: 0, strategic: 1, noise: 2, purge: 3, high: 0, medium: 1, low: 2};
+                return (pOrder[(a.priority||'medium').toLowerCase()]||1) - (pOrder[(b.priority||'medium').toLowerCase()]||1);
+            });
+            
+            const upcoming = upcomingTasks.slice(0, 4);
+            
+            function isTaskInWindow(task) {
+                if (!task.deadline) return false;
+                const deadline = new Date(task.deadline);
+                if (isNaN(deadline.getTime())) return false;
+                const diffMin = (deadline - new Date()) / 60000;
+                return diffMin >= -45 && diffMin <= 45;
+            }
+
             upcomingContainer.innerHTML = upcoming.length > 0
-                ? upcoming.map(t => {
+                ? upcoming.map((t, idx) => {
                     const np = normalizePriority(t.priority);
-                    const borderColor = np === 'high' ? 'var(--red)' : np === 'medium' ? 'var(--amber)' : 'var(--blue)';
+                    const isNow = isTaskInWindow(t);
+                    const borderColor = isNow ? 'var(--blue)' : (np === 'high' ? 'var(--red)' : np === 'medium' ? 'var(--amber)' : 'var(--blue)');
                     const dlInfo = formatDeadline(t.deadline);
                     const dlStr = dlInfo ? `<span style="font-size:10px;color:${dlInfo.color};margin-left:8px;font-family:'DM Mono',monospace;">${dlInfo.text}</span>` : '';
-                    return `<div style="padding:12px;background:rgba(255,255,255,0.02);border-radius:8px;border-left:3px solid ${borderColor};">${t.title}${dlStr}</div>`;
+                    
+                    const nowBadge = isNow ? `<span style="background:rgba(88,166,255,0.2);color:var(--blue);font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;margin-right:6px;letter-spacing:0.5px;">NOW</span>` : '';
+                    
+                    let detailsLine = '';
+                    if (idx === 0) {
+                        const duration = t.duration || 'No estimated duration';
+                        let endsStr = '';
+                        if (t.duration && t.deadline) {
+                            try {
+                                const durVal = t.duration.toLowerCase();
+                                let mins = 0;
+                                if (durVal.includes('m')) mins = parseInt(durVal);
+                                else if (durVal.includes('h')) mins = parseFloat(durVal) * 60;
+                                if (mins > 0) {
+                                    const endDt = new Date(new Date(t.deadline).getTime() + mins * 60000);
+                                    endsStr = ` · Ends ~${endDt.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'})}`;
+                                }
+                            } catch(err) {}
+                        }
+                        detailsLine = `<div style="font-size:11px;color:var(--text-disabled);margin-top:6px;font-family:'DM Mono',monospace;">Est. duration: ${duration}${endsStr}</div>`;
+                    }
+                    
+                    return `<div style="padding:12px;background:rgba(255,255,255,0.02);border-radius:8px;border-left:3px solid ${borderColor};">
+                        <div style="display:flex;align-items:center;flex-wrap:wrap;">
+                            ${nowBadge}${t.title}${dlStr}
+                        </div>
+                        ${detailsLine}
+                    </div>`;
                 }).join('')
                 : '<div style="opacity:0.5;">Queue transparent.</div>';
         }
@@ -2671,7 +3144,342 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         }
     }
 
-    function renderTaskList(tagFilter = null) {
+    let currentTagFilter = null;
+
+    // ═══════════════════════════════════════════════════════════
+    // TASK ENRICHMENT — card row (E10), inline expand (E11), create panel (E12)
+    // ═══════════════════════════════════════════════════════════
+    const NL = String.fromCharCode(10);
+    window.tfOpenSet = window.tfOpenSet || new Set();
+    window.pendingLinks = window.pendingLinks || [];
+    window.pendingChecklist = window.pendingChecklist || [];
+    window.tfLinkType = window.tfLinkType || 'url';
+
+    function tfEsc(s) {
+        return (s == null ? '' : String(s))
+            .split('&').join('&amp;')
+            .split('<').join('&lt;')
+            .split('>').join('&gt;')
+            .split('"').join('&quot;')
+            .split("'").join('&#39;');
+    }
+    function tfTrunc(s, n) { s = s || ''; return s.length > n ? s.slice(0, n - 1) + '…' : s; }
+    function tfOneLine(s) { return (s || '').split(NL).join(' '); }
+    function tfTypeIcon(type) {
+        if (type === 'map') return '📍';
+        if (type === 'reference') return '📄';
+        if (type === 'file') return '📁';
+        return '🔗';
+    }
+
+    // ── E10: pill row ──
+    function tfEnrichmentRow(t) {
+        const desc = t.description;
+        const links = Array.isArray(t.links) ? t.links : [];
+        const checklist = Array.isArray(t.checklist) ? t.checklist : [];
+        const regLinks = links.filter(l => l.type !== 'map');
+        const mapLinks = links.filter(l => l.type === 'map');
+        let pills = '';
+        if (desc) {
+            pills += `<span class="enrich-pill ep-notes" title="${tfEsc(tfTrunc(tfOneLine(desc), 200))}"><span class="ep-ico">📝</span>Notes</span>`;
+        }
+        if (regLinks.length) {
+            pills += `<span class="enrich-pill ep-links"><span class="ep-ico">🔗</span>${regLinks.length} link${regLinks.length > 1 ? 's' : ''}</span>`;
+        }
+        if (mapLinks.length) {
+            pills += `<span class="enrich-pill ep-map" title="${tfEsc(tfTrunc(tfOneLine(mapLinks[0].title || mapLinks[0].url), 120))}"><span class="ep-ico">📍</span>Location</span>`;
+        }
+        if (checklist.length) {
+            const done = checklist.filter(c => c.done).length;
+            const total = checklist.length;
+            const pct = total ? Math.round(done / total * 100) : 0;
+            const cls = (done === total) ? 'all-done' : (done > 0 ? 'in-progress' : '');
+            pills += `<span class="enrich-pill ep-check ${cls}"><span class="ep-ico">✓</span>${done}/${total}<span class="ep-bar"><i style="width:${pct}%"></i></span></span>`;
+        }
+        if (!pills) return '';
+        return `<div class="enrich-row" onclick="event.stopPropagation(); tfToggleExpand(${t.id})">${pills}<span class="enrich-hint">View details <span class="chev">▾</span></span></div>`;
+    }
+
+    // ── E11: expanded detail ──
+    function tfEnrichmentExpand(t) {
+        const desc = t.description;
+        const links = Array.isArray(t.links) ? t.links : [];
+        const checklist = Array.isArray(t.checklist) ? t.checklist : [];
+        if (!desc && !links.length && !checklist.length) return '';
+        let html = '';
+        if (desc) {
+            html += `<div class="enrich-sub"><span class="enrich-sub-label">Notes</span>` +
+                    `<div class="enrich-notes-text">${tfEsc(desc)}</div></div>`;
+        }
+        if (links.length) {
+            let rows = '';
+            links.forEach(l => {
+                const icoCls = 't-' + (l.type || 'url');
+                const label = tfEsc(tfTrunc(l.title || l.url || '', 40));
+                const isOpenable = (l.type === 'url' || l.type === 'map');
+                const btn = isOpenable
+                    ? `<button class="enrich-link-btn open" onclick="event.stopPropagation(); tfOpenLink(${t.id}, '${l.id}')">Open →</button>`
+                    : `<button class="enrich-link-btn copy" onclick="event.stopPropagation(); tfCopyLink(${t.id}, '${l.id}', this)">Copy</button>`;
+                rows += `<div class="enrich-link-row"><span class="elr-ico ${icoCls}">${tfTypeIcon(l.type)}</span>` +
+                        `<span class="elr-label" title="${tfEsc(l.url || '')}">${label}</span>` +
+                        `<span class="elr-id">${tfEsc(l.id)}</span>${btn}</div>`;
+            });
+            html += `<div class="enrich-sub"><span class="enrich-sub-label">Links &amp; References</span>${rows}</div>`;
+        }
+        if (checklist.length) {
+            const done = checklist.filter(c => c.done).length;
+            const total = checklist.length;
+            const pct = total ? Math.round(done / total * 100) : 0;
+            const fillCls = (done === total) ? ' complete' : '';
+            let items = '';
+            checklist.forEach(c => {
+                const checked = c.done ? ' checked' : '';
+                const doneRow = c.done ? ' done' : '';
+                items += `<div class="enrich-chk-row${doneRow}">` +
+                         `<span class="enrich-cbx${checked}" onclick="event.stopPropagation(); tfToggleChecklist(${t.id}, '${c.id}', this)">` +
+                         `<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>` +
+                         `</span><span class="enrich-chk-text">${tfEsc(c.text || '')}</span></div>`;
+            });
+            html += `<div class="enrich-sub"><span class="enrich-sub-label">Checklist (${done}/${total})</span>` +
+                    `<div class="enrich-prog-track"><div class="enrich-prog-fill${fillCls}" style="width:${pct}%"></div></div>${items}</div>`;
+        }
+        html += `<button class="enrich-collapse" onclick="event.stopPropagation(); tfToggleExpand(${t.id})">▲ Hide details</button>`;
+        const openCls = window.tfOpenSet.has(t.id) ? ' open' : '';
+        return `<div class="enrich-expand${openCls}" onclick="event.stopPropagation()">${html}</div>`;
+    }
+
+    function tfBuildEnrichZone(t) {
+        const row = tfEnrichmentRow(t);
+        if (!row) return '';
+        const openCls = window.tfOpenSet.has(t.id) ? ' open' : '';
+        return `<div class="enrich-zone${openCls}" data-eid="${t.id}">${row}${tfEnrichmentExpand(t)}</div>`;
+    }
+
+    // Enrichment shown inside the Mission Briefing modal (always-expanded, interactive)
+    function tfBriefEnrichment(t) {
+        const desc = t.description;
+        const links = Array.isArray(t.links) ? t.links : [];
+        const checklist = Array.isArray(t.checklist) ? t.checklist : [];
+        if (!desc && !links.length && !checklist.length) return '';
+        let html = '';
+        if (desc) {
+            html += `<div class="enrich-sub"><span class="enrich-sub-label">Notes</span>` +
+                    `<div class="enrich-notes-text" style="background:#0D1117;border:1px solid var(--border-subtle);border-radius:8px;padding:12px 14px;max-height:160px;">${tfEsc(desc)}</div></div>`;
+        }
+        if (links.length) {
+            let rows = '';
+            links.forEach(l => {
+                const icoCls = 't-' + (l.type || 'url');
+                const label = tfEsc(tfTrunc(l.title || l.url || '', 40));
+                const isOpenable = (l.type === 'url' || l.type === 'map');
+                const btn = isOpenable
+                    ? `<button class="enrich-link-btn open" onclick="tfOpenLink(${t.id}, '${l.id}')">Open →</button>`
+                    : `<button class="enrich-link-btn copy" onclick="tfCopyLink(${t.id}, '${l.id}', this)">Copy</button>`;
+                rows += `<div class="enrich-link-row"><span class="elr-ico ${icoCls}">${tfTypeIcon(l.type)}</span>` +
+                        `<span class="elr-label" title="${tfEsc(l.url || '')}">${label}</span>` +
+                        `<span class="elr-id">${tfEsc(l.id)}</span>${btn}</div>`;
+            });
+            html += `<div class="enrich-sub"><span class="enrich-sub-label">Links &amp; References</span>${rows}</div>`;
+        }
+        if (checklist.length) {
+            const done = checklist.filter(c => c.done).length;
+            const total = checklist.length;
+            const pct = total ? Math.round(done / total * 100) : 0;
+            const fillCls = (done === total) ? ' complete' : '';
+            let items = '';
+            checklist.forEach(c => {
+                const checked = c.done ? ' checked' : '';
+                const doneRow = c.done ? ' done' : '';
+                items += `<div class="enrich-chk-row${doneRow}">` +
+                         `<span class="enrich-cbx${checked}" onclick="tfToggleChecklist(${t.id}, '${c.id}', this)">` +
+                         `<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>` +
+                         `</span><span class="enrich-chk-text">${tfEsc(c.text || '')}</span></div>`;
+            });
+            html += `<div class="enrich-sub"><span class="enrich-sub-label">Checklist (${done}/${total})</span>` +
+                    `<div class="enrich-prog-track"><div class="enrich-prog-fill${fillCls}" style="width:${pct}%"></div></div>${items}</div>`;
+        }
+        return html;
+    }
+    window.tfRefreshBriefEnrichment = function() {
+        if (!window._briefTaskId) return;
+        const box = document.getElementById('brief-enrich');
+        if (!box) return;
+        const t = allTasks.find(x => x.id === window._briefTaskId);
+        if (t) box.innerHTML = tfBriefEnrichment(t);
+    };
+
+    window.tfToggleExpand = function(taskId) {
+        const zone = document.querySelector(`.enrich-zone[data-eid="${taskId}"]`);
+        if (!zone) return;
+        const expand = zone.querySelector('.enrich-expand');
+        const isOpen = zone.classList.toggle('open');
+        if (expand) expand.classList.toggle('open', isOpen);
+        if (isOpen) window.tfOpenSet.add(taskId); else window.tfOpenSet.delete(taskId);
+    };
+
+    function tfRefreshEnrichZone(taskId) {
+        const zone = document.querySelector(`.enrich-zone[data-eid="${taskId}"]`);
+        if (!zone) return null;
+        const t = allTasks.find(x => x.id === taskId);
+        if (!t) return null;
+        const tmp = document.createElement('div');
+        tmp.innerHTML = tfBuildEnrichZone(t);
+        const fresh = tmp.firstElementChild;
+        if (fresh) zone.replaceWith(fresh);
+        return fresh;
+    }
+
+    window.tfToggleChecklist = async function(taskId, chkId, cbxEl) {
+        try {
+            const res = await fetch(`/api/tasks/${taskId}/checklist/${chkId}/toggle`, { method: 'PATCH' });
+            if (!res.ok) { showToast('Could not update checklist', 'var(--red)'); return; }
+            const updated = await res.json();
+            const idx = allTasks.findIndex(x => x.id === taskId);
+            const wasAllDone = idx >= 0 && allTasks[idx].checklist_total > 0 && allTasks[idx].checklist_done === allTasks[idx].checklist_total;
+            if (idx >= 0) allTasks[idx] = Object.assign({}, allTasks[idx], updated);
+            const nowAllDone = updated.checklist_total > 0 && updated.checklist_done === updated.checklist_total;
+            const fresh = tfRefreshEnrichZone(taskId);
+            if (window._briefTaskId === taskId && window.tfRefreshBriefEnrichment) tfRefreshBriefEnrichment();
+            if (nowAllDone && !wasAllDone) {
+                let track = null;
+                const briefBox = document.getElementById('brief-enrich');
+                if (window._briefTaskId === taskId && briefBox) track = briefBox.querySelector('.enrich-prog-track');
+                if (!track && fresh) track = fresh.querySelector('.enrich-prog-track');
+                if (track) {
+                    tfConfetti(track);
+                    const csub = track.closest('.enrich-sub');
+                    if (csub) { csub.classList.add('enrich-flash'); setTimeout(() => csub.classList.remove('enrich-flash'), 400); }
+                }
+            }
+        } catch (e) { showToast('Network error', 'var(--red)'); }
+    };
+
+    window.tfOpenLink = function(taskId, linkId) {
+        const t = allTasks.find(x => x.id === taskId); if (!t) return;
+        const l = (t.links || []).find(x => x.id === linkId); if (!l) return;
+        window.open(l.url, '_blank');
+    };
+    window.tfCopyLink = function(taskId, linkId, btn) {
+        const t = allTasks.find(x => x.id === taskId); if (!t) return;
+        const l = (t.links || []).find(x => x.id === linkId); if (!l) return;
+        const done = () => { const o = btn.textContent; btn.textContent = 'Copied!'; setTimeout(() => { btn.textContent = o; }, 1500); };
+        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(l.url).then(done).catch(() => showToast('Copy failed', 'var(--red)'));
+        else showToast(l.url, 'var(--blue)');
+    };
+
+    function tfConfetti(anchorEl) {
+        const colors = ['#3FB950', '#58A6FF'];
+        const host = anchorEl.parentElement || anchorEl;
+        if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
+        for (let i = 0; i < 6; i++) {
+            const p = document.createElement('span');
+            p.className = 'enrich-confetti-piece';
+            p.style.background = colors[i % 2];
+            p.style.left = (10 + Math.random() * 80) + '%';
+            p.style.top = '0px';
+            p.style.setProperty('--cx', (Math.random() * 40 - 20) + 'px');
+            p.style.setProperty('--cy', -(30 + Math.random() * 20) + 'px');
+            p.style.setProperty('--cr', (Math.random() * 360) + 'deg');
+            p.style.animation = 'enrichConfetti 550ms ease-out forwards';
+            host.appendChild(p);
+            setTimeout(() => p.remove(), 600);
+        }
+    }
+
+    // ── E12: create-mission panel helpers ──
+    window.tfSelectLinkType = function(btn, type) {
+        window.tfLinkType = type;
+        btn.parentElement.querySelectorAll('.enrich-type-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const input = document.getElementById('mission-link-input');
+        const ph = { url: 'https://...', map: 'Maps link or location name...', reference: 'Document title, book, person...', file: '/path/to/file or filename...' };
+        if (input) input.placeholder = ph[type] || 'https://...';
+    };
+    window.tfAddLink = function() {
+        const input = document.getElementById('mission-link-input');
+        const titleInput = document.getElementById('mission-link-title');
+        if (!input) return;
+        const val = input.value.trim();
+        if (!val) return;
+        if (window.pendingLinks.length >= 10) { showToast('Maximum 10 links', 'var(--amber)'); return; }
+        window.pendingLinks.push({ type: window.tfLinkType, url: val, title: (titleInput && titleInput.value.trim()) || null });
+        input.value = ''; if (titleInput) titleInput.value = '';
+        tfRenderLinkChips(); input.focus();
+    };
+    window.tfRemoveLink = function(idx) {
+        const chips = document.getElementById('mission-links-list');
+        const chip = chips ? chips.children[idx] : null;
+        if (chip) { chip.classList.add('removing'); setTimeout(() => { window.pendingLinks.splice(idx, 1); tfRenderLinkChips(); }, 150); }
+        else { window.pendingLinks.splice(idx, 1); tfRenderLinkChips(); }
+    };
+    function tfRenderLinkChips() {
+        const box = document.getElementById('mission-links-list');
+        if (!box) return;
+        box.innerHTML = window.pendingLinks.map((l, i) =>
+            `<span class="enrich-chip"><span class="ec-ico t-${l.type}">${tfTypeIcon(l.type)}</span>` +
+            `<span class="ec-val" title="${tfEsc(l.url)}">${tfEsc(tfTrunc(l.title || l.url, 40))}</span>` +
+            `<span class="ec-x" onclick="tfRemoveLink(${i})">×</span></span>`
+        ).join('');
+        if (window.tfUpdateProgressDots) tfUpdateProgressDots();
+    }
+    window.tfAddChecklistItem = function() {
+        const input = document.getElementById('mission-checklist-input');
+        if (!input) return;
+        const val = input.value.trim();
+        if (!val) return;
+        if (window.pendingChecklist.length >= 20) { showToast('Maximum 20 items', 'var(--amber)'); return; }
+        window.pendingChecklist.push(val);
+        input.value = ''; tfRenderChecklistBuild(); input.focus();
+    };
+    window.tfRemoveChecklistItem = function(idx) { window.pendingChecklist.splice(idx, 1); tfRenderChecklistBuild(); };
+    function tfRenderChecklistBuild() {
+        const box = document.getElementById('mission-checklist-list');
+        if (!box) return;
+        box.innerHTML = window.pendingChecklist.map((txt, i) =>
+            `<div class="enrich-build-item" draggable="true" data-idx="${i}" ` +
+            `ondragstart="tfDragStart(event,${i})" ondragover="tfDragOver(event,${i})" ondragleave="tfDragLeave(event)" ondrop="tfDrop(event,${i})" ondragend="tfDragEnd(event)">` +
+            `<span class="ebi-grip">⋮⋮</span><span class="ebi-box"></span>` +
+            `<span class="ebi-text">${tfEsc(txt)}</span><span class="ebi-x" onclick="tfRemoveChecklistItem(${i})">×</span></div>`
+        ).join('');
+        if (window.tfUpdateProgressDots) tfUpdateProgressDots();
+    }
+    window._tfDragIdx = null;
+    window.tfDragStart = function(e, i) { window._tfDragIdx = i; if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'; };
+    window.tfDragOver = function(e, i) { e.preventDefault(); if (e.currentTarget) e.currentTarget.classList.add('drag-over'); };
+    window.tfDragLeave = function(e) { if (e.currentTarget) e.currentTarget.classList.remove('drag-over'); };
+    window.tfDrop = function(e, i) {
+        e.preventDefault();
+        const from = window._tfDragIdx;
+        if (from == null || from === i) { window.tfDragEnd(e); return; }
+        const arr = window.pendingChecklist;
+        const moved = arr.splice(from, 1)[0];
+        arr.splice(i, 0, moved);
+        window._tfDragIdx = null;
+        tfRenderChecklistBuild();
+    };
+    window.tfDragEnd = function(e) { document.querySelectorAll('.enrich-build-item').forEach(el => el.classList.remove('drag-over')); window._tfDragIdx = null; };
+
+    window.tfAutoGrow = function(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; };
+    window.tfNotesCounter = function(el) {
+        const c = document.getElementById('mission-notes-counter');
+        if (!c) return;
+        const n = el.value.length;
+        if (n > 0) { c.textContent = n + ' chars'; c.classList.add('show'); }
+        else { c.textContent = ''; c.classList.remove('show'); }
+    };
+    window.tfResetEnrichmentPanel = function() {
+        const notes = document.getElementById('mission-notes');
+        if (notes) { notes.value = ''; notes.style.height = 'auto'; }
+        const counter = document.getElementById('mission-notes-counter'); if (counter) { counter.textContent = ''; counter.classList.remove('show'); }
+        const li = document.getElementById('mission-link-input'); if (li) li.value = '';
+        const lt = document.getElementById('mission-link-title'); if (lt) lt.value = '';
+        const ci = document.getElementById('mission-checklist-input'); if (ci) ci.value = '';
+        window.pendingLinks = []; window.pendingChecklist = []; window.tfLinkType = 'url';
+        document.querySelectorAll('.enrich-type-btn').forEach(b => b.classList.toggle('active', b.getAttribute('data-ltype') === 'url'));
+        tfRenderLinkChips(); tfRenderChecklistBuild();
+    };
+
+    function renderTaskList() {
         try {
             const container = document.getElementById('task-list-container');
             if (!container) {
@@ -2687,16 +3495,24 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 if (card) rects.set(wrap.dataset.id, card.getBoundingClientRect());
             });
 
-            const activeTasks = allTasks.filter(t => !t.completed && t.status !== 'completed' && t.status !== 'done');
+            const activeTasks = allTasks.filter(t => !t.completed && t.status !== 'completed' && t.status !== 'done' && !t.dropped_at && !t.offloaded_at);
             const filtered = activeTasks.filter(t => {
                 const p = normalizePriority(t.priority);
-                if (tagFilter) return (t.tags || []).includes(tagFilter);
+                
+                let tTags = [];
+                if (t.tags) {
+                    if (Array.isArray(t.tags)) tTags = t.tags;
+                    else if (typeof t.tags === 'string') tTags = t.tags.split(',').map(s=>s.trim());
+                }
+
+                if (currentFilter === 'tagged' && currentTagFilter) return tTags.includes(currentTagFilter);
                 if (currentFilter === 'all')    return true;
                 if (currentFilter === 'high')   return p === 'high' || t.deadline_type === 'hard';
                 if (currentFilter === 'medium') return p === 'medium' && t.deadline_type !== 'hard';
                 if (currentFilter === 'low')    return p === 'low';
                 return true;
             });
+
 
             // Sort tasks
             filtered.sort((a, b) => {
@@ -2726,7 +3542,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 const isOverdue = dl ? dl.isOverdue : false;
 
                 // Duration badge
-                const durBadge = t.duration ? `<span class="duration-badge">${t.duration}</span>` : '';
+                const durBadge = t.duration ? `<span class="duration-badge">[${t.duration}]</span>` : '';
 
                 // Overdue chip
                 const overdueChip = isOverdue ? `<span class="overdue-chip">OVERDUE</span>` : '';
@@ -2737,7 +3553,33 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     const pc = t.postpone_count;
                     const cls = pc >= 3 ? 'warn' : 'mild';
                     const warn = pc >= 5 ? ' ⚠⚠' : pc >= 3 ? ' ⚠' : '';
-                    postponeBadge = `<span class="postpone-badge ${cls}">postponed ×${pc}${warn}</span>`;
+                    
+                    // Hover relative time tooltip helper
+                    let tooltip = '';
+                    if (t.postpone_history && t.postpone_history.length > 0) {
+                        try {
+                            const lastEntry = t.postpone_history[t.postpone_history.length - 1];
+                            let dateStr = lastEntry;
+                            if (lastEntry.startsWith('{')) {
+                                const parsed = JSON.parse(lastEntry);
+                                dateStr = parsed.date;
+                            }
+                            const lastDate = new Date(dateStr);
+                            if (!isNaN(lastDate.getTime())) {
+                                const diffMs = new Date() - lastDate;
+                                const diffMin = Math.floor(diffMs / 60000);
+                                const diffHr = Math.floor(diffMs / 3600000);
+                                const diffDays = Math.floor(diffMs / 86400000);
+                                if (diffMin < 1) tooltip = 'just now';
+                                else if (diffMin < 60) tooltip = `${diffMin}m ago`;
+                                else if (diffHr < 24) tooltip = `${diffHr}h ago`;
+                                else tooltip = `${diffDays}d ago`;
+                                tooltip = `Last postponed: ${tooltip}`;
+                            }
+                        } catch(err) {}
+                    }
+                    
+                    postponeBadge = `<span class="postpone-badge ${cls}" title="${tooltip}">postponed ×${pc}${warn}</span>`;
                 }
 
                 // Deadline row
@@ -2784,6 +3626,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                             ${postponeBadge}
                         </div>
                         ${deadlineRow ? '<div style="padding-left:28px;">' + deadlineRow + '</div>' : ''}
+                        ${tfBuildEnrichZone(t)}
                     </div>
                         <div class="task-action-strip">
                             <div class="action-icon" onclick="event.stopPropagation(); startFocusFromCard(${t.id}, this)" title="Deploy Focus Protocol">
@@ -2842,13 +3685,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     function filterTasks(crit, element) {
         currentFilter = crit;
+        currentTagFilter = null;
         document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
         if (element) element.classList.add('active');
         renderTaskList();
     }
 
     function updateFilterCounts() {
-        const activeTasks = allTasks.filter(t => !t.completed && t.status !== 'completed' && t.status !== 'done');
+        const activeTasks = allTasks.filter(t => !t.completed && t.status !== 'completed' && t.status !== 'done' && !t.dropped_at && !t.offloaded_at);
         const all = activeTasks.length;
         const high = activeTasks.filter(t => normalizePriority(t.priority)==='high' || t.deadline_type==='hard').length;
         const med = activeTasks.filter(t => normalizePriority(t.priority)==='medium' && t.deadline_type!=='hard').length;
@@ -2907,7 +3751,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     function checkReminders() {
         const stack = document.getElementById('reminder-stack');
         if (!stack) return;
-        const activeTasks = allTasks.filter(t => !t.completed && t.status !== 'completed' && t.status !== 'done');
+        const activeTasks = allTasks.filter(t => !t.completed && t.status !== 'completed' && t.status !== 'done' && !t.dropped_at && !t.offloaded_at);
         const due = activeTasks.filter(t => t.reminder_fired && !t.reminder_dismissed);
         stack.innerHTML = '';
         due.slice(0, 3).forEach(t => {
@@ -2949,6 +3793,22 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         document.getElementById('dl-soft').classList.toggle('selected', type === 'soft');
         document.getElementById('dl-hard').classList.toggle('selected', type === 'hard');
         document.getElementById('hard-warning').classList.toggle('visible', type === 'hard');
+    };
+
+    // S1-H: Duration pill single-select with bounce animation
+    window.selectDurationPill = function(el, value) {
+        document.querySelectorAll('[data-dur]').forEach(b => b.classList.remove('selected'));
+        el.classList.add('selected');
+        const inp = document.getElementById('mission-duration');
+        if (inp) inp.value = value;
+    };
+
+    // S2-H: Deadline quick-select pills
+    window.selectDeadlinePill = function(el, value) {
+        document.querySelectorAll('[data-dl-preset]').forEach(b => b.classList.remove('selected'));
+        el.classList.add('selected');
+        const inp = document.getElementById('mission-deadline');
+        if (inp) { inp.value = value; inp.dispatchEvent(new Event('input')); }
     };
 
     // ── ANALYTICS & INTELLIGENCE SYSTEM ────────────────────────────────────
@@ -3002,8 +3862,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     function filterByTag(tag) {
         currentFilter = 'tagged';
+        currentTagFilter = tag;
         document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
-        renderTaskList(tag);
+        renderTaskList();
     }
 
     // ── TIMELINE CALENDAR SYSTEM ──────────────────────────────────────────
@@ -3255,7 +4116,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
             pool.innerHTML = '';
             
-            const activeTasks = allTasks.filter(t => !t.completed && t.status !== 'completed' && t.status !== 'done');
+            const activeTasks = allTasks.filter(t => !t.completed && t.status !== 'completed' && t.status !== 'done' && !t.dropped_at && !t.offloaded_at);
 
             activeTasks.forEach(task => {
                 const np = normalizePriority(task.priority);
@@ -3283,22 +4144,43 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
                 // Place task: check mapping first, then deadline date, then unscheduled
                 const dateKey = mapping[task.id];
+                let isScheduled = !!dateKey || !!task.deadline;
                 let placed = false;
+                
+                let targetDateStr = '';
                 if (dateKey) {
-                    const zone = grid.querySelector(`[data-date="${dateKey}"]`);
-                    if (zone) { zone.appendChild(el); placed = true; }
-                    else {
-                        const baseDate = dateKey.replace('_prime', '');
-                        const fallbackZone = grid.querySelector(`.timeline-dropzone[data-date="${baseDate}"]`);
-                        if (fallbackZone) { fallbackZone.appendChild(el); placed = true; }
+                    targetDateStr = dateKey.replace('_prime', '');
+                } else if (task.deadline) {
+                    try {
+                        targetDateStr = formatDateISO(new Date(task.deadline));
+                    } catch(err) {}
+                }
+                
+                if (targetDateStr) {
+                    // Check if this date is visible in our current grid
+                    const hasZone = grid.querySelector(`.timeline-dropzone[data-date="${targetDateStr}"]`);
+                    if (hasZone) {
+                        // Find exact slot (prime or standard)
+                        const primeZone = grid.querySelector(`[data-date="${dateKey}"]`);
+                        if (primeZone && dateKey && dateKey.endsWith('_prime')) {
+                            primeZone.appendChild(el);
+                            placed = true;
+                        } else {
+                            const dropzone = grid.querySelector(`.timeline-dropzone[data-date="${targetDateStr}"]`);
+                            if (dropzone) {
+                                dropzone.appendChild(el);
+                                placed = true;
+                            }
+                        }
+                    } else {
+                        // It is off-screen. Skip rendering.
+                        placed = true; // Prevents showing in unscheduled pool
                     }
                 }
-                if (!placed && task.deadline) {
-                    const dlDate = formatDateISO(new Date(task.deadline));
-                    const zone = grid.querySelector(`.timeline-dropzone[data-date="${dlDate}"]`);
-                    if (zone) { zone.appendChild(el); placed = true; }
+
+                if (!placed && !isScheduled) {
+                    pool.appendChild(el);
                 }
-                if (!placed) pool.appendChild(el);
             });
 
             // Update column headers with mission counts
@@ -3306,10 +4188,33 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 const dropzone = dayEl.querySelector('.timeline-dropzone');
                 if (!dropzone) return;
                 const count = dropzone.querySelectorAll('.timeline-task').length;
+                
+                // prime targets count placeholder
                 const primeSlot = dayEl.querySelector('.prime-target-slot');
                 if (primeSlot) {
                     const label = primeSlot.querySelector('.prime-target-label');
-                    if (label) label.textContent = count > 0 ? count + ' MISSION' + (count > 1 ? 'S' : '') : '[ PRIME TARGET ]';
+                    const hasPrime = primeSlot.querySelectorAll('.timeline-task').length > 0;
+                    if (label) {
+                        if (hasPrime) {
+                            label.textContent = '★ PRIME TARGET';
+                        } else {
+                            label.textContent = '[ PRIME TARGET ]';
+                        }
+                    }
+                }
+                
+                // Show standard mission count in header
+                const header = dayEl.querySelector('.timeline-day-header');
+                if (header) {
+                    const existingBadge = header.querySelector('.header-count-badge');
+                    if (existingBadge) existingBadge.remove();
+                    if (count > 0) {
+                        const badge = document.createElement('span');
+                        badge.className = 'header-count-badge';
+                        badge.style.cssText = 'background: rgba(255,255,255,0.1); color: var(--text-muted); font-size: 9px; padding: 2px 6px; border-radius: 10px; margin-left: 6px;';
+                        badge.textContent = count;
+                        header.appendChild(badge);
+                    }
                 }
             });
         } catch(e) {
@@ -3360,15 +4265,21 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     function renderTagSignals() {
         const discovery = document.getElementById('tag-signal-discovery');
         if (!discovery) return;
-        const activeTasks = allTasks.filter(t => !t.completed && t.status !== 'completed' && t.status !== 'done');
-        const uniqueTags = [...new Set(activeTasks.flatMap(t => t.tags || []))];
+        const activeTasks = allTasks.filter(t => !t.completed && t.status !== 'completed' && t.status !== 'done' && !t.dropped_at && !t.offloaded_at);
+        const uniqueTags = [...new Set(activeTasks.flatMap(t => {
+            if (!t.tags) return [];
+            if (Array.isArray(t.tags)) return t.tags;
+            if (typeof t.tags === 'string') return t.tags.split(',').map(s=>s.trim());
+            return [];
+        }))];
         if (uniqueTags.length === 0) {
             discovery.innerHTML = `<div style="font-size:10px; color:var(--text-disabled); font-style:italic;">No signals discovered.</div>`;
             return;
         }
-        discovery.innerHTML = uniqueTags.map(tg =>
-            `<div class="filter-chip" onclick="filterByTag('${tg}', this)">#${tg.toUpperCase()}</div>`
-        ).join('');
+        discovery.innerHTML = uniqueTags.map(tg => {
+            const isActive = (currentFilter === 'tagged' && currentTagFilter === tg) ? ' active' : '';
+            return `<div class="filter-chip${isActive}" onclick="filterByTag('${tg}', this)">#${tg.toUpperCase()}</div>`;
+        }).join('');
     }
 
     // ── MODAL SYSTEM ──────────────────────────────────────────────────────
@@ -3386,7 +4297,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         const np = normalizePriority(task.priority);
         const dl = formatDeadline(task.deadline);
         const dlInfo = dl ? `<div class="modal-deadline" style="color:${dl.color}">⏰ ${dl.text}${task.deadline_type==='hard'?' <span class="hard-tag">⚠ HARD</span>':''}</div>` : '';
-        const durBadge = task.duration ? `<span class="duration-badge">${task.duration}</span>` : '';
+        const durBadge = task.duration ? `<span class="duration-badge">[${task.duration}]</span>` : '';
         const postponeBadge = (task.postpone_count||0) >= 2 ? `<span class="postpone-badge ${task.postpone_count>=3?'warn':'mild'}">postponed ×${task.postpone_count}</span>` : '';
         const tagBadges = (task.tags||[]).map(tg => `<span class="badge tag">#${tg}</span>`).join('');
         const pc = task.postpone_count || 0;
@@ -3398,87 +4309,101 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
         const createdDate = task.created_at ? new Date(task.created_at).toLocaleDateString([], {day:'numeric', month:'short', year:'numeric'}) : 'Unknown';
 
+        let fMin = 25;
+        if (task.duration) { const mm = String(task.duration).match(/([0-9]+) *(h|m)/i); if (mm) fMin = mm[2].toLowerCase() === 'h' ? parseInt(mm[1]) * 60 : parseInt(mm[1]); }
+        const focusClock = (fMin < 10 ? '0' : '') + fMin + ':00';
+
         document.getElementById('modal-content').innerHTML = `
-            <div class="section-label" style="margin-bottom:8px;letter-spacing:3px;">MISSION BRIEFING</div>
-            <h2 style="font-size:24px; font-weight:700; color:var(--text-hero); margin-bottom:14px; line-height:1.3; padding-right:40px;">${task.title}</h2>
-            <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; align-items:center;">
-                <span class="badge ${np}">${(task.priority||'MEDIUM').toUpperCase()}</span>
-                ${durBadge}
-                ${tagBadges}
-                ${postponeBadge}
-            </div>
-            ${dlInfo}
-
-            <div class="epdo-section">
-                <div class="epdo-label">COMMAND MATRIX</div>
-                <div class="epdo-grid">
-                    <button class="epdo-btn execute" onclick="startFocus(${task.id}); closeModal();" title="Start Focus Protocol">
-                        <span class="epdo-icon">▶</span>
-                        <span class="epdo-text">EXECUTE</span>
-                        <span class="epdo-key">E</span>
-                    </button>
-                    <button class="epdo-btn postpone${!canPostpone?' disabled':''}" onclick="togglePostponePanel(${task.id})" title="Postpone deadline"${!canPostpone?' disabled':''}>
-                        <span class="epdo-icon">⏳</span>
-                        <span class="epdo-text">POSTPONE</span>
-                        <span class="epdo-key">P</span>
-                    </button>
-                    <button class="epdo-btn drop" onclick="dropTaskFromModal(${task.id})" title="Purge mission">
-                        <span class="epdo-icon">✕</span>
-                        <span class="epdo-text">DROP</span>
-                        <span class="epdo-key">D</span>
-                    </button>
-                    <button class="epdo-btn offload" onclick="toggleOffloadPanel(${task.id})" title="Delegate to someone">
-                        <span class="epdo-icon">→</span>
-                        <span class="epdo-text">OFFLOAD</span>
-                        <span class="epdo-key">O</span>
-                    </button>
+            <div class="brief-header">
+                <div class="brief-h-label">MISSION BRIEFING</div>
+                <h2 class="brief-title">${task.title}</h2>
+                <div class="brief-badges">
+                    <span class="badge ${np}">${(task.priority||'MEDIUM').toUpperCase()}</span>
+                    ${durBadge}
+                    ${tagBadges}
+                    ${postponeBadge}
                 </div>
-                ${postponeWarn}
+                ${dlInfo ? `<div class="brief-deadline">${dlInfo}</div>` : ''}
             </div>
 
-            <div class="epdo-sub-panel" id="postpone-panel" style="display:none;">
-                <div class="epdo-sub-label">PUSH DEADLINE →</div>
-                <div class="postpone-options">
-                    <button class="postpone-opt" onclick="executePostpone(${task.id}, '+15m')">+15 min</button>
-                    <button class="postpone-opt" onclick="executePostpone(${task.id}, '+1h')">+1 hour</button>
-                    <button class="postpone-opt" onclick="executePostpone(${task.id}, '+3h')">+3 hours</button>
-                    <button class="postpone-opt" onclick="executePostpone(${task.id}, 'tomorrow')">Tomorrow 9AM</button>
+            <div class="brief-body" id="brief-body">
+                <div class="brief-enrich-block" id="brief-enrich" data-bid="${task.id}">${tfBriefEnrichment(task)}</div>
+
+                <div style="background:rgba(255,255,255,0.02); padding:18px; border-radius:14px; border:1px solid rgba(255,255,255,0.05);">
+                    <div class="section-label" style="margin-bottom:12px;font-size:9px;">FOCUS PROTOCOL</div>
+                    <div style="font-size:34px; font-family:var(--font-mono); margin-bottom:14px; color:var(--text-hero); text-align:center; opacity:0.8;">${focusClock}</div>
+                    <button class="btn-execute" style="width:100%; margin-bottom:10px; padding:13px;" onclick="startFocus(${task.id})">DEPLOY FOCUS SESSION</button>
+                    <div style="display:flex;gap:8px;">
+                        <button class="epdo-btn-util complete" onclick="completeTaskFromModal(${task.id})">✓ COMPLETE</button>
+                        <button class="epdo-btn-util ai" onclick="showToast('Querying Intelligence Core...', 'var(--ai-purple)')">✦ ASK AI</button>
+                    </div>
                 </div>
-                <div class="postpone-custom-row">
-                    <input type="text" id="postpone-custom-input" class="input-system" style="width:100%;" placeholder="Custom time (e.g. 'next fri 3pm')" autocomplete="off">
-                    <textarea id="postpone-reason" class="postpone-reason" rows="2" placeholder="Why are we postponing this? Be honest..."></textarea>
-                    <button class="epdo-btn postpone" style="width:100%; margin-top:8px; padding:10px;" onclick="executePostpone(${task.id}, 'custom')">
-                        <span class="epdo-icon">⏳</span> CONFIRM DELAY
-                    </button>
+
+                <div class="brief-meta">
+                    <span>ID: #${task.id}</span>
+                    <span>Created: ${createdDate}</span>
                 </div>
             </div>
 
-            <div class="epdo-sub-panel" id="offload-panel" style="display:none;">
-                <div class="epdo-sub-label">DELEGATE TO →</div>
-                <div style="display:flex;gap:8px;">
-                    <input type="text" id="offload-note-input" class="input-system" style="flex:1;" placeholder="Who takes ownership?" autocomplete="off">
-                    <button class="epdo-btn offload" style="width:auto;padding:10px 20px;" onclick="executeOffload(${task.id})">
-                        <span class="epdo-icon">→</span> CONFIRM
-                    </button>
+            <div class="brief-footer">
+                <div class="epdo-sub-panel" id="postpone-panel" style="display:none; margin-bottom:10px;">
+                    <div class="epdo-sub-label">PUSH DEADLINE →</div>
+                    <div class="postpone-options">
+                        <button class="postpone-opt" onclick="executePostpone(${task.id}, '+15m')">+15 min</button>
+                        <button class="postpone-opt" onclick="executePostpone(${task.id}, '+1h')">+1 hour</button>
+                        <button class="postpone-opt" onclick="executePostpone(${task.id}, '+3h')">+3 hours</button>
+                        <button class="postpone-opt" onclick="executePostpone(${task.id}, 'tomorrow')">Tomorrow 9AM</button>
+                    </div>
+                    <div class="postpone-custom-row">
+                        <input type="text" id="postpone-custom-input" class="input-system" style="width:100%;" placeholder="Custom time (e.g. 'next fri 3pm')" autocomplete="off">
+                        <textarea id="postpone-reason" class="postpone-reason" rows="2" placeholder="Why are we postponing this? Be honest..."></textarea>
+                        <button class="epdo-btn postpone" style="width:100%; margin-top:8px; padding:10px;" onclick="executePostpone(${task.id}, 'custom')">
+                            <span class="epdo-icon">⏳</span> CONFIRM DELAY
+                        </button>
+                    </div>
                 </div>
-            </div>
 
-            <div style="background:rgba(255,255,255,0.02); padding:20px; border-radius:14px; border:1px solid rgba(255,255,255,0.05); margin-top:14px;">
-                <div class="section-label" style="margin-bottom:12px;font-size:9px;">FOCUS PROTOCOL</div>
-                <div style="font-size:36px; font-family:var(--font-mono); margin-bottom:14px; color:var(--text-hero); text-align:center; opacity:0.8;">25:00</div>
-                <button class="btn-execute" style="width:100%; margin-bottom:10px; padding:13px;" onclick="startFocus(${task.id})">DEPLOY FOCUS SESSION</button>
-                <div style="display:flex;gap:8px;">
-                    <button class="epdo-btn-util complete" onclick="completeTaskFromModal(${task.id})">✓ COMPLETE</button>
-                    <button class="epdo-btn-util ai" onclick="showToast('Querying Intelligence Core...', 'var(--ai-purple)')">✦ ASK AI</button>
+                <div class="epdo-sub-panel" id="offload-panel" style="display:none; margin-bottom:10px;">
+                    <div class="epdo-sub-label">DELEGATE TO →</div>
+                    <div style="display:flex;gap:8px;">
+                        <input type="text" id="offload-note-input" class="input-system" style="flex:1;" placeholder="Who takes ownership?" autocomplete="off">
+                        <button class="epdo-btn offload" style="width:auto;padding:10px 20px;" onclick="executeOffload(${task.id})">
+                            <span class="epdo-icon">→</span> CONFIRM
+                        </button>
+                    </div>
                 </div>
-            </div>
 
-            <div class="modal-meta-row">
-                <span>ID: #${task.id}</span>
-                <span>Created: ${createdDate}</span>
+                <div class="epdo-section" style="margin:0;">
+                    <div class="epdo-label">COMMAND MATRIX</div>
+                    <div class="epdo-grid">
+                        <button class="epdo-btn execute" onclick="startFocus(${task.id}); closeModal();" title="Start Focus Protocol">
+                            <span class="epdo-icon">▶</span>
+                            <span class="epdo-text">EXECUTE</span>
+                            <span class="epdo-key">E</span>
+                        </button>
+                        <button class="epdo-btn postpone${!canPostpone?' disabled':''}" onclick="togglePostponePanel(${task.id})" title="Postpone deadline"${!canPostpone?' disabled':''}>
+                            <span class="epdo-icon">⏳</span>
+                            <span class="epdo-text">POSTPONE</span>
+                            <span class="epdo-key">P</span>
+                        </button>
+                        <button class="epdo-btn drop" onclick="dropTaskFromModal(${task.id})" title="Purge mission">
+                            <span class="epdo-icon">✕</span>
+                            <span class="epdo-text">DROP</span>
+                            <span class="epdo-key">D</span>
+                        </button>
+                        <button class="epdo-btn offload" onclick="toggleOffloadPanel(${task.id})" title="Delegate to someone">
+                            <span class="epdo-icon">→</span>
+                            <span class="epdo-text">OFFLOAD</span>
+                            <span class="epdo-key">O</span>
+                        </button>
+                    </div>
+                    ${postponeWarn}
+                </div>
             </div>
         `;
         modal.classList.add('show');
+        document.body.style.overflow = 'hidden';
+        window._briefTaskId = task.id;
 
         // Keyboard shortcuts for EPDO
         if (_modalKeyHandler) document.removeEventListener('keydown', _modalKeyHandler);
@@ -3499,9 +4424,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     function closeModal() {
         modal.classList.remove('show');
+        document.body.style.overflow = '';
+        window._briefTaskId = null;
         if (_modalKeyHandler) { document.removeEventListener('keydown', _modalKeyHandler); _modalKeyHandler = null; }
     }
     document.getElementById('btn-modal-close').onclick = closeModal;
+    (function(){ const ov = document.getElementById('modal-overlay'); if (ov && !ov._tfBackdrop) { ov._tfBackdrop = true; ov.addEventListener('click', e => { if (e.target === ov) closeModal(); }); } })();
 
     // ── EPDO HANDLERS ──────────────────────────────────────────────────
     window.togglePostponePanel = function(taskId) {
@@ -3757,7 +4685,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     const disp = document.getElementById('deadline-parsed-display');
                     const section = document.getElementById('deadline-type-section');
                     const val = dlInput.value.trim();
-                    if (!val) { parsedDeadlineISO = null; if(disp){disp.textContent='';disp.classList.remove('visible');} if(section)section.style.display='none'; return; }
+                    if (!val) { parsedDeadlineISO = null; if(disp){disp.textContent='';disp.classList.remove('visible');} if(section)section.style.display='none'; if(window.tfUpdateProgressDots) tfUpdateProgressDots(); return; }
                     const parsed = parseDeadlineInput(val);
                     if (parsed) {
                         parsedDeadlineISO = parsed.toISOString();
@@ -3769,6 +4697,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                         if(disp){disp.textContent="→ Could not understand. Try: 'Friday 3pm'"; disp.style.color='#F85149'; disp.classList.add('visible');}
                         if(section)section.style.display='none';
                     }
+                    if(window.tfUpdateProgressDots) tfUpdateProgressDots();
                 }, 800);
             });
         }
@@ -3788,8 +4717,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
         // ── PHASE 1: Start pressure, recovery, reminder intervals ──
         checkRecoveryStatus();
-        setInterval(() => { updateAllPressureLevels(); checkReminders(); }, 60000);
-        setInterval(checkRecoveryStatus, 60000);
+        setInterval(() => {
+            updateAllPressureLevels();
+            checkReminders();
+            checkRecoveryStatus();
+        }, 60000);
         setTimeout(() => { checkReminders(); }, 2000);
 
         // ── OMNIBAR (FRICTIONLESS CAPTURE) INIT ────────

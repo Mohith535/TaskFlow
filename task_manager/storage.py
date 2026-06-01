@@ -25,6 +25,7 @@ class TaskStorage:
         self.backup_dir = self.data_dir / "backups"
         self.recovery_state_file = self.data_dir / "recovery_state.json"
         self.recovery_log_file = self.data_dir / "recovery_log.json"
+        self.config_file = self.data_dir / "config.json"
         
         self._ensure_directories()
 
@@ -262,6 +263,37 @@ class TaskStorage:
             return True
         except Exception as e:
             print(f"Error appending recovery log: {e}")
+            return False
+
+    def load_config(self) -> dict:
+        """Load global configuration (e.g. first run flag)."""
+        default_config = {
+            "first_run_complete": False,
+            "today_views_opened": 0,
+            "last_today_view": None
+        }
+        if not self.config_file.exists():
+            return default_config
+        try:
+            with open(self.config_file, 'r') as file:
+                config = json.load(file)
+                for k, v in default_config.items():
+                    if k not in config:
+                        config[k] = v
+                return config
+        except Exception:
+            return default_config
+
+    def save_config(self, config: dict) -> bool:
+        """Save global configuration."""
+        try:
+            temp_file = self.config_file.with_suffix('.tmp')
+            with open(temp_file, 'w') as file:
+                json.dump(config, file, indent=2)
+            temp_file.replace(self.config_file)
+            return True
+        except Exception as e:
+            print(f"Error saving config: {e}")
             return False
 
 

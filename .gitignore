@@ -46,3 +46,6 @@ fix_parser.py
 fix_timeline.py
 patch2.py
 patch_all.py
+
+# Personal / long-form draft content — keep local, not for the public repo
+ARTICLE.md

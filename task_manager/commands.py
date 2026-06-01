@@ -24,193 +24,518 @@ from .blockers import GentleBlocker  # For fallback
 from .blockers.blocklist import blocklist_manager
 
 def parse_deadline(raw_string: str):
-    """Parse natural language date/time strings."""
+    """Parse natural language date/time strings. Always returns timezone-naive datetime."""
     if not raw_string or not raw_string.strip():
         return None
         
     import re
-    # Convert "monday 17h" to "monday 17:00" but leave "in 2h" alone
-    processed_string = re.sub(r'(?<!in )(?<!\+)\b(\d{1,2})h\b', r'\1:00', raw_string.lower())
+    processed = raw_string.lower().strip()
     
-    return dateparser.parse(
-        processed_string,
+    # "monday 17h" -> "monday 17:00"
+    processed = re.sub(r'(?<!in )(?<!\+)\b(\d{1,2})h\b', r'\1:00', processed)
+    
+    # exact matches
+    if processed == "tomorrow":
+        processed = "tomorrow 9am"
+    elif processed == "morning":
+        processed = "tomorrow 9am"
+    elif processed == "evening":
+        processed = "today 6pm"
+        
+    # next day
+    processed = re.sub(r'\bnext\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b', r'\1', processed)
+    
+    dt = dateparser.parse(
+        processed,
         settings={
             'PREFER_DATES_FROM': 'future',
             'PREFER_DAY_OF_MONTH': 'first',
-            'DATE_ORDER': 'DMY'
+            'DATE_ORDER': 'DMY',
+            'RETURN_AS_TIMEZONE_AWARE': False,
+            'TIMEZONE': 'local'
         }
     )
+    if dt and dt.tzinfo is not None:
+        dt = dt.replace(tzinfo=None)
+    return dt
+
+def format_time_remaining(td: timedelta) -> str:
+    secs = int(td.total_seconds())
+    if secs >= 0:
+        if secs > 3600:
+            h = secs // 3600
+            m = (secs % 3600) // 60
+            return f"{h}h {m}m remaining" if m > 0 else f"{h}h remaining"
+        elif secs >= 60:
+            return f"{secs // 60}m remaining"
+        else:
+            return f"{secs}s remaining"
+    else:
+        secs = abs(secs)
+        if secs > 3600:
+            h = secs // 3600
+            m = (secs % 3600) // 60
+            return f"OVERDUE {h}h {m}m" if m > 0 else f"OVERDUE {h}h"
+        else:
+            return f"OVERDUE {secs // 60}m"
+
+def format_deadline_display(task: Task) -> str:
+    if not getattr(task, 'deadline', None):
+        return ""
+    try:
+        dt = datetime.fromisoformat(task.deadline)
+        if dt.tzinfo is not None:
+            dt = dt.replace(tzinfo=None)
+        now = datetime.now()
+        today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        task_date = dt.replace(hour=0, minute=0, second=0, microsecond=0)
+        
+        is_hard = (getattr(task, 'deadline_type', None) == "hard")
+        hard_tag = " ⚠ HARD" if is_hard else ""
+        
+        if dt < now:
+            # Overdue
+            date_formatted = dt.strftime('%b %d, %I:%M %p').replace(" 0", " ")
+            color = Fore.RED
+            res = f"OVERDUE — {date_formatted}"
+        elif task_date == today:
+            time_formatted = dt.strftime('%I:%M %p').lstrip('0')
+            color = Fore.YELLOW
+            res = f"Today at {time_formatted}"
+        elif task_date == today + timedelta(days=1):
+            time_formatted = dt.strftime('%I:%M %p').lstrip('0')
+            color = Fore.CYAN
+            res = f"Tomorrow at {time_formatted}"
+        else:
+            date_formatted = dt.strftime('%a %d %b, %I:%M %p').replace(" 0", " ")
+            color = Fore.CYAN
+            res = date_formatted
+            
+        hard_colored = f"{Fore.RED}{hard_tag}{Style.RESET_ALL}" if hard_tag else ""
+        return f"{color}{res}{Style.RESET_ALL}{hard_colored}"
+    except Exception:
+        return f"{Fore.WHITE}{task.deadline}{Style.RESET_ALL}"
+
+def log_behavior(event_dict):
+    log_file = storage.data_dir / "behavior_log.jsonl"
+    event_dict["ts"] = datetime.now().isoformat()
+    try:
+        storage.data_dir.mkdir(exist_ok=True)
+        with open(log_file, "a") as f:
+            f.write(json.dumps(event_dict) + "\n")
+    except Exception:
+        pass
+
+def get_missed_tasks(tasks: List[Task]) -> List[Task]:
+    missed = []
+    now = datetime.now()
+    today_str = now.strftime('%Y-%m-%d')
+    for task in tasks:
+        if task.completed or getattr(task, 'dropped_at', None) or getattr(task, 'offloaded_at', None):
+            continue
+        if getattr(task, 'status', None) in ['completed', 'done', 'dropped', 'offloaded']:
+            continue
+        if not getattr(task, 'deadline', None):
+            continue
+        try:
+            dl_dt = datetime.fromisoformat(task.deadline)
+            if dl_dt.tzinfo is not None:
+                dl_dt = dl_dt.replace(tzinfo=None)
+            if dl_dt < now:
+                if getattr(task, 'last_missed_prompt', None) != today_str:
+                    missed.append((task, dl_dt))
+        except ValueError:
+            pass
+            
+    def missed_sort_key(item):
+        t, dl_dt = item
+        is_hard = (getattr(t, 'deadline_type', None) == "hard")
+        return (0 if is_hard else 1, dl_dt)
+        
+    missed.sort(key=missed_sort_key)
+    return [m[0] for m in missed]
+
+def print_missed_task_block(task: Task):
+    bar = Fore.YELLOW + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" + Style.RESET_ALL
+    header = Fore.YELLOW + "⚠  Mission window missed" + Style.RESET_ALL
+    print(bar)
+    print(header)
+    print(bar)
+    
+    title_val = Fore.WHITE + Style.BRIGHT + task.title + Style.RESET_ALL
+    print(f"Task:     {title_val}")
+    
+    dl_dt = datetime.fromisoformat(task.deadline)
+    if dl_dt.tzinfo is not None:
+        dt = dl_dt.replace(tzinfo=None)
+    else:
+        dt = dl_dt
+    due_val = dt.strftime('%A, %b %d at %H:%M')
+    
+    is_hard = (getattr(task, 'deadline_type', None) == "hard")
+    due_color = Fore.RED if is_hard else Fore.YELLOW
+    print(f"Was due:  {due_color}{due_val}{Style.RESET_ALL}")
+    
+    dur_val = task.duration if task.duration else "not set"
+    print(f"Priority: {task.priority}  ·  Duration: {dur_val}")
+    
+    if task.postpone_count >= 1:
+        postpone_color = Fore.YELLOW if task.postpone_count < 5 else Fore.RED
+        print(f"Postponed: {postpone_color}{task.postpone_count}×{Style.RESET_ALL}")
+        
+    print(bar)
+    print()
+    print("What do you want to do?")
+    print()
+    print("  [E]  Execute now     — mark as active, start tracking")
+    print("  [P]  Postpone        — reschedule to a new time")
+    print("  [D]  Drop            — remove from active tasks")
+    print("  [O]  Offload         — not my responsibility")
+    print("  [S]  Skip for now    — decide this later")
+    print("  [Q]  Quit review     — return to your list")
+    print()
+
+def postpone_flow(task: Task, tasks: List[Task], original_deadline: datetime, today_str: str) -> bool:
+    count = task.postpone_count
+    if count == 2:
+        print(Fore.YELLOW + "⚠  Heads up: you've postponed this twice already." + Style.RESET_ALL)
+    elif count in [3, 4]:
+        print(Fore.YELLOW + f"""┌─────────────────────────────────────────┐
+│  ⚠  Postponed {count} times.               │
+│  This task keeps getting pushed back.   │
+│  Is it actually going to happen?        │
+└─────────────────────────────────────────┘""" + Style.RESET_ALL)
+        
+    print(f"\nReschedule \"{task.title}\" to:")
+    print("[1]  +30 minutes")
+    print("[2]  +1 hour")
+    print("[3]  +2 hours")
+    print("[4]  Tomorrow, same time")
+    if count in [3, 4]:
+        print("[5]  Custom (type a new deadline)")
+        print("[6]  Drop instead\n")
+    else:
+        print("[5]  Custom (type a new deadline)\n")
+        
+    p_choice = get_valid_input("Choice [1]: ", "1").strip()
+    now = datetime.now()
+    
+    if count in [3, 4] and p_choice == "6":
+        task.status = "dropped"
+        task.dropped_at = now.isoformat()
+        task.drop_reason = "user decision — missed deadline"
+        task.last_decision = "D"
+        task.last_decision_at = now.isoformat()
+        task.last_missed_prompt = today_str
+        storage.save_tasks(tasks)
+        print(Fore.WHITE + Style.DIM + "Task dropped. It's done with." + Style.RESET_ALL)
+        
+        hours_overdue = (now - original_deadline).total_seconds() / 3600.0
+        log_behavior({
+            "event": "missed_task_decision",
+            "task_id": task.id,
+            "decision": "D",
+            "postpone_count": task.postpone_count,
+            "deadline_type": getattr(task, 'deadline_type', 'soft'),
+            "hours_overdue": round(hours_overdue, 2)
+        })
+        return True
+        
+    new_dt = None
+    if p_choice == "1":
+        new_dt = now + timedelta(minutes=30)
+    elif p_choice == "2":
+        new_dt = now + timedelta(hours=1)
+    elif p_choice == "3":
+        new_dt = now + timedelta(hours=2)
+    elif p_choice == "4":
+        new_dt = original_deadline + timedelta(days=1)
+    elif p_choice == "5":
+        while True:
+            custom_input = get_valid_input("New deadline (e.g. tomorrow 3pm): ").strip()
+            if not custom_input:
+                break
+            parsed = parse_deadline(custom_input)
+            if parsed:
+                print(f"→ Deadline set: {parsed.strftime('%A, %d %b %Y at %H:%M')}")
+                confirm = get_valid_input("Confirm? [Y/n]: ", "y").lower()
+                if confirm == "y" or confirm == "":
+                    new_dt = parsed
+                    break
+            else:
+                print("Could not understand. Try: \"tomorrow 3pm\" or \"Friday\"")
+                
+    if new_dt:
+        task.deadline = new_dt.isoformat()
+        task.postpone_count += 1
+        task.postpone_history.append(now.isoformat())
+        
+        ph = task.postpone_history
+        if len(ph) >= 2:
+            gaps = []
+            for i in range(1, len(ph)):
+                t1 = datetime.fromisoformat(ph[i-1])
+                t2 = datetime.fromisoformat(ph[i])
+                gaps.append((t2-t1).total_seconds() / 3600.0)
+            task.average_postpone_gap_hours = round(sum(gaps)/len(gaps), 1)
+            
+        task.last_decision = "P"
+        task.last_decision_at = now.isoformat()
+        task.last_missed_prompt = today_str
+        calculate_reminder_time(task)
+        task.reminder_fired = False
+        task.reminder_fired_2 = False
+        task.reminder_dismissed = False
+        storage.save_tasks(tasks)
+        
+        print(f"Rescheduled to {new_dt.strftime('%A, %d %b at %I:%M %p')}.")
+        new_count = task.postpone_count
+        if new_count >= 2:
+            msg = f"Postponed {new_count} time(s) total."
+            print((Fore.RED if new_count >= 5 else Fore.YELLOW) + msg + Style.RESET_ALL)
+            
+        hours_overdue = (now - original_deadline).total_seconds() / 3600.0
+        log_behavior({
+            "event": "missed_task_decision",
+            "task_id": task.id,
+            "decision": "P",
+            "postpone_count": task.postpone_count,
+            "deadline_type": getattr(task, 'deadline_type', 'soft'),
+            "hours_overdue": round(hours_overdue, 2)
+        })
+        log_behavior({
+            "event": "task_postponed",
+            "task_id": task.id,
+            "postpone_count": task.postpone_count,
+            "new_deadline": task.deadline,
+            "gap_from_original_hours": round((new_dt - original_deadline).total_seconds() / 3600.0, 2)
+        })
+        return True
+    else:
+        print("Invalid choice. Skipping postpone.")
+        return False
+
+def prompt_missed_task(task: Task, tasks: List[Task]) -> bool:
+    today_str = datetime.now().strftime('%Y-%m-%d')
+    original_deadline = datetime.fromisoformat(task.deadline)
+    if original_deadline.tzinfo is not None:
+        original_deadline = original_deadline.replace(tzinfo=None)
+        
+    def get_choice():
+        while True:
+            print_missed_task_block(task)
+            choice = get_valid_input("Choice: ").strip().upper()
+            if choice in ['E', 'P', 'D', 'O', 'S', 'Q']:
+                return choice
+            print("Please enter E, P, D, O, S (skip), or Q (quit).")
+
+    choice = get_choice()
+    if choice == 'Q':
+        return 'quit'        # do NOT set last_missed_prompt — stays for next time
+    if choice == 'S' or choice is None:
+        return 'skipped'     # do NOT set last_missed_prompt — reappears next time
+        
+    if choice == 'P' and task.postpone_count >= 5:
+        print(Fore.RED + f"""┌─────────────────────────────────────────┐
+│  ⚠  Postponed {task.postpone_count} times.               │
+│  This task has never been executed.     │
+│  Postpone is no longer available.       │
+└─────────────────────────────────────────┘""" + Style.RESET_ALL)
+        while True:
+            print("\nOptions:")
+            print("  [E]  Execute now — just do it")
+            print("  [D]  Drop it — it's not happening")
+            print("  [O]  Offload — not your responsibility\n")
+            sub_choice = get_valid_input("Choice: ").strip().upper()
+            if sub_choice == 'P':
+                print(Fore.RED + f"You've postponed this {task.postpone_count} times.\nThat option is no longer available." + Style.RESET_ALL)
+            elif sub_choice in ['E', 'D', 'O']:
+                choice = sub_choice
+                break
+            else:
+                print("Please enter E, D, or O.")
+                
+    if choice == 'E':
+        task.status = "active"
+        task.executed_late = True
+        task.actual_start_time = datetime.now().isoformat()
+        task.last_decision = "E"
+        task.last_decision_at = datetime.now().isoformat()
+        task.last_missed_prompt = today_str
+        storage.save_tasks(tasks)
+        print(Fore.GREEN + Style.BRIGHT + "Execution started. Focus up." + Style.RESET_ALL)
+        
+        hours_overdue = (datetime.now() - original_deadline).total_seconds() / 3600.0
+        log_behavior({
+            "event": "missed_task_decision",
+            "task_id": task.id,
+            "decision": "E",
+            "postpone_count": task.postpone_count,
+            "deadline_type": getattr(task, 'deadline_type', 'soft'),
+            "hours_overdue": round(hours_overdue, 2)
+        })
+        return 'decided'
+        
+    elif choice == 'D':
+        task.status = "dropped"
+        task.dropped_at = datetime.now().isoformat()
+        task.drop_reason = "user decision — missed deadline"
+        task.last_decision = "D"
+        task.last_decision_at = datetime.now().isoformat()
+        task.last_missed_prompt = today_str
+        storage.save_tasks(tasks)
+        print(Fore.WHITE + Style.DIM + "Task dropped. It's done with." + Style.RESET_ALL)
+
+        hours_overdue = (datetime.now() - original_deadline).total_seconds() / 3600.0
+        log_behavior({
+            "event": "missed_task_decision",
+            "task_id": task.id,
+            "decision": "D",
+            "postpone_count": task.postpone_count,
+            "deadline_type": getattr(task, 'deadline_type', 'soft'),
+            "hours_overdue": round(hours_overdue, 2)
+        })
+        return 'decided'
+        
+    elif choice == 'O':
+        task.status = "offloaded"
+        task.offloaded_at = datetime.now().isoformat()
+        task.last_decision = "O"
+        task.last_decision_at = datetime.now().isoformat()
+        task.last_missed_prompt = today_str
+        note = get_valid_input("Brief note (who/why) [optional]: ").strip()
+        task.offload_note = note
+        storage.save_tasks(tasks)
+        print(Fore.WHITE + Style.DIM + "Noted. Responsibility transferred." + Style.RESET_ALL)
+
+        hours_overdue = (datetime.now() - original_deadline).total_seconds() / 3600.0
+        log_behavior({
+            "event": "missed_task_decision",
+            "task_id": task.id,
+            "decision": "O",
+            "postpone_count": task.postpone_count,
+            "deadline_type": getattr(task, 'deadline_type', 'soft'),
+            "hours_overdue": round(hours_overdue, 2)
+        })
+        return 'decided'
+        
+    elif choice == 'P':
+        return 'decided' if postpone_flow(task, tasks, original_deadline, today_str) else 'skipped'
 
 def handle_missed_tasks():
-    """Handle tasks with missed deadlines using decision pressure."""
+    """Show alerts for missed deadlines."""
     try:
         tasks = storage.load_tasks()
     except Exception:
         return
         
-    today_str = datetime.now().strftime('%Y-%m-%d')
-    now = datetime.now()
-    
-    missed_tasks = []
-    for task in tasks:
-        if task.completed or task.dropped_at or task.offloaded_at:
-            continue
-        if not task.deadline:
-            continue
-        try:
-            deadline_dt = datetime.fromisoformat(task.deadline)
-            if deadline_dt < now and task.last_missed_prompt != today_str:
-                missed_tasks.append(task)
-        except ValueError:
-            pass
-            
-    if not missed_tasks:
+    missed = get_missed_tasks(tasks)
+    if not missed:
         return
         
-    # Sort: HARD first, then SOFT (by deadline)
-    def sort_key(t):
-        try:
-            dt = datetime.fromisoformat(t.deadline)
-        except ValueError:
-            dt = datetime.max
-        return (0 if t.deadline_type == "hard" else 1, dt)
-        
-    missed_tasks.sort(key=sort_key)
+    print(Fore.YELLOW + f"You have {len(missed)} missed mission(s) to address." + Style.RESET_ALL)
+    print()
     
-    print(Fore.YELLOW + f"You have {len(missed_tasks)} missed mission(s) to address." + Style.RESET_ALL)
-    
-    for task in missed_tasks:
-        try:
-            deadline_dt = datetime.fromisoformat(task.deadline)
-            due_str = deadline_dt.strftime('%A, %d %b at %I:%M %p')
-        except ValueError:
-            due_str = task.deadline
-            
-        print(Fore.YELLOW + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" + Style.RESET_ALL)
-        print(Fore.YELLOW + "⚠  Mission window missed" + Style.RESET_ALL)
-        print(Fore.YELLOW + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" + Style.RESET_ALL)
-        print(f"Task:    " + Fore.WHITE + Style.BRIGHT + task.title + Style.RESET_ALL)
-        print(f"Was due: {due_str}")
-        print(f"Priority: {task.priority}  ·  Duration: {task.duration or 'None'}")
-        print(Fore.YELLOW + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" + Style.RESET_ALL)
-        while True:
-            print("What do you want to do?\n")
-            print("[E]  Execute now     — mark as active, start tracking")
-            if task.postpone_count < 5:
-                print("[P]  Postpone        — reschedule to a new time")
-            print("[D]  Drop            — remove from active tasks")
-            print("[O]  Offload         — not my responsibility anymore\n")
-            
-            choice = get_valid_input("Choice: ").strip().upper()
-            
-            if choice == "P" and task.postpone_count >= 5:
-                print(Fore.RED + f"You've postponed this {task.postpone_count} times. That option is no longer available." + Style.RESET_ALL)
-                continue
-                
-            if choice not in ["E", "P", "D", "O"]:
-                print("Please enter E, P, D, or O.")
-                continue
+    for task in missed:
+        prompt_missed_task(task, tasks)
+
+    print()
+
+
+def _print_missed_list_row(task: Task) -> None:
+    """One plain row for 'taskflow missed --skip' (no prompts)."""
+    due = ""
+    try:
+        dt = datetime.fromisoformat(task.deadline)
+        if dt.tzinfo is not None:
+            dt = dt.replace(tzinfo=None)
+        if getattr(task, 'deadline_type', None) == 'hard':
+            due = dt.strftime('%b %d at %H:%M').replace(' 0', ' ')
+        else:
+            due = dt.strftime('%b %d').replace(' 0', ' ')
+    except Exception:
+        due = task.deadline or ""
+    title = task.title if len(task.title) <= 34 else task.title[:33] + "…"
+    print(f"  · #{task.id:<4} {title:<36} Was due: {due}")
+
+
+def command_missed(hard_only: bool = False, soft_only: bool = False, skip_list: bool = False) -> None:
+    """Dedicated, user-invoked review of missed missions.
+
+    This is the ONLY place the interactive Execute/Postpone/Drop/Offload flow
+    runs. It is never triggered automatically by list/today. Always escapable
+    via [S] Skip and [Q] Quit.
+    """
+    R = Style.RESET_ALL
+    tasks = storage.load_tasks()
+    hard, soft = _split_missed(tasks)
+    if hard_only:
+        missed = list(hard)
+    elif soft_only:
+        missed = list(soft)
+    else:
+        missed = list(hard) + list(soft)  # hard first
+
+    if not missed:
+        print(Fore.GREEN + "No missed missions. You're on track." + R)
+        return
+
+    # --skip : plain, non-interactive listing
+    if skip_list:
+        print(f"\nMissed missions ({len(missed)} total):\n")
+        if hard and not soft_only:
+            print(Fore.RED + Style.BRIGHT + "HARD DEADLINE:" + R)
+            for t in hard:
+                _print_missed_list_row(t)
+            print()
+        if soft and not hard_only:
+            print(Fore.YELLOW + "SOFT DEADLINE:" + R)
+            for t in soft:
+                _print_missed_list_row(t)
+            print()
+        print(Fore.WHITE + Style.DIM + "Run: taskflow missed  to address them." + R)
+        return
+
+    # Interactive review (escapable)
+    bar = Fore.YELLOW + "━" * 38 + R
+    print(bar)
+    print(Fore.YELLOW + "⚡  Missed Mission Review" + R)
+    print(bar)
+    print(Fore.YELLOW + f"You have {len(missed)} missed mission(s)." + R)
+    print(Fore.YELLOW + "Address them one by one, or press S to skip any." + R)
+    print(Fore.YELLOW + "Press Q at any time to quit and return to list." + R)
+    print(bar)
+    print()
+
+    addressed = skipped = 0
+    quit_early = False
+    for task in missed:
+        # reload so each decision persists and is seen by the next iteration
+        tasks = storage.load_tasks()
+        live = next((t for t in tasks if t.id == task.id), None)
+        if not live:
+            continue
+        result = prompt_missed_task(live, tasks)
+        if result == 'quit':
+            quit_early = True
             break
-            
-        if choice == "E":
-            task.executed_late = True
-            task.last_missed_prompt = today_str
-            print(Fore.GREEN + "Execution started. Focus up." + Style.RESET_ALL)
-        elif choice == "P":
-            count = task.postpone_count
-            if count == 2:
-                print(Fore.YELLOW + "⚠  Heads up: you've postponed this twice already." + Style.RESET_ALL)
-            elif count == 3 or count == 4:
-                print(Fore.YELLOW + f"""
-  ┌─────────────────────────────────────────┐
-  │  ⚠  Postponed {count} times.                 │
-  │  This task keeps getting pushed back.   │
-  │  Is it actually going to happen?        │
-  └─────────────────────────────────────────┘""" + Style.RESET_ALL)
-            elif count >= 5:
-                print(Fore.RED + f"""
-  ┌─────────────────────────────────────────┐
-  │  ⚠  Postponed {count} times.                 │
-  │  This task has never been executed.     │
-  │  You have 3 choices:                    │
-  └─────────────────────────────────────────┘""" + Style.RESET_ALL)
+        elif result == 'skipped':
+            skipped += 1
+            print(Fore.WHITE + Style.DIM + "Skipped. You'll see this again next time." + R)
+        else:
+            addressed += 1
+        print()
 
-            print("\nReschedule to:")
-            print("[1]  +30 minutes")
-            print("[2]  +1 hour")
-            print("[3]  +2 hours")
-            print("[4]  Tomorrow, same time")
-            if count >= 3:
-                print("[5]  Custom (type a new deadline)")
-                print("[6]  Drop this task instead\n")
-            else:
-                print("[5]  Custom (type a new deadline)\n")
-            
-            p_choice = get_valid_input("Choice [1]: ", "1").strip()
-            
-            if count >= 3 and p_choice == "6":
-                task.dropped_at = now.isoformat()
-                task.drop_reason = f"user decision — dropped after {count} postpones"
-                task.last_missed_prompt = today_str
-                print(Fore.WHITE + Style.DIM + f"Dropped after {count} postpones. Good call." + Style.RESET_ALL)
-                continue
-                
-            new_dt = None
-            if p_choice == "1":
-                new_dt = now + timedelta(minutes=30)
-            elif p_choice == "2":
-                new_dt = now + timedelta(hours=1)
-            elif p_choice == "3":
-                new_dt = now + timedelta(hours=2)
-            elif p_choice == "4":
-                try:
-                    orig = datetime.fromisoformat(task.deadline)
-                    new_dt = orig + timedelta(days=1)
-                except ValueError:
-                    new_dt = now + timedelta(days=1)
-            elif p_choice == "5":
-                custom_input = get_valid_input("New deadline: ")
-                parsed = parse_deadline(custom_input)
-                if parsed:
-                    new_dt = parsed
-                else:
-                    print("Could not parse date. Skipping postpone.")
-            
-            if new_dt:
-                task.deadline = new_dt.isoformat()
-                task.postpone_count += 1
-                task.postpone_history.append(now.isoformat())
-                task.last_missed_prompt = today_str
-                
-                # Feature 7: Recalculate reminders when postponed
-                calculate_reminder_time(task)
-                task.reminder_fired = False
-                task.reminder_fired_2 = False
-                
-                new_count = task.postpone_count
-                print(Fore.CYAN + f"Rescheduled to {new_dt.strftime('%A, %d %b at %I:%M %p')}." + Style.RESET_ALL)
-                msg = f"Postponed {new_count} time(s) total."
-                if new_count >= 2:
-                    print(Fore.YELLOW + msg + Style.RESET_ALL)
-                else:
-                    print(Fore.CYAN + msg + Style.RESET_ALL)
-            else:
-                print("Invalid choice. Skipping postpone.")
-                task.last_missed_prompt = today_str
-        elif choice == "D":
-            task.dropped_at = now.isoformat()
-            task.drop_reason = "user decision — missed deadline"
-            task.last_missed_prompt = today_str
-            print(Fore.WHITE + Style.DIM + "Task dropped. It's done with." + Style.RESET_ALL)
-        elif choice == "O":
-            task.offloaded_at = now.isoformat()
-            note = get_valid_input("Brief note (who/why) [optional]: ")
-            task.offload_note = note
-            task.last_missed_prompt = today_str
-            print(Fore.WHITE + Style.DIM + "Noted. Responsibility transferred." + Style.RESET_ALL)
+    remaining = len(missed) - addressed - skipped
+    if quit_early:
+        print(Fore.WHITE + Style.DIM + f"Review paused. {remaining} mission(s) still unaddressed." + R)
+        print(Fore.WHITE + Style.DIM + "Run: taskflow missed  to continue." + R)
+        return
 
-    storage.save_tasks(tasks)
-    print("")
+    print(bar)
+    print("Review complete.")
+    print(f"Addressed: {addressed} · Skipped: {skipped} · Remaining: {remaining}")
+    print(bar)
 
 
 def command_postpone(task_id: int) -> bool:
@@ -222,97 +547,102 @@ def command_postpone(task_id: int) -> bool:
         Messenger.task_not_found(task_id)
         return False
         
-    if task.completed or task.dropped_at or task.offloaded_at:
+    if task.completed or getattr(task, 'dropped_at', None) or getattr(task, 'offloaded_at', None):
         status = "completed" if task.completed else ("dropped" if task.dropped_at else "offloaded")
-        print(f"Task #{task_id} is already {status}. Cannot postpone.")
+        print(f"Task #{task_id} is {status}. Cannot postpone.")
         return False
         
-    if not task.deadline:
-        print(f"Task #{task_id} has no deadline set. Add one first: taskflow edit {task_id}")
+    if not getattr(task, 'deadline', None):
+        print(f"Task #{task_id} has no deadline set.\nAdd one: taskflow edit {task_id}")
         return False
         
+    original_deadline = datetime.fromisoformat(task.deadline)
+    if original_deadline.tzinfo is not None:
+        original_deadline = original_deadline.replace(tzinfo=None)
+        
+    today_str = datetime.now().strftime('%Y-%m-%d')
     count = task.postpone_count
-    if count == 2:
-        print(Fore.YELLOW + "⚠  Heads up: you've postponed this twice already." + Style.RESET_ALL)
-    elif count == 3 or count == 4:
-        print(Fore.YELLOW + f"""
-  ┌─────────────────────────────────────────┐
-  │  ⚠  Postponed {count} times.                 │
-  │  This task keeps getting pushed back.   │
-  │  Is it actually going to happen?        │
-  └─────────────────────────────────────────┘""" + Style.RESET_ALL)
-    elif count >= 5:
-        print(Fore.RED + f"""
-  ┌─────────────────────────────────────────┐
-  │  ⚠  Postponed {count} times.                 │
-  │  This task has never been executed.     │
-  │  You have 3 choices:                    │
-  └─────────────────────────────────────────┘""" + Style.RESET_ALL)
-
-    print(f"\nReschedule \"{task.title}\" to:")
-    print("[1]  +30 minutes")
-    print("[2]  +1 hour")
-    print("[3]  +2 hours")
-    print("[4]  Tomorrow, same time")
-    if count >= 3:
-        print("[5]  Custom (type a new deadline)")
-        print("[6]  Drop this task instead\n")
+    
+    if count >= 5:
+        print(Fore.RED + f"""┌─────────────────────────────────────────┐
+│  ⚠  Postponed {count} times.               │
+│  This task has never been executed.     │
+│  Postpone is no longer available.       │
+└─────────────────────────────────────────┘""" + Style.RESET_ALL)
+        while True:
+            print("\nOptions:")
+            print("  [E]  Execute now — just do it")
+            print("  [D]  Drop it — it's not happening")
+            print("  [O]  Offload — not your responsibility\n")
+            sub_choice = get_valid_input("Choice: ").strip().upper()
+            if sub_choice == 'P':
+                print(Fore.RED + f"You've postponed this {count} times.\nThat option is no longer available." + Style.RESET_ALL)
+            elif sub_choice in ['E', 'D', 'O']:
+                choice = sub_choice
+                break
+            else:
+                print("Please enter E, D, or O.")
+                
+        if choice == 'E':
+            task.status = "active"
+            task.executed_late = True
+            task.actual_start_time = datetime.now().isoformat()
+            task.last_decision = "E"
+            task.last_decision_at = datetime.now().isoformat()
+            task.last_missed_prompt = today_str
+            storage.save_tasks(tasks)
+            print(Fore.GREEN + Style.BRIGHT + "Execution started. Focus up." + Style.RESET_ALL)
+            hours_overdue = (datetime.now() - original_deadline).total_seconds() / 3600.0
+            log_behavior({
+                "event": "missed_task_decision",
+                "task_id": task.id,
+                "decision": "E",
+                "postpone_count": task.postpone_count,
+                "deadline_type": getattr(task, 'deadline_type', 'soft'),
+                "hours_overdue": round(hours_overdue, 2)
+            })
+            return True
+        elif choice == 'D':
+            task.status = "dropped"
+            task.dropped_at = datetime.now().isoformat()
+            task.drop_reason = "user decision — missed deadline"
+            task.last_decision = "D"
+            task.last_decision_at = datetime.now().isoformat()
+            task.last_missed_prompt = today_str
+            storage.save_tasks(tasks)
+            print(Fore.WHITE + Style.DIM + "Task dropped. It's done with." + Style.RESET_ALL)
+            hours_overdue = (datetime.now() - original_deadline).total_seconds() / 3600.0
+            log_behavior({
+                "event": "missed_task_decision",
+                "task_id": task.id,
+                "decision": "D",
+                "postpone_count": task.postpone_count,
+                "deadline_type": getattr(task, 'deadline_type', 'soft'),
+                "hours_overdue": round(hours_overdue, 2)
+            })
+            return True
+        elif choice == 'O':
+            task.status = "offloaded"
+            task.offloaded_at = datetime.now().isoformat()
+            task.last_decision = "O"
+            task.last_decision_at = datetime.now().isoformat()
+            task.last_missed_prompt = today_str
+            note = get_valid_input("Brief note (who/why) [optional]: ").strip()
+            task.offload_note = note
+            storage.save_tasks(tasks)
+            print(Fore.WHITE + Style.DIM + "Noted. Responsibility transferred." + Style.RESET_ALL)
+            hours_overdue = (datetime.now() - original_deadline).total_seconds() / 3600.0
+            log_behavior({
+                "event": "missed_task_decision",
+                "task_id": task.id,
+                "decision": "O",
+                "postpone_count": task.postpone_count,
+                "deadline_type": getattr(task, 'deadline_type', 'soft'),
+                "hours_overdue": round(hours_overdue, 2)
+            })
+            return True
     else:
-        print("[5]  Custom (type a new deadline)\n")
-    
-    p_choice = get_valid_input("Choice [1]: ", "1").strip()
-    now = datetime.now()
-    
-    if count >= 3 and p_choice == "6":
-        task.dropped_at = now.isoformat()
-        task.drop_reason = f"user decision — dropped after {count} postpones"
-        storage.save_tasks(tasks)
-        print(Fore.WHITE + Style.DIM + f"Dropped after {count} postpones. Good call." + Style.RESET_ALL)
-        return True
-        
-    new_dt = None
-    if p_choice == "1":
-        new_dt = now + timedelta(minutes=30)
-    elif p_choice == "2":
-        new_dt = now + timedelta(hours=1)
-    elif p_choice == "3":
-        new_dt = now + timedelta(hours=2)
-    elif p_choice == "4":
-        try:
-            orig = datetime.fromisoformat(task.deadline)
-            new_dt = orig + timedelta(days=1)
-        except ValueError:
-            new_dt = now + timedelta(days=1)
-    elif p_choice == "5":
-        custom_input = get_valid_input("New deadline: ")
-        parsed = parse_deadline(custom_input)
-        if parsed:
-            new_dt = parsed
-        else:
-            print("Could not parse date. Skipping postpone.")
-    
-    if new_dt:
-        task.deadline = new_dt.isoformat()
-        task.postpone_count += 1
-        task.postpone_history.append(now.isoformat())
-        
-        calculate_reminder_time(task)
-        task.reminder_fired = False
-        task.reminder_fired_2 = False
-        
-        storage.save_tasks(tasks)
-        
-        new_count = task.postpone_count
-        print(Fore.CYAN + f"Rescheduled to {new_dt.strftime('%A, %d %b at %I:%M %p')}." + Style.RESET_ALL)
-        msg = f"Postponed {new_count} time(s) total."
-        if new_count >= 2:
-            print(Fore.YELLOW + msg + Style.RESET_ALL)
-        else:
-            print(Fore.CYAN + msg + Style.RESET_ALL)
-        return True
-    else:
-        print("Invalid choice. Skipping postpone.")
-        return False
+        return postpone_flow(task, tasks, original_deadline, today_str)
 
 
 
@@ -323,6 +653,8 @@ def calculate_reminder_time(task) -> Optional[datetime]:
         
     try:
         dt = datetime.fromisoformat(task.deadline)
+        if dt.tzinfo is not None:
+            dt = dt.replace(tzinfo=None)
     except ValueError:
         return None
         
@@ -378,6 +710,8 @@ def check_reminders(tasks: List[Task]) -> List[Task]:
         is_due = False
         try:
             r1 = datetime.fromisoformat(task.reminder_time)
+            if r1.tzinfo is not None:
+                r1 = r1.replace(tzinfo=None)
             if now >= r1 and not task.reminder_fired:
                 is_due = True
                 task.reminder_fired = True
@@ -387,6 +721,8 @@ def check_reminders(tasks: List[Task]) -> List[Task]:
         if not is_due and task.reminder_time_2:
             try:
                 r2 = datetime.fromisoformat(task.reminder_time_2)
+                if r2.tzinfo is not None:
+                    r2 = r2.replace(tzinfo=None)
                 if now >= r2 and not task.reminder_fired_2:
                     is_due = True
                     task.reminder_fired_2 = True
@@ -1117,6 +1453,377 @@ def complete_focus(efficiency_score=0, time_saved=0, time_used=0):
 # CORE TASK OPERATIONS (Enhanced) - MAIN.PY IMPORTS THESE
 # =========================================================
 
+def detect_link_type(val: str) -> str:
+    """Auto-detect link/reference type."""
+    val_lower = val.lower()
+    # Map detection must precede the generic http(s) check, since map URLs
+    # also start with https:// and would otherwise always classify as "url".
+    if "maps.google" in val_lower or "maps.apple" in val_lower or "goo.gl/maps" in val_lower:
+        return "map"
+    elif val_lower.startswith("http://") or val_lower.startswith("https://"):
+        return "url"
+    elif val.startswith("/") or val.startswith("~") or (len(val) >= 3 and val[1:3] == ":\\"):
+        return "file"
+    else:
+        return "reference"
+
+def prompt_description() -> Optional[str]:
+    """Prompt user for a description/note with multi-line support."""
+    first_line = get_valid_input("> ")
+    if not first_line:
+        return None
+    if first_line.strip() == "...":
+        print("Multi-line mode. Type END on its own line to finish.")
+        lines = []
+        while True:
+            line = get_valid_input("")
+            if line == "END":
+                break
+            lines.append(line)
+        return "\n".join(lines)
+    else:
+        return first_line
+
+def edit_note(task_id: int) -> bool:
+    """Edit or append notes/description of a task (E5)."""
+    tasks = storage.load_tasks()
+    task = next((t for t in tasks if t.id == task_id), None)
+    if not task:
+        Messenger.task_not_found(task_id)
+        return False
+        
+    existing = getattr(task, 'description', None)
+    if existing:
+        print("Current notes:")
+        print("──────────────────────")
+        print(existing)
+        print("──────────────────────")
+        choice = get_valid_input("Edit? [Y/n/append]: ", "y").strip().lower()
+        
+        if choice in ['y', 'yes']:
+            print("Enter new notes (Enter to skip):")
+            new_desc = prompt_description()
+            task.description = new_desc
+            task.description_updated_at = datetime.now().isoformat()
+        elif choice in ['append', 'a']:
+            print("Enter notes to append:")
+            append_desc = prompt_description()
+            if append_desc:
+                if task.description:
+                    task.description += "\n" + append_desc
+                else:
+                    task.description = append_desc
+                task.description_updated_at = datetime.now().isoformat()
+        else:
+            print("No changes made.")
+            return False
+    else:
+        print("No notes yet.")
+        print("Add notes (Enter to skip):")
+        new_desc = prompt_description()
+        task.description = new_desc
+        task.description_updated_at = datetime.now().isoformat()
+        
+    storage.save_tasks(tasks)
+    if task.description:
+        print(Fore.GREEN + f"→ Notes updated for task #{task_id}." + Style.RESET_ALL)
+    else:
+        print(Fore.GREEN + f"→ Notes cleared for task #{task_id}." + Style.RESET_ALL)
+    return True
+
+def manage_links(task_id: int, add_url: str = None, title: str = None) -> bool:
+    """View and manage links for a task (E6)."""
+    tasks = storage.load_tasks()
+    task = next((t for t in tasks if t.id == task_id), None)
+    if not task:
+        Messenger.task_not_found(task_id)
+        return False
+        
+    if not getattr(task, 'links', None):
+        task.links = []
+        
+    # Non-interactive direct command version
+    if add_url:
+        if len(task.links) >= 10:
+            print("Maximum 10 links reached.")
+            return False
+            
+        next_num = 1
+        if task.links:
+            ids = []
+            for l in task.links:
+                try:
+                    num = int(l.get("id").replace("lnk_", ""))
+                    ids.append(num)
+                except ValueError:
+                    pass
+            if ids:
+                next_num = max(ids) + 1
+                
+        link_id = f"lnk_{next_num:03d}"
+        l_type = detect_link_type(add_url)
+        
+        task.links.append({
+            "id": link_id,
+            "type": l_type,
+            "url": add_url,
+            "title": title if title else None,
+            "added_at": datetime.now().isoformat()
+        })
+        task.links_count = len(task.links)
+        storage.save_tasks(tasks)
+        print(Fore.GREEN + f"→ Link {link_id} added." + Style.RESET_ALL)
+        return True
+        
+    # Interactive menu
+    while True:
+        print(f"\nLinks for task #{task.id} · {task.title}")
+        if not task.links:
+            print("  No links attached.")
+        else:
+            for l in task.links:
+                lnk_id = l.get("id")
+                lnk_type = l.get("type", "url")
+                lnk_url = l.get("url")
+                lnk_title = l.get("title")
+                
+                id_str = f"[{lnk_id}]"
+                type_str = f"{lnk_type:<10}"
+                print(f"  {id_str} {type_str} {lnk_url}")
+                if lnk_title:
+                    print(f"                      \"{lnk_title}\"")
+                    
+        print("\n  [A] Add new link")
+        print("  [R] Remove a link")
+        print("  [O] Open a link (prints URL to copy)")
+        print("  [X] Exit")
+        choice = get_valid_input("Choice: ").strip().upper()
+        
+        if choice == 'A':
+            if len(task.links) >= 10:
+                print("Maximum 10 links reached.")
+                continue
+            url = get_valid_input("Paste a URL, map location, or reference (Enter to cancel): ").strip()
+            if not url:
+                continue
+            l_type = detect_link_type(url)
+            print(f"Detected: {l_type}")
+            label = get_valid_input("Label (optional, e.g. \"Design doc\", Enter to skip): ").strip()
+            
+            next_num = 1
+            if task.links:
+                ids = []
+                for l in task.links:
+                    try:
+                        num = int(l.get("id").replace("lnk_", ""))
+                        ids.append(num)
+                    except ValueError:
+                        pass
+                if ids:
+                    next_num = max(ids) + 1
+            link_id = f"lnk_{next_num:03d}"
+            
+            task.links.append({
+                "id": link_id,
+                "type": l_type,
+                "url": url,
+                "title": label if label else None,
+                "added_at": datetime.now().isoformat()
+            })
+            task.links_count = len(task.links)
+            storage.save_tasks(tasks)
+            print(Fore.GREEN + f"→ Link added." + Style.RESET_ALL)
+            
+        elif choice == 'R':
+            if not task.links:
+                print("No links to remove.")
+                continue
+            lnk_id = get_valid_input("Enter link ID to remove (e.g. lnk_001): ").strip()
+            link_obj = next((l for l in task.links if l.get("id") == lnk_id), None)
+            if not link_obj:
+                print("Link ID not found.")
+                continue
+            title_or_url = link_obj.get("title") or link_obj.get("url")
+            confirm = get_valid_input(f"Confirm remove \"{title_or_url}\"? [Y/n]: ", "y").strip().lower()
+            if confirm == 'y' or confirm == '':
+                task.links.remove(link_obj)
+                task.links_count = len(task.links)
+                storage.save_tasks(tasks)
+                print(Fore.GREEN + "→ Link removed." + Style.RESET_ALL)
+                
+        elif choice == 'O':
+            if not task.links:
+                print("No links to open.")
+                continue
+            lnk_id = get_valid_input("Enter link ID: ").strip()
+            link_obj = next((l for l in task.links if l.get("id") == lnk_id), None)
+            if not link_obj:
+                print("Link ID not found.")
+                continue
+            url = link_obj.get("url")
+            l_type = link_obj.get("type", "url")
+            
+            print(f"Value: {url}")
+            if l_type in ["url", "map"]:
+                print("Copy this URL and open in your browser.")
+                try:
+                    import sys, subprocess, os
+                    if sys.platform == 'win32':
+                        os.startfile(url)
+                    elif sys.platform == 'darwin':
+                        subprocess.run(["open", url])
+                    else:
+                        subprocess.run(["xdg-open", url])
+                except Exception:
+                    pass
+            else:
+                if l_type == "file":
+                    try:
+                        import sys, subprocess, os
+                        if sys.platform == 'win32':
+                            os.startfile(url)
+                        elif sys.platform == 'darwin':
+                            subprocess.run(["open", url])
+                        else:
+                            subprocess.run(["xdg-open", url])
+                    except Exception:
+                        pass
+                        
+        elif choice == 'X' or not choice:
+            break
+    return True
+
+def manage_checklist(task_id: int, toggle_index: int = None) -> bool:
+    """View and manage checklist for a task (E7)."""
+    tasks = storage.load_tasks()
+    task = next((t for t in tasks if t.id == task_id), None)
+    if not task:
+        Messenger.task_not_found(task_id)
+        return False
+        
+    if not getattr(task, 'checklist', None):
+        task.checklist = []
+        
+    # Direct non-interactive toggle
+    if toggle_index is not None:
+        idx = toggle_index - 1
+        if idx < 0 or idx >= len(task.checklist):
+            print(f"Invalid checklist item index: {toggle_index}")
+            return False
+        item = task.checklist[idx]
+        if item.get("done"):
+            item["done"] = False
+            item["done_at"] = None
+            print(Fore.GREEN + f"→ Checklist item {toggle_index} marked incomplete." + Style.RESET_ALL)
+        else:
+            item["done"] = True
+            item["done_at"] = datetime.now().isoformat()
+            print(Fore.GREEN + f"→ Checklist item {toggle_index} marked complete." + Style.RESET_ALL)
+            
+        task.checklist_total = len(task.checklist)
+        task.checklist_done = sum(1 for x in task.checklist if x.get("done"))
+        storage.save_tasks(tasks)
+        return True
+        
+    # Interactive menu
+    while True:
+        print(f"\nChecklist for task #{task.id} · {task.title}")
+        print("─────────────────────────────────────────────")
+        if not task.checklist:
+            print("  No checklist items.")
+        else:
+            for idx, item in enumerate(task.checklist):
+                is_done = item.get("done")
+                checkmark = "✓" if is_done else "·"
+                mark_color = Fore.GREEN if is_done else Fore.WHITE + Style.DIM
+                text_color = Fore.WHITE if is_done else Fore.WHITE + Style.DIM
+                print(f"  [{idx+1}] {mark_color}{checkmark}{Style.RESET_ALL}  {text_color}{item.get('text')}{Style.RESET_ALL}")
+        print("─────────────────────────────────────────────")
+        
+        done_count = sum(1 for x in task.checklist if x.get("done"))
+        total_count = len(task.checklist)
+        pct = int(done_count / total_count * 100) if total_count > 0 else 0
+        print(f"  Progress: {done_count}/{total_count} done ({pct}%)")
+        
+        print("\n  Enter item number to toggle, A to add, R to remove, or Enter to exit:")
+        choice = get_valid_input("Choice: ").strip()
+        
+        if not choice:
+            break
+            
+        if choice.upper() == 'A':
+            if len(task.checklist) >= 20:
+                print("Maximum 20 checklist items reached.")
+                continue
+            text = get_valid_input("New item text: ").strip()
+            if not text:
+                continue
+                
+            next_num = 1
+            if task.checklist:
+                ids = []
+                for x in task.checklist:
+                    try:
+                        num = int(x.get("id").replace("chk_", ""))
+                        ids.append(num)
+                    except ValueError:
+                        pass
+                if ids:
+                    next_num = max(ids) + 1
+            chk_id = f"chk_{next_num:03d}"
+            
+            task.checklist.append({
+                "id": chk_id,
+                "text": text,
+                "done": False,
+                "done_at": None
+            })
+            task.checklist_total = len(task.checklist)
+            task.checklist_done = sum(1 for x in task.checklist if x.get("done"))
+            storage.save_tasks(tasks)
+            print(Fore.GREEN + "→ Item added." + Style.RESET_ALL)
+            
+        elif choice.upper() == 'R':
+            if not task.checklist:
+                print("No items to remove.")
+                continue
+            try:
+                num = int(get_valid_input("Enter item number to remove: "))
+                idx = num - 1
+                if 0 <= idx < len(task.checklist):
+                    task.checklist.pop(idx)
+                    task.checklist_total = len(task.checklist)
+                    task.checklist_done = sum(1 for x in task.checklist if x.get("done"))
+                    storage.save_tasks(tasks)
+                    print(Fore.GREEN + "→ Item removed." + Style.RESET_ALL)
+                else:
+                    print("Invalid item number.")
+            except ValueError:
+                print("Please enter a valid number.")
+                
+        else:
+            try:
+                num = int(choice)
+                idx = num - 1
+                if 0 <= idx < len(task.checklist):
+                    item = task.checklist[idx]
+                    if item.get("done"):
+                        item["done"] = False
+                        item["done_at"] = None
+                        print(Fore.GREEN + f"→ Item {num} marked incomplete." + Style.RESET_ALL)
+                    else:
+                        item["done"] = True
+                        item["done_at"] = datetime.now().isoformat()
+                        print(Fore.GREEN + f"→ Item {num} marked complete." + Style.RESET_ALL)
+                    task.checklist_total = len(task.checklist)
+                    task.checklist_done = sum(1 for x in task.checklist if x.get("done"))
+                    storage.save_tasks(tasks)
+                else:
+                    print("Invalid item number.")
+            except ValueError:
+                print("Invalid input. Enter a number, A, R, or Enter to exit.")
+    return True
+
 def add_task(is_hard: bool = False, preset_deadline: str = None, preset_duration: str = None, preset_priority: str = None) -> bool:
     """Add a new task with improved UX."""
     tasks = storage.load_tasks()
@@ -1179,7 +1886,7 @@ def add_task(is_hard: bool = False, preset_deadline: str = None, preset_duration
             
     if not deadline_iso:
         while True:
-            dl_input = get_valid_input("Deadline (e.g. tomorrow 3pm, Friday, in 2h): ")
+            dl_input = get_valid_input("Deadline (e.g. tomorrow 3pm, Friday, in 2h) [skip]: ")
             if not dl_input:
                 break
             parsed_dl = parse_deadline(dl_input)
@@ -1190,27 +1897,27 @@ def add_task(is_hard: bool = False, preset_deadline: str = None, preset_duration
                     deadline_iso = parsed_dl.isoformat()
                     break
                 else:
-                    dl_input2 = get_valid_input("Deadline (e.g. tomorrow 3pm, Friday, in 2h): ")
-                    if not dl_input2:
+                    dl_input = get_valid_input("Deadline (e.g. tomorrow 3pm, Friday, in 2h) [skip]: ")
+                    if not dl_input:
                         break
-                    parsed_dl2 = parse_deadline(dl_input2)
-                    if parsed_dl2:
-                        print(f"→ Deadline set: {parsed_dl2.strftime('%A, %d %b %Y at %H:%M')}")
+                    parsed_dl = parse_deadline(dl_input)
+                    if parsed_dl:
+                        print(f"→ Deadline set: {parsed_dl.strftime('%A, %d %b %Y at %H:%M')}")
                         confirm2 = get_valid_input("Confirm? [Y/n]: ", "y").lower()
                         if confirm2 == "y" or confirm2 == "":
-                            deadline_iso = parsed_dl2.isoformat()
+                            deadline_iso = parsed_dl.isoformat()
                     break
             else:
-                print("Could not understand that date. Try: 'tomorrow 3pm', 'Friday', 'in 2 hours'")
-                dl_input2 = get_valid_input("Deadline (e.g. tomorrow 3pm, Friday, in 2h): ")
-                if not dl_input2:
+                print("Could not understand. Try: \"tomorrow 3pm\" or \"Friday\"")
+                dl_input = get_valid_input("Deadline (e.g. tomorrow 3pm, Friday, in 2h) [skip]: ")
+                if not dl_input:
                     break
-                parsed_dl2 = parse_deadline(dl_input2)
-                if parsed_dl2:
-                    print(f"→ Deadline set: {parsed_dl2.strftime('%A, %d %b %Y at %H:%M')}")
+                parsed_dl = parse_deadline(dl_input)
+                if parsed_dl:
+                    print(f"→ Deadline set: {parsed_dl.strftime('%A, %d %b %Y at %H:%M')}")
                     confirm2 = get_valid_input("Confirm? [Y/n]: ", "y").lower()
                     if confirm2 == "y" or confirm2 == "":
-                        deadline_iso = parsed_dl2.isoformat()
+                        deadline_iso = parsed_dl.isoformat()
                 break
                 
         # Ask for deadline type
@@ -1226,6 +1933,61 @@ def add_task(is_hard: bool = False, preset_deadline: str = None, preset_duration
         elif deadline_iso and is_hard:
             deadline_type = "hard"
 
+    # E2 - PROMPT 1: Description
+    print()
+    print("Notes (optional, Enter to skip):")
+    description = prompt_description()
+    description_updated_at = datetime.now().isoformat() if description else None
+    
+    # E2 - PROMPT 2: Links
+    links = []
+    print()
+    first_url = get_valid_input("Paste a URL, map location, or reference (Enter to skip): ").strip()
+    if first_url:
+        while True:
+            l_type = detect_link_type(first_url)
+            print(f"Detected: {l_type}")
+            label = get_valid_input("Label (optional, e.g. \"Design doc\", Enter to skip): ").strip()
+            
+            link_id = f"lnk_{len(links)+1:03d}"
+            links.append({
+                "id": link_id,
+                "type": l_type,
+                "url": first_url,
+                "title": label if label else None,
+                "added_at": datetime.now().isoformat()
+            })
+            
+            if len(links) >= 10:
+                print("Maximum 10 links reached.")
+                break
+                
+            another = get_valid_input("Add another link? [y/N]: ", "n").strip().lower()
+            if another == 'y' or another == 'yes':
+                first_url = get_valid_input("Paste a URL, map location, or reference (Enter to skip): ").strip()
+                if not first_url:
+                    break
+            else:
+                break
+                
+    # E2 - PROMPT 3: Checklist
+    checklist = []
+    print()
+    add_chk = get_valid_input("Add checklist items? [y/N]: ", "n").strip().lower()
+    if add_chk == 'y' or add_chk == 'yes':
+        print("Add items one by one. Enter blank line when done.")
+        while len(checklist) < 20:
+            item_text = get_valid_input(f"Item [{len(checklist)+1}]: ").strip()
+            if not item_text:
+                break
+            chk_id = f"chk_{len(checklist)+1:03d}"
+            checklist.append({
+                "id": chk_id,
+                "text": item_text,
+                "done": False,
+                "done_at": None
+            })
+
     task = Task(
         id=0,  # Will be auto-assigned
         title=title,
@@ -1236,24 +1998,62 @@ def add_task(is_hard: bool = False, preset_deadline: str = None, preset_duration
     task.deadline = deadline_iso
     task.deadline_type = deadline_type
     
+    # Enrichment fields
+    task.description = description
+    task.links = links
+    task.checklist = checklist
+    task.description_updated_at = description_updated_at
+    task.links_count = len(links)
+    task.checklist_total = len(checklist)
+    task.checklist_done = 0
+    
+    if deadline_iso:
+        task.deadline_raw = dl_input if not preset_deadline else preset_deadline
+        try:
+            dl_dt = datetime.fromisoformat(deadline_iso)
+            task.deadline_set_advance_hours = round((dl_dt - datetime.now()).total_seconds() / 3600, 1)
+        except Exception:
+            pass
+    
     if deadline_iso:
         calculate_reminder_time(task)
         
     try:
         task_id = manager.add_task(task)
         storage.save_tasks(manager.tasks)
-        if duration:
-            Messenger.success(f"Task #{task_id} added. · {duration} estimated.")
+        
+        # E2 custom success message
+        desc_notes = " · notes added" if task.description else ""
+        link_str = ""
+        if task.links:
+            count = len(task.links)
+            if task.description:
+                link_str = f" · {count} links"
+            else:
+                link_str = f" · {count} links attached"
+        chk_str = f" · {len(task.checklist)} checklist items" if task.checklist else ""
+        
+        if desc_notes or link_str or chk_str:
+            dur_part = f". Est. {duration}" if duration else ""
+            print(f"→ Task #{task_id} added{dur_part}{desc_notes}{link_str}{chk_str}.")
         else:
-            Messenger.success(f"Task #{task_id} added successfully.")
+            if duration:
+                print(f"→ Task #{task_id} added. Est. {duration}.")
+            else:
+                print(f"→ Task #{task_id} added successfully.")
         return True
     except Exception as e:
         Messenger.careful(f"Could not add task: {e}")
         return False
 
-def dump_task(title: str) -> dict:
-    """Frictionless capture: instantly add a task without prompts."""
+def dump_task(title: str, duration: str = None, deadline: str = None, is_hard: bool = False, note: str = None, links: list = None) -> dict:
+    """Frictionless capture: instantly add a task without prompts.
+
+    note  : optional description string (E3 --note).
+    links : optional list of {"url": str, "title": str|None} dicts (E3 --link/--link-title).
+    """
     import re
+    from datetime import datetime
     tasks = storage.load_tasks()
     manager = TaskManager(tasks)
     
@@ -1277,6 +2077,33 @@ def dump_task(title: str) -> dict:
     clean_title = re.sub(r'#\w+', '', title)
     clean_title = re.sub(r'!(low|medium|high|noise|strategic|critical|l|m|h|p|purge)(?!\w)', '', clean_title, flags=re.IGNORECASE)
     clean_title = re.sub(r'\s+', ' ', clean_title).strip()  # Collapse residual whitespace
+
+    # S2-D: extract an inline natural-language deadline from the text (when no --deadline flag)
+    inline_deadline_dt = None
+    inline_phrase = None
+    if not deadline:
+        _date_pat = re.compile(
+            r'\b('
+            r'tomorrow(?:\s+(?:morning|afternoon|evening|night))?(?:\s+at)?(?:\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?)?'
+            r'|today(?:\s+at)?(?:\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?)?|tonight'
+            r'|this\s+(?:morning|afternoon|evening)'
+            r'|next\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)'
+            r'|(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)(?:\s+at)?(?:\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?)?'
+            r'|in\s+\d+\s*(?:minutes?|mins?|hours?|hrs?|days?)'
+            r'|\d{1,2}(?::\d{2})?\s*(?:am|pm)'
+            r'|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2}'
+            r')\b',
+            re.IGNORECASE
+        )
+        _m = _date_pat.search(clean_title)
+        if _m:
+            _parsed = parse_deadline(_m.group(0))
+            if _parsed:
+                inline_deadline_dt = _parsed
+                inline_phrase = _m.group(0).strip()
+                clean_title = (clean_title[:_m.start()] + clean_title[_m.end():])
+                clean_title = re.sub(r'\s+', ' ', clean_title).strip()
+
     clean_title = validate_title(clean_title)
     
     if not clean_title:
@@ -1289,6 +2116,50 @@ def dump_task(title: str) -> dict:
         tags=tags
     )
     
+    if duration:
+        task.duration = duration.lower()
+        
+    if deadline:
+        parsed_dl = parse_deadline(deadline)
+        if parsed_dl:
+            task.deadline = parsed_dl.isoformat()
+            task.deadline_raw = deadline
+            task.deadline_type = "hard" if is_hard else "soft"
+            try:
+                task.deadline_set_advance_hours = round((parsed_dl - datetime.now()).total_seconds() / 3600, 1)
+            except Exception:
+                pass
+            calculate_reminder_time(task)
+    elif inline_deadline_dt:
+        task.deadline = inline_deadline_dt.isoformat()
+        task.deadline_raw = inline_phrase
+        task.deadline_type = "hard" if is_hard else "soft"
+        try:
+            task.deadline_set_advance_hours = round((inline_deadline_dt - datetime.now()).total_seconds() / 3600, 1)
+        except Exception:
+            pass
+        calculate_reminder_time(task)
+
+    # E3: enrichment captured via flags
+    if note:
+        task.description = note
+        task.description_updated_at = datetime.now().isoformat()
+    if links:
+        assembled = []
+        for ln in links[:10]:
+            url = (ln.get("url") or "").strip()
+            if not url:
+                continue
+            assembled.append({
+                "id": f"lnk_{len(assembled)+1:03d}",
+                "type": detect_link_type(url),
+                "url": url,
+                "title": (ln.get("title") or None),
+                "added_at": datetime.now().isoformat()
+            })
+        task.links = assembled
+        task.links_count = len(assembled)
+
     try:
         task_id = manager.add_task(task)
         storage.save_tasks(manager.tasks)
@@ -1452,39 +2323,103 @@ def format_time_remaining(td: timedelta) -> str:
 
 def get_pressure_level(task) -> int:
     """Calculate the pressure level based on deadline proximity."""
-    if task.completed or not task.deadline:
+    if not getattr(task, 'deadline', None):
+        return 0
+    if task.completed or getattr(task, 'dropped_at', None) or getattr(task, 'offloaded_at', None):
+        return 0
+    if getattr(task, 'status', None) in ['completed', 'done', 'dropped', 'offloaded']:
         return 0
         
     try:
         dt = datetime.fromisoformat(task.deadline)
+        if dt.tzinfo is not None:
+            dt = dt.replace(tzinfo=None)
     except ValueError:
         return 0
         
     td = dt - datetime.now()
-    secs = td.total_seconds()
+    seconds = td.total_seconds()
     
-    if secs < 0:
-        return 3 # Overdue
-    elif secs < 15 * 60: # 15 mins
-        return 3 # Critical
-    elif secs <= 3600: # 1 hour
-        return 2 # Near
-    elif secs <= 3 * 3600: # 3 hours
-        return 1 # Approaching
+    if seconds > 10800:
+        return 0
+    elif seconds > 3600:
+        return 1
+    elif seconds > 900:
+        return 2
     else:
-        return 0 # No pressure
+        return 3
 
 
-def list_tasks(filter_status: Optional[str] = None, 
+def _split_missed(tasks: List[Task]):
+    """Return (hard_missed, soft_missed) lists of currently-missed pending tasks.
+
+    Uses get_missed_tasks() so tasks already addressed via 'taskflow missed'
+    (last_missed_prompt == today) correctly drop off the notices.
+    """
+    missed = get_missed_tasks(tasks)
+    hard = [t for t in missed if getattr(t, 'deadline_type', None) == 'hard']
+    soft = [t for t in missed if getattr(t, 'deadline_type', None) != 'hard']
+    return hard, soft
+
+
+def print_list_missed_banner(tasks: List[Task]) -> None:
+    """PASSIVE top-of-list notice for missed HARD deadlines. One block, never prompts."""
+    hard, _ = _split_missed(tasks)
+    if not hard:
+        return
+    n = len(hard)
+    R = Style.RESET_ALL
+    red = Fore.RED + Style.BRIGHT
+    dim = Fore.WHITE + Style.DIM
+    plural = "s" if n != 1 else ""
+    line1 = f"⚠  {n} hard deadline{plural} missed"
+    line2 = "Run: taskflow missed  to address them"
+    W = max(len(line1), len(line2))
+    bar = "─" * (W + 2)
+    print(dim + "┌" + bar + "┐" + R)
+    print(dim + "│ " + R + red + line1.ljust(W) + R + dim + " │" + R)
+    print(dim + "│ " + line2.ljust(W) + " │" + R)
+    print(dim + "└" + bar + "┘" + R)
+    print()
+
+
+def print_list_missed_footer(tasks: List[Task]) -> None:
+    """PASSIVE bottom-of-list notice for missed SOFT deadlines. One line, never prompts."""
+    _, soft = _split_missed(tasks)
+    if not soft:
+        return
+    n = len(soft)
+    plural = "s" if n != 1 else ""
+    R = Style.RESET_ALL
+    print(f"\n{Fore.YELLOW}ℹ  {n} soft deadline{plural} passed{R}")
+    print(f"{Fore.YELLOW}   Run: taskflow missed --soft  to review{R}")
+
+
+def print_today_missed_notice(tasks: List[Task]) -> None:
+    """PASSIVE bottom-of-today notice for any missed missions. Never prompts."""
+    hard, soft = _split_missed(tasks)
+    n = len(hard) + len(soft)
+    if n == 0:
+        return
+    R = Style.RESET_ALL
+    dim = Fore.WHITE + Style.DIM
+    plural = "s" if n != 1 else ""
+    print(dim + "─" * 50 + R)
+    print(f"{Fore.YELLOW}⚠  {n} missed mission{plural} need attention.{R}")
+    print(f"{dim}   Run: taskflow missed  to address them now.{R}")
+    print(dim + "─" * 50 + R)
+
+
+def list_tasks(filter_status: Optional[str] = None,
                filter_priority: Optional[str] = None,
                filter_tag: Optional[str] = None,
                show_all: bool = False,
-               sort_by: Optional[str] = None) -> None:
-    """List tasks with advanced filtering."""
-    handle_missed_tasks()
-    
+               sort_by: Optional[str] = None,
+               show_detail: bool = False) -> None:
+    """List tasks with advanced filtering and optional enrichment details."""
     tasks = storage.load_tasks()
-    
+    print_list_missed_banner(tasks)  # PASSIVE notice only — never prompts (see: taskflow missed)
+
     if not tasks:
         Messenger.empty_list()
         return
@@ -1542,6 +2477,31 @@ def list_tasks(filter_status: Optional[str] = None,
             Messenger.note("No tasks match your filters.")
         return
     
+    def get_indicator_str(t) -> str:
+        import sys
+        supports_emoji = False
+        try:
+            encoding = sys.stdout.encoding or 'ascii'
+            if 'utf' in encoding.lower() or 'cp65001' in encoding.lower():
+                supports_emoji = True
+        except Exception:
+            pass
+            
+        parts = []
+        if getattr(t, 'description', None):
+            parts.append("📝" if supports_emoji else "[note]")
+        if getattr(t, 'links', None):
+            count = len(t.links)
+            parts.append(f"🔗 ×{count}" if supports_emoji else f"[{count} links]")
+        if getattr(t, 'checklist', None):
+            done = sum(1 for x in t.checklist if x.get("done"))
+            total = len(t.checklist)
+            parts.append(f"☑ {done}/{total}" if supports_emoji else f"[{done}/{total}]")
+            
+        if not parts:
+            return ""
+        return "     " + " · ".join(parts)
+
     shown = 0
     print()
     for task in filtered_tasks:
@@ -1558,24 +2518,24 @@ def list_tasks(filter_status: Optional[str] = None,
             if pressure > 0 and task.deadline:
                 try:
                     dt = datetime.fromisoformat(task.deadline)
+                    if dt.tzinfo is not None:
+                        dt = dt.replace(tzinfo=None)
                     td = dt - datetime.now()
                     rem_str = format_time_remaining(td)
                     
                     if pressure == 3:
-                        if getattr(task, 'deadline_type', None) == "hard":
-                            title_color = Fore.RED + Style.BRIGHT
-                            hard_pressure_line = f"\n      → {Fore.RED}Hard deadline. Execute or reschedule now.{Style.RESET_ALL}"
-                        else:
-                            title_color = Fore.YELLOW + Style.BRIGHT
+                        title_color = Fore.RED + Style.BRIGHT
                         if td.total_seconds() < 0:
                             pressure_suffix = f" · {Fore.RED + Style.BRIGHT}{rem_str}{Style.RESET_ALL}"
                         else:
                             pressure_suffix = f" · {Fore.RED + Style.BRIGHT}{rem_str} ⚠{Style.RESET_ALL}"
+                        if getattr(task, 'deadline_type', None) == "hard":
+                            hard_pressure_line = f"\n     → {Fore.RED}Hard deadline. Execute or reschedule now.{Style.RESET_ALL}"
                     elif pressure == 2:
-                        title_color = Fore.YELLOW
+                        title_color = Fore.YELLOW + Style.BRIGHT
                         pressure_suffix = f" · {Fore.YELLOW + Style.BRIGHT}{rem_str}{Style.RESET_ALL}"
                         if getattr(task, 'deadline_type', None) == "hard":
-                            hard_pressure_line = f"\n      → {Fore.RED}Hard deadline. Execute or reschedule now.{Style.RESET_ALL}"
+                            hard_pressure_line = f"\n     → {Fore.RED}Hard deadline. Execute or reschedule now.{Style.RESET_ALL}"
                     elif pressure == 1:
                         pressure_suffix = f" · {Fore.YELLOW}{rem_str}{Style.RESET_ALL}"
                 except ValueError:
@@ -1614,57 +2574,65 @@ def list_tasks(filter_status: Optional[str] = None,
         else:
             tags_str = ""
         
-        deadline_str = ""
-        if getattr(task, 'deadline', None):
-            try:
-                dt = datetime.fromisoformat(task.deadline)
-                now = datetime.now()
-                today = now.replace(hour=0, minute=0, second=0, microsecond=0)
-                task_date = dt.replace(hour=0, minute=0, second=0, microsecond=0)
-                
-                hard_indicator = f"  {Fore.RED}⚠{Style.RESET_ALL}" if getattr(task, 'deadline_type', None) == "hard" else ""
-                
-                if dt < now:
-                    # Past
-                    date_formatted = dt.strftime('%b %d')
-                    dl_text = f"Overdue — {date_formatted}"
-                    deadline_str = f" · {Fore.RED}{dl_text}{Style.RESET_ALL}{hard_indicator}"
-                elif task_date == today:
-                    # Today
-                    time_formatted = dt.strftime('%I:%M %p').lstrip('0')
-                    dl_text = f"Today at {time_formatted}"
-                    deadline_str = f" · {Fore.YELLOW}{dl_text}{Style.RESET_ALL}{hard_indicator}"
-                elif task_date == today + timedelta(days=1):
-                    # Tomorrow
-                    time_formatted = dt.strftime('%I:%M %p').lstrip('0')
-                    dl_text = f"Tomorrow at {time_formatted}"
-                    deadline_str = f" · {Fore.MAGENTA}{dl_text}{Style.RESET_ALL}{hard_indicator}"
-                else:
-                    # Future
-                    date_formatted = dt.strftime('%a %d %b')
-                    time_formatted = dt.strftime('%I:%M %p').lstrip('0')
-                    dl_text = f"{date_formatted}, {time_formatted}"
-                    deadline_str = f" · {Fore.GREEN}{dl_text}{Style.RESET_ALL}{hard_indicator}"
-            except ValueError:
-                deadline_str = f" · {Fore.WHITE}{Style.DIM}{task.deadline}{Style.RESET_ALL}"
-                
         # Build the final string
         id_str = f"{Fore.GREEN}#{task.id}{Style.RESET_ALL}"
-        base = f"{id_str} · {title_color}{task.title}{Style.RESET_ALL}{duration_str}{priority_str}{tags_str}{pressure_suffix}{postpone_suffix}\n     Deadline: {deadline_str.strip(' ·')}"
+        
+        # S1-D: Duration appears between title and priority.
+        duration_part = f"  [{task.duration}] " if task.duration else ""
+        
+        deadline_str = format_deadline_display(task)
+        if deadline_str:
+            deadline_str = f" · {deadline_str}"
+            
+        base = f"{id_str} · {title_color}{task.title}{Style.RESET_ALL}{duration_part}{priority_str}{tags_str}{pressure_suffix}{postpone_suffix}\n     Deadline: {deadline_str.strip(' ·')}"
         if not getattr(task, 'deadline', None):
-            base = f"{id_str} · {title_color}{task.title}{Style.RESET_ALL}{duration_str}{priority_str}{tags_str}{pressure_suffix}{postpone_suffix}"
+            base = f"{id_str} · {title_color}{task.title}{Style.RESET_ALL}{duration_part}{priority_str}{tags_str}{pressure_suffix}{postpone_suffix}"
         
         base += hard_pressure_line
         
+        detail_lines = []
+        if show_detail:
+            if getattr(task, 'description', None):
+                preview = task.description.replace('\n', ' ')
+                if len(preview) > 80:
+                    preview = preview[:77] + "..."
+                detail_lines.append(f"     Notes: {preview}")
+            if getattr(task, 'links', None):
+                for l in task.links:
+                    title_part = f" (\"{l.get('title')}\")" if l.get('title') else ""
+                    detail_lines.append(f"     Link: [{l.get('id')}] {l.get('type')} → {l.get('url')}{title_part}")
+            if getattr(task, 'checklist', None):
+                for idx, item in enumerate(task.checklist):
+                    chk = "✓" if item.get("done") else "·"
+                    detail_lines.append(f"     Subtask {idx+1}: [{chk}] {item.get('text')}")
+        
         if task.completed:
             # Overwrite base format for completed tasks to match old style but dim
-            base = f"{id_str} · {title_color}{task.title}{Style.RESET_ALL}{duration_str}{priority_str}{tags_str}{deadline_str}"
+            base = f"{id_str} · {title_color}{task.title}{Style.RESET_ALL}{duration_part}{priority_str}{tags_str}{deadline_str}"
             print(f"{Fore.GREEN}✓{Style.RESET_ALL} {Style.DIM}{base}{Style.RESET_ALL}")
+            ind = get_indicator_str(task)
+            if ind:
+                print(Style.DIM + ind + Style.RESET_ALL)
+            if show_detail:
+                for dl in detail_lines:
+                    print(Style.DIM + dl + Style.RESET_ALL)
         elif task.dropped_at or task.offloaded_at:
-            base = f"{id_str} · {title_color}{task.title}{Style.RESET_ALL}{duration_str}{priority_str}{tags_str}{deadline_str}"
+            base = f"{id_str} · {title_color}{task.title}{Style.RESET_ALL}{duration_part}{priority_str}{tags_str}{deadline_str}"
             print(f"{Fore.RED}x{Style.RESET_ALL} {Style.DIM}{base}{Style.RESET_ALL}")
+            ind = get_indicator_str(task)
+            if ind:
+                print(Style.DIM + ind + Style.RESET_ALL)
+            if show_detail:
+                for dl in detail_lines:
+                    print(Style.DIM + dl + Style.RESET_ALL)
         else:
             print(f"{Fore.YELLOW}○{Style.RESET_ALL} {base}")
+            ind = get_indicator_str(task)
+            if ind:
+                print(ind)
+            if show_detail:
+                for dl in detail_lines:
+                    print(dl)
             
         shown += 1
     
@@ -1675,6 +2643,8 @@ def list_tasks(filter_status: Optional[str] = None,
         Messenger.note(
             "Tip: Use --sort priority or --sort due to organize tasks."
         )
+
+    print_list_missed_footer(tasks)  # PASSIVE soft-deadline notice at bottom — never prompts
 
 
 
@@ -1766,8 +2736,64 @@ def complete_task(task_id: int):
                 except: pass
                 return dopamine
 
+            # Calculate pressure level BEFORE marking completed
+            level = get_pressure_level(task)
+            task.pressure_level_at_completion = level
+            task.completed_under_pressure = (level >= 2)
+
+            # S4-D Now Window tracking
+            if getattr(task, 'deadline', None):
+                try:
+                    deadline_dt = datetime.fromisoformat(task.deadline)
+                    if deadline_dt.tzinfo is not None:
+                        deadline_dt = deadline_dt.replace(tzinfo=None)
+                    
+                    completion_time = datetime.now()
+                    window_start = completion_time - timedelta(minutes=45)
+                    window_end = completion_time + timedelta(minutes=45)
+                    
+                    if window_start <= deadline_dt <= window_end:
+                        task.executed_in_window = True
+                    else:
+                        task.executed_in_window = False
+                    
+                    drift = (completion_time - deadline_dt).total_seconds() / 60.0
+                    task.window_drift_minutes = int(drift)
+                except ValueError:
+                    task.executed_in_window = None
+                    task.window_drift_minutes = None
+            else:
+                task.executed_in_window = None
+                task.window_drift_minutes = None
+
             task.completed = True
+            task.status = "completed"
             task.completed_at = datetime.now().strftime("%Y-%m-%d %H:%M")
+            task.actual_end_time = datetime.now().isoformat()
+            
+            if task.actual_start_time and task.duration:
+                try:
+                    start_dt = datetime.fromisoformat(task.actual_start_time)
+                    end_dt = datetime.fromisoformat(task.actual_end_time)
+                    actual_min = (end_dt - start_dt).total_seconds() / 60.0
+                    
+                    # Parse duration string to minutes
+                    dur_str = task.duration.lower()
+                    est_min = None
+                    if dur_str == "15m": est_min = 15
+                    elif dur_str == "30m": est_min = 30
+                    elif dur_str == "1h": est_min = 60
+                    elif dur_str == "2h": est_min = 120
+                    elif dur_str == "3h": est_min = 180
+                    elif dur_str == "4h+": est_min = 240
+                    
+                    if est_min:
+                        task.duration_accuracy_ratio = round(actual_min / est_min, 2)
+                except Exception:
+                    pass
+            elif not task.actual_start_time:
+                task.duration_accuracy_ratio = None
+                
             storage.save_tasks(tasks)
 
             dopamine = _generate_dopamine(task_id, increment=True)
@@ -2040,26 +3066,167 @@ def reset_tasks() -> bool:
 
 
 def view_task(task_id: int) -> None:
-    """View task details with notes, tags, AND focus minutes."""
+    """View detailed MISSION BRIEF for a task with enrichment (E4)."""
     tasks = storage.load_tasks()
     
-    for task in tasks:
-        if task.id == task_id:
-            print(f"\n{'='*40}")
-            print(f"TASK #{task_id}")
-            print(f"{'='*40}")
-            print(f"Title     : {task.title}")
-            print(f"Status    : {'COMPLETED' if task.completed else 'PENDING'}")
-            print(f"Priority  : {task.priority}")
-            print(f"Created   : {task.created_at}")
-            print(f"Completed : {task.completed_at or 'Not yet'}")
-            print(f"Tags      : {', '.join(task.tags) if task.tags else 'None'}")
-            print(f"Notes     : {task.notes or 'No notes yet'}")
-            print(f"Focus spent: {task.focus_minutes_spent} minutes")  # NEW LINE
-            print(f"{'='*40}")
-            return
+    task = next((t for t in tasks if t.id == task_id), None)
+    if not task:
+        Messenger.task_not_found(task_id)
+        return
     
-    Messenger.task_not_found(task_id)
+    DIM_LINE = Fore.WHITE + Style.DIM
+    BRIGHT = Fore.WHITE + Style.BRIGHT
+    CYAN_BRIGHT = Fore.CYAN + Style.BRIGHT
+    R = Style.RESET_ALL
+    divider = "━" * 58
+    
+    print()
+    print(f"{DIM_LINE}{divider}{R}")
+    print(f"{CYAN_BRIGHT}MISSION BRIEF · #{task.id}{R}")
+    print(f"{DIM_LINE}{divider}{R}")
+    
+    # Core fields
+    print(f"  Title:     {BRIGHT}{task.title}{R}")
+    
+    status_str = f"{Fore.GREEN}[V] COMPLETED{R}" if task.completed else f"{Fore.YELLOW}[ ] TODO{R}"
+    if getattr(task, 'dropped_at', None):
+        status_str = f"{Fore.RED}[X] DROPPED{R}"
+    elif getattr(task, 'offloaded_at', None):
+        status_str = f"{Fore.CYAN}[→] OFFLOADED{R}"
+    print(f"  Status:    {status_str}")
+    
+    p_lower = (task.priority or "").lower()
+    if p_lower in ["critical", "high"]:
+        p_color = Fore.RED
+    elif p_lower in ["strategic", "medium"]:
+        p_color = Fore.CYAN
+    else:
+        p_color = Fore.WHITE + Style.DIM
+    print(f"  Priority:  {p_color}{task.priority}{R}")
+    
+    if task.duration:
+        print(f"  Duration:  {task.duration} estimated")
+    
+    if task.deadline:
+        try:
+            dt = datetime.fromisoformat(task.deadline)
+            if dt.tzinfo is not None:
+                dt = dt.replace(tzinfo=None)
+            dl_display = dt.strftime('%A, %d %b %Y at %H:%M')
+            dl_type = getattr(task, 'deadline_type', None) or "soft"
+            type_color = Fore.RED if dl_type == "hard" else Fore.YELLOW
+            type_tag = f" {type_color}[{dl_type.upper()}]{R}"
+            
+            td = dt - datetime.now()
+            rem_str = format_time_remaining(td)
+            p_level = get_pressure_level(task)
+            if p_level >= 3:
+                rem_color = Fore.RED + Style.BRIGHT
+            elif p_level >= 2:
+                rem_color = Fore.YELLOW + Style.BRIGHT
+            elif p_level >= 1:
+                rem_color = Fore.YELLOW
+            else:
+                rem_color = Fore.WHITE + Style.DIM
+            
+            if not task.completed:
+                print(f"  Deadline:  {dl_display}{type_tag} ← {rem_color}{rem_str}{R}")
+            else:
+                print(f"  Deadline:  {dl_display}{type_tag}")
+        except ValueError:
+            print(f"  Deadline:  {task.deadline}")
+    
+    if task.tags:
+        formatted_tags = ", ".join(f"#{t}" for t in task.tags)
+        print(f"  Tags:      {Fore.BLUE}{formatted_tags}{R}")
+    
+    if task.created_at:
+        try:
+            cdt = datetime.fromisoformat(task.created_at)
+            print(f"  Created:   {cdt.strftime('%A, %d %b %Y at %H:%M')}")
+        except ValueError:
+            print(f"  Created:   {task.created_at}")
+    
+    if task.completed_at:
+        try:
+            comp_dt = datetime.fromisoformat(task.completed_at)
+            print(f"  Completed: {comp_dt.strftime('%A, %d %b %Y at %H:%M')}")
+        except ValueError:
+            print(f"  Completed: {task.completed_at}")
+    
+    if task.focus_minutes_spent > 0:
+        print(f"  Focus:     {task.focus_minutes_spent} minutes spent")
+    
+    print(f"{DIM_LINE}{divider}{R}")
+    
+    # NOTES section (E4)
+    desc = getattr(task, 'description', None)
+    if desc:
+        print()
+        print(f"{BRIGHT}NOTES{R}")
+        for line in desc.split('\n'):
+            print(f"  {line}")
+    
+    # LINKS & REFERENCES section (E4)
+    links = getattr(task, 'links', None) or []
+    if links:
+        print()
+        print(f"{BRIGHT}LINKS & REFERENCES ({len(links)}){R}")
+        for l in links:
+            lnk_id = l.get("id", "?")
+            lnk_type = l.get("type", "url")
+            lnk_url = l.get("url", "")
+            lnk_title = l.get("title")
+            
+            id_str = f"{DIM_LINE}[{lnk_id}]{R}"
+            type_str = f"{CYAN_BRIGHT}{lnk_type:<10}{R}"
+            url_str = f"→ {lnk_url}"
+            print(f"  {id_str} {type_str} {url_str}")
+            if lnk_title:
+                print(f"  {'':>24}\"{DIM_LINE}{lnk_title}{R}\"")
+    
+    # CHECKLIST section (E4)
+    checklist = getattr(task, 'checklist', None) or []
+    if checklist:
+        done_count = sum(1 for x in checklist if x.get("done"))
+        total_count = len(checklist)
+        print()
+        print(f"{BRIGHT}CHECKLIST ({done_count}/{total_count} done){R}")
+        for item in checklist:
+            is_done = item.get("done", False)
+            if is_done:
+                print(f"  {Fore.GREEN}✓ {item.get('text', '')}{R}")
+            else:
+                print(f"  {DIM_LINE}· {item.get('text', '')}{R}")
+    
+    # Footer
+    print()
+    print(f"{DIM_LINE}{divider}{R}")
+    
+    # Postpone count and age
+    footer_parts = []
+    postpone_count = getattr(task, 'postpone_count', 0)
+    footer_parts.append(f"Postponed: {postpone_count}×")
+    
+    if task.created_at:
+        try:
+            created_dt = datetime.fromisoformat(task.created_at)
+            if created_dt.tzinfo is not None:
+                created_dt = created_dt.replace(tzinfo=None)
+            age_td = datetime.now() - created_dt
+            age_hours = age_td.total_seconds() / 3600
+            if age_hours < 1:
+                age_str = f"{int(age_td.total_seconds() / 60)} minutes ago"
+            elif age_hours < 24:
+                age_str = f"{int(age_hours)} hours ago"
+            else:
+                age_str = f"{int(age_hours / 24)} days ago"
+            footer_parts.append(f"Added: {age_str}")
+        except ValueError:
+            pass
+    
+    print(f"  {DIM_LINE}{' · '.join(footer_parts)}{R}")
+    print(f"{DIM_LINE}{divider}{R}")
 
 
 def change_priority(task_id: int, level: str) -> bool:
@@ -2117,6 +3284,10 @@ def focus_task(task_id: int, minutes: int = 25,
             if focus_manager.is_focus_active():
                 Messenger.note("A focus session is already active. End it first.")
                 return False
+                
+            if not task.actual_start_time:
+                task.actual_start_time = datetime.now().isoformat()
+                storage.save_tasks(tasks)
                 
             # --- BLOCKLIST INTEGRATION ---
             if (mode in ["strict", "gentle"]) and not block_sites:
@@ -2582,8 +3753,8 @@ def __parse_date(date_str: str) -> str:
 def schedule_task(task_id: int, date_str: str) -> bool:
     """Schedule a task to the Execution Engine Timeline."""
     tasks = storage.load_tasks()
-    task_exists = any(t.id == task_id for t in tasks)
-    if not task_exists:
+    task = next((t for t in tasks if t.id == task_id), None)
+    if not task:
         Messenger.task_not_found(task_id)
         return False
         
@@ -2592,6 +3763,10 @@ def schedule_task(task_id: int, date_str: str) -> bool:
         mapping = storage.load_timeline()
         mapping[str(task_id)] = scheduled_date
         storage.save_timeline(mapping)
+        
+        task.scheduled_date = scheduled_date
+        storage.save_tasks(tasks)
+        
         Messenger.success(f"Task #{task_id} logically deployed to {scheduled_date}")
         return True
     except ValueError:
@@ -2602,8 +3777,8 @@ def set_prime_target(task_id: int, date_str: str = 'today') -> bool:
     """Set a task as the single [PRIME TARGET] for a given date."""
     if not date_str: date_str = 'today'
     tasks = storage.load_tasks()
-    task_exists = any(t.id == task_id for t in tasks)
-    if not task_exists:
+    task = next((t for t in tasks if t.id == task_id), None)
+    if not task:
         Messenger.task_not_found(task_id)
         return False
         
@@ -2621,6 +3796,10 @@ def set_prime_target(task_id: int, date_str: str = 'today') -> bool:
                 
         mapping[str(task_id)] = prime_key
         storage.save_timeline(mapping)
+        
+        task.prime_target_date = scheduled_date
+        storage.save_tasks(tasks)
+        
         Messenger.success(f"🎯 Task #{task_id} is now your [PRIME TARGET] for {scheduled_date}")
         return True
     except ValueError:
@@ -2805,169 +3984,273 @@ def normalize_priority(priority: str) -> str:
 
 def run_today_view():
     """Show today's tasks chronologically with Now Window."""
-    handle_missed_tasks()
-    
     tasks = storage.load_tasks()
     timeline = storage.load_timeline()
+    config = storage.load_config()
+    
+    # S4-G: Update today view opened counts
+    config["today_views_opened"] = config.get("today_views_opened", 0) + 1
+    config["last_today_view"] = datetime.now().isoformat()
+    storage.save_config(config)
     
     now = datetime.now()
     today_str = now.strftime('%Y-%m-%d')
-    today_task_ids = {int(tid) for tid, tslot in timeline.items() if tslot.startswith(today_str)}
     
-    today_tasks = []
+    completed_today = []
+    main_tasks = []
     
     for task in tasks:
-        if not task.completed and (task.dropped_at or task.offloaded_at):
+        # Completed today section
+        if task.completed:
+            if task.completed_at and task.completed_at.startswith(today_str):
+                completed_today.append(task)
+            continue
+            
+        # Exclude dropped/offloaded from main list
+        if getattr(task, 'dropped_at', None) or getattr(task, 'offloaded_at', None):
+            continue
+        if getattr(task, 'status', None) in ['dropped', 'offloaded']:
             continue
             
         included = False
         task_dt = None
         
+        # (a) deadline date is today
         if task.deadline:
             try:
                 dt = datetime.fromisoformat(task.deadline)
+                if dt.tzinfo is not None:
+                    dt = dt.replace(tzinfo=None)
                 if dt.strftime('%Y-%m-%d') == today_str:
                     included = True
                     task_dt = dt
             except ValueError:
                 pass
                 
-        if not included and not task.deadline and not task.completed:
+        # (b) scheduled date is today
+        if not included:
+            tslot = timeline.get(str(task.id))
+            if tslot and tslot.startswith(today_str):
+                included = True
+                # If there's a custom slot like YYYY-MM-DD HH:MM, we can parse it to dt
+                if len(tslot) >= 16:
+                    try:
+                        slot_dt = datetime.fromisoformat(tslot)
+                        if slot_dt.tzinfo is not None:
+                            slot_dt = slot_dt.replace(tzinfo=None)
+                        task_dt = slot_dt
+                    except ValueError:
+                        pass
+            elif task.scheduled_date == today_str:
+                included = True
+                
+        # (c) prime date is today
+        if not included:
+            tslot = timeline.get(str(task.id))
+            if tslot == f"{today_str}_prime":
+                included = True
+            elif task.prime_target_date == today_str:
+                included = True
+                
+        # (d) untimed, "todo" status, and created today
+        if not included and not task.deadline:
             if task.created_at and task.created_at.startswith(today_str):
                 included = True
                 
-        if not included and task.id in today_task_ids:
-            included = True
-            
         if included:
-            today_tasks.append((task, task_dt))
+            main_tasks.append((task, task_dt))
             
-    if not today_tasks:
+    if not main_tasks and not completed_today:
         print("\nNo missions scheduled for today.\nAdd one: taskflow add\n")
         return
         
-    if all(t[0].completed for t in today_tasks):
-        print(Fore.GREEN + "\nAll missions complete. Excellent execution today.\n" + Style.RESET_ALL)
-        return
-        
-    timed_tasks = [t for t in today_tasks if t[1] is not None]
-    untimed_tasks = [t for t in today_tasks if t[1] is None]
+    timed_tasks = [t for t in main_tasks if t[1] is not None]
+    untimed_tasks = [t for t in main_tasks if t[1] is None]
     
     timed_tasks.sort(key=lambda t: t[1])
     
     priority_order = {"critical": 0, "strategic": 1, "noise": 2, "purge": 3, "high": 0, "medium": 1, "low": 2}
     untimed_tasks.sort(key=lambda t: priority_order.get((t[0].priority or "").lower(), 1))
     
-    # Feature 8: The "Approaching" header
+    # Increment today_view_shown_count for all tasks shown and save
+    for task, _ in timed_tasks:
+        task.today_view_shown_count += 1
+    for task, _ in untimed_tasks:
+        task.today_view_shown_count += 1
+    for task in completed_today:
+        task.today_view_shown_count += 1
+    storage.save_tasks(tasks)
+    
+    # Calculate Now window
+    window_start = now - timedelta(minutes=45)
+    window_end = now + timedelta(minutes=45)
+    
+    window_tasks = [t for t in timed_tasks if window_start <= t[1] <= window_end]
+    primary_now_task = window_tasks[0] if window_tasks else None
+    secondary_window_tasks = window_tasks[1:]
+    
+    next_task = None
+    if not primary_now_task:
+        for task, dt in timed_tasks:
+            if dt > now:
+                next_task = (task, dt)
+                break
+                
+    # Calculate pressure counts for Approaching header
     pressure_counts = {2: 0, 3: 0}
-    for task, dt in today_tasks:
-        if not task.completed:
-            p_level = get_pressure_level(task)
-            if p_level in [2, 3]:
-                pressure_counts[p_level] += 1
+    for task, _ in main_tasks:
+        p_level = get_pressure_level(task)
+        if p_level in [2, 3]:
+            pressure_counts[p_level] += 1
                 
     total_pressure_tasks = pressure_counts[2] + pressure_counts[3]
     print()
     if total_pressure_tasks > 0:
-        header_color = Fore.RED if pressure_counts[3] > 0 else Fore.YELLOW
-        print(header_color + f"  ⚡ {total_pressure_tasks} task(s) need attention now." + Style.RESET_ALL)
+        if pressure_counts[3] > 0:
+            header_color = Fore.RED + Style.BRIGHT
+            print(header_color + f"  ⚡ {total_pressure_tasks} task(s) need immediate attention." + Style.RESET_ALL)
+        else:
+            header_color = Fore.YELLOW
+            print(header_color + f"  ⚡ {total_pressure_tasks} task(s) need attention soon." + Style.RESET_ALL)
         
-    header_str = f" TODAY · {now.strftime('%A, %d %b')} "
-    print(Fore.WHITE + Style.DIM + f"──{header_str}" + "─" * (50 - len(header_str) - 2) + Style.RESET_ALL)
+    # S4-G: Telemetry behavior logging with complete schema
+    now_window_task_id = primary_now_task[0].id if primary_now_task else None
+    log_behavior({
+        "event": "today_view_opened",
+        "task_count": len(main_tasks),
+        "now_window_task_id": now_window_task_id,
+        "pressure_tasks": total_pressure_tasks
+    })
+    
+    # S4-E: Dividers pad to exactly 50 characters
+    header_str = f" TODAY · {now.strftime('%A, %B %d').replace(' 0', ' ')} "
+    header_str = header_str.replace(", 0", ", ")
+    divider = f"──{header_str}"
+    divider += "─" * (50 - len(divider))
+    print(Fore.WHITE + Style.DIM + divider + Style.RESET_ALL)
     print()
     
-    window_start = now - timedelta(minutes=45)
-    window_end = now + timedelta(minutes=45)
-    
-    now_task = None
-    next_task = None
-    
     for task, dt in timed_tasks:
-        if not task.completed:
-            if window_start <= dt <= window_end:
-                now_task = (task, dt)
-                break
-                
-    if not now_task:
-        for task, dt in timed_tasks:
-            if not task.completed and dt > now:
-                next_task = (task, dt)
-                break
-                
-    for task, dt in timed_tasks:
-        time_str = dt.strftime('%H:%M')
+        time_str = f"[{dt.strftime('%H:%M')}]"
         
         row_color = Fore.WHITE
         prefix = "   "
         suffix = ""
         is_now = False
         is_next = False
+        is_window = False
         
         pressure_line = ""
         
-        if task.completed:
-            row_color = Fore.WHITE + Style.DIM
-            prefix = "✓  "
-            suffix = "   [done]"
-        else:
-            if now_task and task.id == now_task[0].id:
-                row_color = Fore.WHITE + Style.BRIGHT
-                prefix = "▶  "
-                suffix = f"   {Fore.CYAN}[NOW ← you are here]{Style.RESET_ALL}"
-                is_now = True
-            elif next_task and task.id == next_task[0].id:
-                row_color = Fore.WHITE + Style.BRIGHT
-                prefix = "▶  "
-                suffix = f"   {Fore.CYAN}[NEXT MISSION]{Style.RESET_ALL}"
-                is_next = True
+        if primary_now_task and task.id == primary_now_task[0].id:
+            row_color = Fore.WHITE + Style.BRIGHT
+            prefix = "▶  "
+            suffix = f"   {Fore.CYAN}[NOW ← you are here]{Style.RESET_ALL}"
+            is_now = True
+        elif task.id in [t[0].id for t in secondary_window_tasks]:
+            row_color = Fore.WHITE + Style.BRIGHT
+            prefix = "▶  "
+            suffix = f"   {Fore.CYAN}[WINDOW]{Style.RESET_ALL}"
+            is_window = True
+        elif next_task and task.id == next_task[0].id:
+            row_color = Fore.WHITE + Style.BRIGHT
+            prefix = "·  " # S4-D prefix marker
+            suffix = f"   {Fore.CYAN}[NEXT MISSION]{Style.RESET_ALL}"
+            is_next = True
+            
+        p_level = get_pressure_level(task)
+        if p_level > 0:
+            td = dt - now
+            rem_str = format_time_remaining(td)
+            if p_level == 3:
+                if getattr(task, 'deadline_type', None) == "hard":
+                    row_color = Fore.RED + Style.BRIGHT
+                else:
+                    row_color = Fore.YELLOW + Style.BRIGHT
+                if td.total_seconds() < 0:
+                    suffix += f" · {Fore.RED + Style.BRIGHT}{rem_str}{Style.RESET_ALL}"
+                else:
+                    suffix += f" · {Fore.RED + Style.BRIGHT}{rem_str} ⚠{Style.RESET_ALL}"
                 
-            # Feature 8 & 6C Integration
-            p_level = get_pressure_level(task)
-            if p_level > 0:
-                td = dt - datetime.now()
-                rem_str = format_time_remaining(td)
-                if p_level == 3:
-                    if getattr(task, 'deadline_type', None) == "hard":
-                        row_color = Fore.RED + Style.BRIGHT
-                    else:
-                        row_color = Fore.YELLOW + Style.BRIGHT
-                    if td.total_seconds() < 0:
-                        suffix += f" · {Fore.RED + Style.BRIGHT}{rem_str}{Style.RESET_ALL}"
-                    else:
-                        suffix += f" · {Fore.RED + Style.BRIGHT}{rem_str} ⚠{Style.RESET_ALL}"
-                    pressure_line = f"\n     ··· {Fore.RED + Style.BRIGHT}⚠ Execution window closing in {rem_str.replace(' left', '')}.{Style.RESET_ALL}"
-                elif p_level == 2:
-                    row_color = Fore.YELLOW
-                    suffix += f" · {Fore.YELLOW + Style.BRIGHT}{rem_str}{Style.RESET_ALL}"
-                    pressure_line = f"\n     ··· {Fore.YELLOW}Execution window closing in {rem_str.replace(' left', '')}.{Style.RESET_ALL}"
-                elif p_level == 1:
-                    suffix += f" · {Fore.YELLOW}{rem_str}{Style.RESET_ALL}"
-            
-            if task.postpone_count >= 5:
-                suffix += f"  {Fore.RED}(postponed ×{task.postpone_count}) ⚠⚠{Style.RESET_ALL}"
-            elif task.postpone_count >= 3:
-                suffix += f"  {Fore.YELLOW}(postponed ×{task.postpone_count}) ⚠{Style.RESET_ALL}"
-            elif task.postpone_count == 2:
-                suffix += f"  {Fore.YELLOW}(postponed ×2){Style.RESET_ALL}"
-            
-            if getattr(task, 'deadline_type', None) == "hard":
-                suffix += f"  {Fore.RED}⚠ HARD{Style.RESET_ALL}"
-            
-        print(row_color + f"{prefix}{time_str}   {task.title:<26}{Style.RESET_ALL}{suffix}")
+                mins = int(td.total_seconds() // 60)
+                rem_spelled = f"{mins} minutes" if mins >= 0 else f"{abs(mins)} minutes ago"
+                pressure_line = f"\n     ··· {Fore.RED + Style.BRIGHT}⚠ Execution window closing in {rem_spelled}.{Style.RESET_ALL}"
+            elif p_level == 2:
+                row_color = Fore.YELLOW
+                suffix += f" · {Fore.YELLOW + Style.BRIGHT}{rem_str}{Style.RESET_ALL}"
+                
+                mins = int(td.total_seconds() // 60)
+                rem_spelled = f"{mins} minutes"
+                pressure_line = f"\n     ··· {Fore.YELLOW}Execution window closing in {rem_spelled}.{Style.RESET_ALL}"
+            elif p_level == 1:
+                suffix += f" · {Fore.YELLOW}{rem_str}{Style.RESET_ALL}"
         
-        if is_now or is_next:
-            duration_part = f" · {task.duration} estimated" if task.duration else ""
-            tags_part = f" · #{', #'.join(task.tags)}" if task.tags else ""
-            print(row_color + f"           Priority: {task.priority}{tags_part}{duration_part}" + Style.RESET_ALL)
+        if task.postpone_count >= 5:
+            suffix += f"  {Fore.RED}(postponed ×{task.postpone_count}) ⚠⚠{Style.RESET_ALL}"
+        elif task.postpone_count >= 3:
+            suffix += f"  {Fore.YELLOW}(postponed ×{task.postpone_count}) ⚠{Style.RESET_ALL}"
+        elif task.postpone_count == 2:
+            suffix += f"  {Fore.YELLOW}(postponed ×2){Style.RESET_ALL}"
             
+        dur_display = f"  [{task.duration}] " if task.duration else ""
+        
+        if dt > now:
+            rem_str = format_time_remaining(dt - now)
+            suffix += f"  ← {rem_str}"
+        else:
+            rem_str = format_time_remaining(dt - now)
+            suffix += f"  ← {rem_str}"
+
+        if getattr(task, 'deadline_type', None) == "hard":
+            suffix = f"  {Fore.RED}[HARD]{Style.RESET_ALL}" + suffix
+            
+        # S4-E Brackets around time stamp
+        print(row_color + f"{prefix}{time_str}  {task.title:<26}{Style.RESET_ALL}{dur_display}{suffix}")
+        
+        if is_now or is_next or is_window:
+            if is_next:
+                duration_part = f"Est. duration: {task.duration}" if task.duration else "No estimated duration"
+                ends_part = ""
+                if task.duration:
+                    try:
+                        dur_str = task.duration.lower()
+                        import re
+                        m = re.match(r'(\d+)(m|h)', dur_str)
+                        if m:
+                            val = int(m.group(1))
+                            unit = m.group(2)
+                            mins = val if unit == 'm' else val * 60
+                            end_time = now + timedelta(minutes=mins)
+                            ends_part = f" · Ends ~{end_time.strftime('%I:%M %p').lstrip('0')}"
+                    except:
+                        pass
+                print(row_color + f"           {duration_part}{ends_part}" + Style.RESET_ALL)
+            else:
+                tags_part = f" · #{', #'.join(task.tags)}" if task.tags else ""
+                print(row_color + f"           Priority: {task.priority}{tags_part}" + Style.RESET_ALL)
+
+        # E9: enrichment context — shown ONLY for the NOW task
+        if is_now:
+            now_desc = getattr(task, 'description', None)
+            if now_desc:
+                first_line = now_desc.split('\n')[0]
+                if len(first_line) > 60:
+                    first_line = first_line[:57] + "..."
+                print(f"     {Style.DIM}··· {first_line}{Style.RESET_ALL}")
+            now_links = getattr(task, 'links', None) or []
+            if now_links:
+                print(f"     {Style.DIM}··· 🔗 {len(now_links)} links — run: taskflow link {task.id} to access{Style.RESET_ALL}")
+            now_chk = getattr(task, 'checklist', None) or []
+            if now_chk:
+                done_ct = sum(1 for x in now_chk if x.get('done'))
+                print(f"     {Style.DIM}··· ☑ {done_ct}/{len(now_chk)} checklist — run: taskflow check {task.id}{Style.RESET_ALL}")
+
         if pressure_line:
             print(pressure_line)
             
     if untimed_tasks:
         print("\n  No time set:")
         for task, _ in untimed_tasks:
-            if task.completed:
-                continue
             priority_tags = f"{task.priority}"
             if task.tags:
                 priority_tags += f" · #{', #'.join(task.tags)}"
@@ -2978,17 +4261,23 @@ def run_today_view():
             
             if p_level > 0 and task.deadline:
                 try:
-                    td = datetime.fromisoformat(task.deadline) - datetime.now()
+                    td = datetime.fromisoformat(task.deadline) - now
+                    if td.tzinfo is not None:
+                        td = td.replace(tzinfo=None)
                     rem_str = format_time_remaining(td)
                     if p_level == 3:
                         if td.total_seconds() < 0:
                             suffix += f" · {Fore.RED + Style.BRIGHT}{rem_str}{Style.RESET_ALL}"
                         else:
                             suffix += f" · {Fore.RED + Style.BRIGHT}{rem_str} ⚠{Style.RESET_ALL}"
-                        pressure_line = f"\n        ··· {Fore.RED + Style.BRIGHT}⚠ Execution window closing in {rem_str.replace(' left', '')}.{Style.RESET_ALL}"
+                        mins = int(td.total_seconds() // 60)
+                        rem_spelled = f"{mins} minutes" if mins >= 0 else f"{abs(mins)} minutes ago"
+                        pressure_line = f"\n        ··· {Fore.RED + Style.BRIGHT}⚠ Execution window closing in {rem_spelled}.{Style.RESET_ALL}"
                     elif p_level == 2:
                         suffix += f" · {Fore.YELLOW + Style.BRIGHT}{rem_str}{Style.RESET_ALL}"
-                        pressure_line = f"\n        ··· {Fore.YELLOW}Execution window closing in {rem_str.replace(' left', '')}.{Style.RESET_ALL}"
+                        mins = int(td.total_seconds() // 60)
+                        rem_spelled = f"{mins} minutes"
+                        pressure_line = f"\n        ··· {Fore.YELLOW}Execution window closing in {rem_spelled}.{Style.RESET_ALL}"
                     elif p_level == 1:
                         suffix += f" · {Fore.YELLOW}{rem_str}{Style.RESET_ALL}"
                 except ValueError:
@@ -3007,14 +4296,40 @@ def run_today_view():
             print(f"     ·  {task.title:<30}  {priority_tags}{suffix}")
             if pressure_line:
                 print(pressure_line)
+                
+    if completed_today:
+        comp_hdr = "── COMPLETED TODAY "
+        comp_hdr += "─" * (50 - len(comp_hdr))
+        print("\n" + Fore.WHITE + Style.DIM + comp_hdr + Style.RESET_ALL)
+        for task in completed_today:
+            comp_time = "     "
+            done_suffix = "done"
+            if getattr(task, 'completed_at', None):
+                try:
+                    cdt = datetime.fromisoformat(task.completed_at)
+                    if cdt.tzinfo is not None:
+                        cdt = cdt.replace(tzinfo=None)
+                    comp_time = cdt.strftime('%H:%M')
+                    
+                    if getattr(task, 'actual_start_time', None):
+                        sdt = datetime.fromisoformat(task.actual_start_time)
+                        if sdt.tzinfo is not None:
+                            sdt = sdt.replace(tzinfo=None)
+                        elapsed_hours = (cdt - sdt).total_seconds() / 3600.0
+                        done_suffix = f"done · {round(elapsed_hours, 1)}h"
+                    elif getattr(task, 'duration', None):
+                        done_suffix = f"done · {task.duration}"
+                except Exception:
+                    pass
+            print(Fore.WHITE + Style.DIM + f"     ✓  [{comp_time} completed]  {task.title:<26}  [{done_suffix}]{Style.RESET_ALL}")
             
     print(Fore.WHITE + Style.DIM + "─" * 50 + Style.RESET_ALL)
     
-    target = now_task or next_task
+    target = primary_now_task or next_task
     if target:
         t, dt = target
         title_color = Fore.CYAN + Style.BRIGHT
-        if now_task:
+        if primary_now_task:
             print(title_color + f"Next mission: {t.title}" + Style.RESET_ALL)
         else:
             print(title_color + f"Upcoming mission: {t.title}" + Style.RESET_ALL)
@@ -3044,7 +4359,7 @@ def run_today_view():
                 
         print(f"{started_str}{dur_str}{ends_str}")
     else:
-        uncompleted_timed = [t for t in timed_tasks if not t[0].completed]
+        uncompleted_timed = [t for t in timed_tasks]
         if not uncompleted_timed and untimed_tasks:
             pass 
         elif not uncompleted_timed:
@@ -3052,6 +4367,7 @@ def run_today_view():
         else:
             print("All scheduled windows have passed.")
     print()
+    print_today_missed_notice(tasks)  # PASSIVE bottom notice — never prompts (see: taskflow missed)
 
 
 # =========================================================
@@ -3072,6 +4388,8 @@ def should_trigger_recovery() -> bool:
         if not task.completed and task.deadline:
             try:
                 dt = datetime.fromisoformat(task.deadline)
+                if dt.tzinfo is not None:
+                    dt = dt.replace(tzinfo=None)
                 if dt < now and dt.strftime('%Y-%m-%d') == today_str:
                     missed_count += 1
             except ValueError:
@@ -3090,6 +4408,8 @@ def should_trigger_recovery() -> bool:
                 if task.deadline:
                     try:
                         dt = datetime.fromisoformat(task.deadline)
+                        if dt.tzinfo is not None:
+                            dt = dt.replace(tzinfo=None)
                         if dt.hour < 12:
                             morning_pending += 1
                     except ValueError:

@@ -70,6 +70,9 @@ from task_manager.commands import (
     schedule_task,
     show_today_tasks,
     add_note,
+    edit_note,
+    manage_links,
+    manage_checklist,
     tag_task,
     backup_tasks,
     # v2.5 focus blocking commands (new!)
@@ -84,6 +87,7 @@ from task_manager.commands import (
     command_postpone,
     command_remind,
     command_recover,
+    command_missed,
     check_reminders,
     check_recovery_mode
 )
@@ -118,9 +122,12 @@ def show_help() -> None:
     prime <id> [date]       Set mission as [PRIME TARGET] for a day
     schedule <id> <date>    Assign mission to timeline (YYYY-MM-DD/today)
     today                   Review missions assigned for today
+    missed                  Triage missed missions interactively (--hard/--soft/--skip)
     
   ENHANCED TELEMETRY:
-    note <id>               Append intelligence to mission
+    note <id>               Add/edit mission notes (description)
+    link <id>               Manage links & references (--add URL --title)
+    check <id> [item]       Manage checklist (item number toggles directly)
     tag <id> <tags...>      Categorize mission (multi-tag support)
     priority <id> <level>   Adjust mission priority (low/medium/high)
     search <keyword>        Query mission database
@@ -147,32 +154,128 @@ def show_help() -> None:
   {"─" * 60}
 """)
 
-def show_welcome() -> None:
-    """Show first-run welcome message for new users."""
-    print(f"""
-  \033[1;36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m
-  \033[1m🌊 Welcome to TaskFlow {APP_VERSION}\033[0m
-  \033[90m{APP_TAGLINE}\033[0m
-  \033[1;36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m
+def show_first_run_wizard():
+    """Show first-run wizard for new users (S0-D)."""
+    print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    print("  Welcome to TaskFlow.")
+    print("  Built for people who execute,")
+    print("  not just organize.")
+    print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    print("\n  What's the most important thing")
+    print("  you need to do today?\n")
+    
+    task_title = input("  > ").strip()
+    
+    if not task_title:
+        print("\nSkipping setup. Run 'taskflow add' anytime.")
+        print()
+        show_help()
+    else:
+        from task_manager.commands import validate_title
+        from task_manager.models import Task, TaskManager
+        from datetime import datetime
+        
+        clean_title = validate_title(task_title)
+        if clean_title:
+            tasks = storage.load_tasks()
+            manager = TaskManager(tasks)
+            task = Task(id=0, title=clean_title, priority="High")
+            
+            # set prime target for today
+            today = datetime.now().strftime('%Y-%m-%d')
+            task_id = manager.add_task(task)
+            storage.save_tasks(manager.tasks)
+            
+            mapping = storage.load_timeline()
+            mapping[str(task_id)] = f"{today}_prime"
+            storage.save_timeline(mapping)
+            
+            print("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            print("  Mission locked. Set as Prime Target.")
+            print("\n  Your three commands:")
+            print("  taskflow today    → your execution plan")
+            print("  taskflow ui       → open the dashboard")
+            print("  taskflow dump \"\"  → capture anything fast")
+            print("\n  That's all you need to start.")
+            print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            
+    # Set config flag
+    config = storage.load_config()
+    config["first_run_complete"] = True
+    storage.save_config(config)
 
-  \033[1mLet's set up your first day.\033[0m
-
-  \033[36m1.\033[0m Add your first mission         →  \033[1mtaskflow add\033[0m
-  \033[36m2.\033[0m Quick capture a thought         →  \033[1mtaskflow dump "your task here"\033[0m
-  \033[36m3.\033[0m Launch the visual dashboard     →  \033[1mtaskflow ui\033[0m
-
-  \033[90mTip: Use 'taskflow help' anytime for the full command list.\033[0m
-  \033[90mAlt: You can also run commands with 'python -m taskflow <command>'\033[0m
-  \033[1;36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m
-""")
-
-def is_first_run() -> bool:
-    """Check if this is the user's first time running TaskFlow."""
+def command_doctor():
+    """Run full health check report (S0-C)."""
+    import platform
+    print("\nChecking TaskFlow installation...")
+    
+    # Python
+    py_version = sys.version.split()[0]
+    py_major, py_minor = sys.version_info[:2]
+    if py_major >= 3 and py_minor >= 10:
+        print(f"✓ Python {py_version} detected")
+    else:
+        print(f"✗ Python {py_version} detected (requires 3.10+)")
+        
+    # TaskFlow version
+    print(f"✓ TaskFlow {APP_VERSION} installed")
+    
+    # tasks.json
     try:
         tasks = storage.load_tasks()
-        return len(tasks) == 0
+        print(f"✓ tasks.json found — {len(tasks)} tasks at {storage.tasks_file}")
     except Exception:
-        return True
+        print(f"✗ tasks.json not found or corrupted at {storage.tasks_file}")
+        
+    # dateparser
+    try:
+        import dateparser
+        dp_ver = getattr(dateparser, '__version__', None) or getattr(dateparser, 'VERSION', 'installed')
+        print(f"✓ dateparser {dp_ver} installed")
+    except ImportError:
+        print("✗ dateparser not installed")
+        
+    # colorama
+    try:
+        import colorama
+        print(f"✓ colorama {colorama.__version__} installed")
+    except ImportError:
+        print("✗ colorama not installed")
+        
+    # Scripts in PATH
+    scripts_dir = os.path.dirname(sys.executable)
+    if not scripts_dir.endswith("Scripts"):
+        scripts_dir = os.path.join(scripts_dir, "Scripts")
+    path_env = os.environ.get("PATH", "")
+    
+    issues = 0
+    if scripts_dir.lower() not in path_env.lower():
+        print("✗ Scripts not in PATH")
+        print(f"  Fix: setx PATH \"%PATH%;{scripts_dir}\"")
+        issues += 1
+    else:
+        print("✓ Scripts directory in PATH")
+        
+    # Orphaned focus sessions
+    try:
+        from task_manager.commands import focus_manager
+        if focus_manager.is_focus_active():
+            print("✗ Orphaned focus session detected")
+            issues += 1
+        else:
+            print("✓ No orphaned focus sessions")
+    except Exception:
+        print("✓ No orphaned focus sessions")
+        
+    # Recovery Mode
+    rec_state = storage.load_recovery_state()
+    if rec_state.get("active"):
+        print("✗ Recovery Mode: active")
+        issues += 1
+    else:
+        print("✓ Recovery Mode: inactive")
+        
+    print(f"\nStatus: {'All systems ready' if issues == 0 else f'{issues} issue(s) found. See fix above.'}\n")
 
 def show_version():
     """Show version information with system details."""
@@ -245,8 +348,10 @@ Examples:
     list_parser.add_argument('--priority', choices=['low', 'medium', 'high'], 
                            help='Filter by priority')
     list_parser.add_argument('--tag', help='Filter by tag')
-    list_parser.add_argument('--all', action='store_true', 
+    list_parser.add_argument('--all', action='store_true',
                            help='Show all tasks (no 10-task limit)')
+    list_parser.add_argument('--detail', action='store_true',
+                           help='Show enrichment details (notes preview, links, checklist) under each task')
     
     # Task operations with single ID argument
     id_commands = [
@@ -304,6 +409,12 @@ Examples:
     recover_parser = subparsers.add_parser('recover', help='Manage system recovery mode')
     recover_parser.add_argument('--trigger', action='store_true', help='Manually trigger recovery mode')
     recover_parser.add_argument('--exit', action='store_true', help='Exit recovery mode')
+
+    # Missed mission review — the ONLY interactive E/P/D/O flow (user-invoked, escapable)
+    missed_parser = subparsers.add_parser('missed', help='Review & address missed missions interactively')
+    missed_parser.add_argument('--hard', action='store_true', help='Only HARD missed deadlines')
+    missed_parser.add_argument('--soft', action='store_true', help='Only soft missed deadlines')
+    missed_parser.add_argument('--skip', action='store_true', help='List missed missions without prompts')
     
     # Timeline
     subparsers.add_parser('timeline', help='Render a 7-day tactical terminal view')
@@ -349,7 +460,30 @@ Examples:
                          
     # Frictionless dump
     dump_parser = subparsers.add_parser('dump', help='Frictionless quick capture of a thought')
-    dump_parser.add_argument('text', nargs=argparse.REMAINDER, help='The task description string')
+    dump_parser.add_argument('text', nargs='+', help='The task description string')
+    dump_parser.add_argument('--duration', type=str, help='Set duration (e.g. 1h)')
+    dump_parser.add_argument('--deadline', type=str, help='Set deadline (e.g. tomorrow 3pm)')
+    dump_parser.add_argument('--hard', action='store_true', help='Set deadline type to hard')
+    dump_parser.add_argument('--note', type=str, help='Attach a description/note to the task')
+    dump_parser.add_argument('--link', action='append', dest='links', metavar='URL',
+                             help='Attach a link/reference (auto-detected; repeatable, up to 10)')
+    dump_parser.add_argument('--link-title', action='append', dest='link_titles', metavar='TITLE',
+                             help='Title for the most recent --link')
+
+    # Link management (E6)
+    link_parser = subparsers.add_parser('link', help='View/manage links & references for a task')
+    link_parser.add_argument('id', type=int, help='Task ID')
+    link_parser.add_argument('--add', type=str, metavar='URL', help='Add a link directly (auto-detects type)')
+    link_parser.add_argument('--title', type=str, help='Label for the --add link')
+
+    # Checklist management (E7)
+    check_parser = subparsers.add_parser('check', help='View/manage checklist for a task')
+    check_parser.add_argument('id', type=int, help='Task ID')
+    check_parser.add_argument('item', type=int, nargs='?', default=None,
+                              help='Item number to toggle directly (skips the interactive menu)')
+    
+    # Doctor
+    subparsers.add_parser('doctor', help='Check system health')
     
     
     # Simple commands without arguments
@@ -387,6 +521,24 @@ def main():
         # Colorama init
         colorama.init(autoreset=True)
         
+        # S0-B: Path detection
+        scripts_dir = os.path.dirname(sys.executable)
+        if not scripts_dir.endswith("Scripts"):
+            scripts_dir = os.path.join(scripts_dir, "Scripts")
+        path_env = os.environ.get("PATH", "")
+        
+        config = storage.load_config()
+        if scripts_dir.lower() not in path_env.lower() and not config.get("path_warning_shown"):
+            print("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            print("taskflow is installed but not in PATH.")
+            print("Run this once to fix it permanently:\n")
+            print("Windows CMD:")
+            print(f"setx PATH \"%PATH%;{scripts_dir}\"\n")
+            print("Then restart your terminal and run: taskflow")
+            print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+            config["path_warning_shown"] = True
+            storage.save_config(config)
+            
         # If on Windows and admin, check for orphaned blocks IF no active session
         if SystemDetector.get_os() == "windows" and SystemDetector.is_admin():
             if not time_tracker.active_session:
@@ -403,8 +555,9 @@ def main():
     
     # Show help if no arguments (or welcome for first-run)
     if len(sys.argv) == 1:
-        if is_first_run():
-            show_welcome()
+        config = storage.load_config()
+        if not config.get("first_run_complete"):
+            show_first_run_wizard()
         else:
             show_help()
         return
@@ -460,7 +613,8 @@ def main():
                 filter_priority=args.priority,
                 filter_tag=args.tag,
                 show_all=args.all,
-                sort_by=args.sort
+                sort_by=args.sort,
+                show_detail=getattr(args, 'detail', False)
             )
         
         elif args.command == 'view':
@@ -482,7 +636,7 @@ def main():
             delete_task(args.id)
         
         elif args.command == 'note':
-            add_note(args.id)
+            edit_note(args.id)
         
         elif args.command == 'focus':
             if args.status:
@@ -579,11 +733,38 @@ def main():
             emergency_cleanup()
             
         elif args.command == 'dump':
-            text = " ".join(args.text).strip()
-            if not text:
-                print("Error: Nothing to dump.")
+            if args.text:
+                text = " ".join(args.text)
+                # E3: assemble --link / --link-title into link dicts (positional pairing)
+                dump_links = None
+                raw_links = getattr(args, 'links', None)
+                if raw_links:
+                    titles = getattr(args, 'link_titles', None) or []
+                    dump_links = []
+                    for i, url in enumerate(raw_links):
+                        dump_links.append({
+                            "url": url,
+                            "title": titles[i] if i < len(titles) else None
+                        })
+                dump_task(
+                    text,
+                    duration=args.duration,
+                    deadline=args.deadline,
+                    is_hard=args.hard,
+                    note=getattr(args, 'note', None),
+                    links=dump_links
+                )
             else:
-                dump_task(text)
+                Messenger.careful("No text provided for dump.")
+
+        elif args.command == 'link':
+            manage_links(args.id, add_url=getattr(args, 'add', None), title=getattr(args, 'title', None))
+
+        elif args.command == 'check':
+            manage_checklist(args.id, toggle_index=getattr(args, 'item', None))
+                
+        elif args.command == 'doctor':
+            command_doctor()
                 
         elif args.command == 'postpone':
             command_postpone(args.id)
@@ -595,6 +776,13 @@ def main():
             trigger = getattr(args, 'trigger', False)
             exit_mode = getattr(args, 'exit', False)
             command_recover(trigger, exit_mode)
+
+        elif args.command == 'missed':
+            command_missed(
+                hard_only=getattr(args, 'hard', False),
+                soft_only=getattr(args, 'soft', False),
+                skip_list=getattr(args, 'skip', False)
+            )
         
         else:
             print(f"Unknown command: {args.command}")
@@ -605,6 +793,8 @@ def main():
         print("Remember: Progress, not perfection. 💫")
         sys.exit(0) 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         print(f"\nAn unexpected error occurred: {e}")
         print("Please report this issue if it persists.")
         sys.exit(1)

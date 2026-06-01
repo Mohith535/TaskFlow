@@ -19,7 +19,9 @@ class Task:
     focus_minutes_spent: int = 0  # NEW: Track focus time
     duration: Optional[str] = None
     deadline: Optional[str] = None
+    deadline_raw: Optional[str] = None
     deadline_type: Optional[str] = None
+    deadline_set_advance_hours: Optional[float] = None
     postpone_count: int = 0
     last_missed_prompt: Optional[str] = None
     executed_late: Optional[bool] = None
@@ -34,11 +36,42 @@ class Task:
     reminder_fired_2: bool = False
     reminder_dismissed: bool = False
     
+    # NEW S1 TRACKING FIELDS
+    actual_start_time: Optional[str] = None
+    actual_end_time: Optional[str] = None
+    duration_accuracy_ratio: Optional[float] = None
+    
     # NEW EVENT FIELDS
     mission_type: str = "Task"
     date: Optional[str] = None
     start_time: Optional[str] = None
     end_time: Optional[str] = None
+    
+    # S3 NEW FIELDS
+    pressure_level_at_completion: Optional[int] = None
+    completed_under_pressure: Optional[bool] = None
+    
+    # S4 NEW FIELDS
+    scheduled_date: Optional[str] = None
+    prime_target_date: Optional[str] = None
+    today_view_shown_count: int = 0
+    executed_in_window: Optional[bool] = None
+    window_drift_minutes: Optional[int] = None
+    
+    # S5 NEW FIELDS
+    last_decision: Optional[str] = None
+    last_decision_at: Optional[str] = None
+    average_postpone_gap_hours: Optional[float] = None
+    status: str = "todo"
+    
+    # ENRICHMENT NEW FIELDS
+    description: Optional[str] = None
+    links: List[dict] = field(default_factory=list)
+    checklist: List[dict] = field(default_factory=list)
+    description_updated_at: Optional[str] = None
+    links_count: int = 0
+    checklist_total: int = 0
+    checklist_done: int = 0
     
     def __post_init__(self):
         """Validate task after initialization."""
@@ -98,8 +131,13 @@ class Task:
             "notes": self.notes,
             "focus_minutes_spent": self.focus_minutes_spent,
             "duration": self.duration,
+            "actual_start_time": self.actual_start_time,
+            "actual_end_time": self.actual_end_time,
+            "duration_accuracy_ratio": self.duration_accuracy_ratio,
             "deadline": self.deadline,
+            "deadline_raw": self.deadline_raw,
             "deadline_type": self.deadline_type,
+            "deadline_set_advance_hours": self.deadline_set_advance_hours,
             "postpone_count": self.postpone_count,
             "last_missed_prompt": self.last_missed_prompt,
             "executed_late": self.executed_late,
@@ -116,7 +154,27 @@ class Task:
             "mission_type": self.mission_type,
             "date": self.date,
             "start_time": self.start_time,
-            "end_time": self.end_time
+            "end_time": self.end_time,
+            "pressure_level_at_completion": self.pressure_level_at_completion,
+            "completed_under_pressure": self.completed_under_pressure,
+            "scheduled_date": self.scheduled_date,
+            "prime_target_date": self.prime_target_date,
+            "today_view_shown_count": self.today_view_shown_count,
+            "executed_in_window": self.executed_in_window,
+            "window_drift_minutes": self.window_drift_minutes,
+            "last_decision": self.last_decision,
+            "last_decision_at": self.last_decision_at,
+            "average_postpone_gap_hours": self.average_postpone_gap_hours,
+            "status": self.status,
+            
+            # Enrichment fields
+            "description": self.description,
+            "links": self.links,
+            "checklist": self.checklist,
+            "description_updated_at": self.description_updated_at,
+            "links_count": self.links_count,
+            "checklist_total": self.checklist_total,
+            "checklist_done": self.checklist_done
         }
     
     @classmethod
@@ -132,8 +190,14 @@ class Task:
             
         # Get optional new fields with safe defaults
         data["duration"] = data.get("duration")
+        data["actual_start_time"] = data.get("actual_start_time")
+        data["actual_end_time"] = data.get("actual_end_time")
+        data["duration_accuracy_ratio"] = data.get("duration_accuracy_ratio")
+        
         data["deadline"] = data.get("deadline")
+        data["deadline_raw"] = data.get("deadline_raw")
         data["deadline_type"] = data.get("deadline_type")
+        data["deadline_set_advance_hours"] = data.get("deadline_set_advance_hours")
         data["postpone_count"] = data.get("postpone_count", 0)
         data["last_missed_prompt"] = data.get("last_missed_prompt")
         data["executed_late"] = data.get("executed_late")
@@ -152,6 +216,27 @@ class Task:
         data["date"] = data.get("date")
         data["start_time"] = data.get("start_time")
         data["end_time"] = data.get("end_time")
+        
+        data["pressure_level_at_completion"] = data.get("pressure_level_at_completion")
+        data["completed_under_pressure"] = data.get("completed_under_pressure")
+        data["scheduled_date"] = data.get("scheduled_date")
+        data["prime_target_date"] = data.get("prime_target_date")
+        data["today_view_shown_count"] = data.get("today_view_shown_count", 0)
+        data["executed_in_window"] = data.get("executed_in_window")
+        data["window_drift_minutes"] = data.get("window_drift_minutes")
+        data["last_decision"] = data.get("last_decision")
+        data["last_decision_at"] = data.get("last_decision_at")
+        data["average_postpone_gap_hours"] = data.get("average_postpone_gap_hours")
+        data["status"] = data.get("status", "todo")
+        
+        # Enrichment fields
+        data["description"] = data.get("description", None)
+        data["links"] = data.get("links", [])
+        data["checklist"] = data.get("checklist", [])
+        data["description_updated_at"] = data.get("description_updated_at", None)
+        data["links_count"] = data.get("links_count", 0)
+        data["checklist_total"] = data.get("checklist_total", 0)
+        data["checklist_done"] = data.get("checklist_done", 0)
         
         return cls(**data)
     
