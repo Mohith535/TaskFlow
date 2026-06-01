@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🌊 TaskFlow v8.0.0
+# 🌊 TaskFlow v8.5.0
 
 ### The Execution Engine for Deep Work
 
@@ -11,11 +11,20 @@
 <br/>
 
 <p>
-  <img src="https://img.shields.io/badge/Version-8.0.0-0d1117?style=for-the-badge&labelColor=161b22" alt="Version" />
+  <img src="https://img.shields.io/badge/Version-8.5.0-0d1117?style=for-the-badge&labelColor=161b22" alt="Version" />
   <img src="https://img.shields.io/badge/Python-3.8+-3776ab?style=for-the-badge&logo=python&logoColor=white" alt="Python" />
   <img src="https://img.shields.io/badge/100%25_Offline-Local_First-2ea043?style=for-the-badge" alt="Offline" />
   <img src="https://img.shields.io/badge/License-MIT-8b5cf6?style=for-the-badge" alt="License" />
 </p>
+
+<br/>
+
+<div align="center">
+  <img src="docs/assets/demo.gif" alt="TaskFlow demo"
+       width="700" />
+  <br/>
+  <sub>taskflow dump → taskflow today → taskflow ui</sub>
+</div>
 
 <br/>
 
@@ -24,6 +33,7 @@
   <a href="#-what-makes-taskflow-different">Why TaskFlow</a> · 
   <a href="#-the-system">The System</a> · 
   <a href="#-command-reference">Commands</a> · 
+  <a href="#-whats-built--whats-coming">Roadmap</a> · 
   <a href="docs/deep-dive.md">Psychology Deep-Dive →</a>
 </p>
 
@@ -38,25 +48,40 @@
 ## ⚡ Quick Start
 
 ```bash
-# Install (requires Python 3.8+ and Git)
+# Install
 pip install --upgrade git+https://github.com/Mohith535/TaskFlow.git
+
+# Verify installation
+taskflow doctor
 ```
 
 ```bash
-# Capture your first mission
+# First run — guided setup wizard
+taskflow
+```
+
+```bash
+# Capture anything instantly (NLP extracts everything)
 taskflow dump "Finish project report by Friday #work !h"
 
-# See your mission board
-taskflow list --todo
+# Add a task with full context
+taskflow add
+# → guided prompts: title, priority, tags,
+#   notes, links, duration, deadline
 
-# Set your one non-negotiable target for today
-taskflow prime 1
+# See what to do RIGHT NOW
+taskflow today
 
-# Enter deep focus — 45 min, zero distractions
-taskflow focus --id 1 --minutes 45
+# Enter deep focus
+taskflow focus --id 1 --minutes 45 --mode strict
 
-# Launch the visual Mission Control dashboard
+# Launch the visual dashboard
 taskflow ui
+```
+
+```bash
+# When the day gets rough
+taskflow recover
 ```
 
 > **💡 If `taskflow` isn't recognized**, use `python -m taskflow` as a drop-in replacement:
@@ -77,14 +102,14 @@ Most task managers are **passive lists** — they store what you type and wait. 
 
 <table>
 <tr>
-<td width="50%">
+<td width="25%">
 
 ### 🐸 The One Frog Protocol
 One `[★ PRIME TARGET]` per day. Not two. Not five. One.<br/><br/>
 Based on Mark Twain's "Eat the Frog" principle and research on willpower depletion — your strongest cognitive resources exist in the first hours of your day. TaskFlow forces you to choose the one thing that matters most.
 
 </td>
-<td width="50%">
+<td width="25%">
 
 ### 🔥 Priority as Psychology
 No "1-5" scales. Priorities are **behavioral categories**:<br/><br/>
@@ -95,9 +120,7 @@ No "1-5" scales. Priorities are **behavioral categories**:<br/><br/>
 Mapped to the Eisenhower Matrix. Forces real triage.
 
 </td>
-</tr>
-<tr>
-<td width="50%">
+<td width="25%">
 
 ### 🛡️ Focus Protocol
 Launch a focus session and TaskFlow builds a **multi-layered defense** around your attention:<br/><br/>
@@ -106,7 +129,7 @@ Launch a focus session and TaskFlow builds a **multi-layered defense** around yo
 **System** — Optional strict mode blocks websites at the OS level.
 
 </td>
-<td width="50%">
+<td width="25%">
 
 ### ⏱️ Temporal Pressure
 Deadlines aren't just dates — they're **visual states**:<br/><br/>
@@ -118,7 +141,7 @@ Missed a deadline? You must explicitly Execute, Postpone, Drop, or Offload. No s
 </td>
 </tr>
 <tr>
-<td width="50%">
+<td width="25%">
 
 ### 📥 2-Second Capture
 The `dump` command captures thoughts faster than any app:<br/><br/>
@@ -128,7 +151,7 @@ taskflow dump "Call dentist #personal !h"
 NLP extracts priority, tags, and deadlines automatically. Based on the Zeigarnik Effect — unwritten thoughts leak cognitive bandwidth.
 
 </td>
-<td width="50%">
+<td width="25%">
 
 ### 📈 Momentum Engine
 Progress isn't just tracked — it's **felt**:<br/><br/>
@@ -136,6 +159,61 @@ Progress isn't just tracked — it's **felt**:<br/><br/>
 • Premium completion animations<br/>
 • Postpone mirrors (`postponed ×3 ⚠`) that hold you accountable<br/>
 • Intelligent next-target suggestions after each completion
+
+</td>
+<td width="25%">
+
+### ▶ Today View — The Now Window
+One command answers the question "what should I do RIGHT NOW?" with a single answer:<br/><br/>
+`taskflow today` renders your day as a mission briefing — chronological, with a 90-minute rolling Now Window that shows exactly which task you should be executing at this moment. Not a list. A directive.
+
+</td>
+<td width="25%">
+
+### 🔔 Intelligent Reminders
+Reminders are calculated from priority + duration + deadline type — not a fixed 1-hour default.<br/><br/>
+A HIGH+HARD task gets a 2-hour warning AND a 30-min second reminder. A LOW+SOFT task gets a 15-minute nudge. The system models a thoughtful colleague, not an alarm clock.
+
+</td>
+</tr>
+<tr>
+<td width="25%">
+
+### ⚖️ Forced Confrontation
+Silent "overdue" labels enable avoidance. TaskFlow forces a decision on every missed task:<br/><br/>
+**[E]** Execute now · **[P]** Postpone · **[D]** Drop · **[O]** Offload<br/><br/>
+The fourth option — Offload — explicitly names "this is no longer my responsibility," converting passive neglect into conscious release.
+
+</td>
+<td width="25%">
+
+### ⚡ Recovery Mode
+When too many deadlines collapse, TaskFlow detects the overload and offers recovery — automatically at 6pm, or manually anytime:<br/><br/>
+- UI darkens. Non-essential tasks blur to 25%.<br/>
+- Only 1-2 critical missions remain visible.<br/>
+- "Salvage my day" — not "you failed."<br/><br/>
+Four entry points in the Web HUD. Always opt-in.
+
+</td>
+<td width="25%">
+
+### 📝 Task Enrichment
+Every mission can carry full context:<br/><br/>
+- **Notes** — free-text description with multi-line support<br/>
+- **Links & References** — URLs, map locations, documents, files (auto-detected type)<br/>
+- **Checklist** — sub-tasks with progress tracking<br/><br/>
+All accessible inline in the CLI and expandable on Web HUD cards. Zero separate apps needed.
+
+</td>
+<td width="25%">
+
+### ⏳ Duration Intelligence
+Estimate time on every task. Track actuals. Build your personal accuracy profile:<br/><br/>
+```bash
+Duration: 1h  →  Actual: 1h 34m
+Accuracy ratio: 1.57 (you underestimate by ~57%)
+```
+The foundation of the Phase 2 AI estimation layer — your own history becomes your forecasting instrument.
 
 </td>
 </tr>
@@ -175,6 +253,36 @@ When too many deadlines collapse in a single day, TaskFlow detects the overload 
 - Only 1-2 critical missions remain visible
 - Forces triage instead of panic
 
+### Today View — Mission Briefing, Not Task List
+
+`taskflow today` renders your day as a chronological execution plan with a **90-minute Now Window**:
+
+```
+── TODAY · Thursday, 25 Apr ──────────────────────
+✓  09:00  Write API docs            [done]
+▶  11:00  Review PR for backend     [NOW ← you are here]
+          High · #work · 1h · ends ~12:00
+   14:00  Team standup
+   16:00  Deploy to staging         ⚠ HARD · 4h left
+──────────────────────────────────────────────────
+Next mission: Review PR (started 11 min ago)
+```
+
+One marker. One task. No decision required.
+
+### Execution Pressure System
+
+As deadlines approach, TaskFlow quietly shifts its visual tone — no alarms, no popups, just color:
+
+| Time Remaining | Signal |
+|:---|:---|
+| 3h+ | Normal |
+| 1h–3h | Amber border appears |
+| 15min–1h | Title turns amber |
+| < 15min | Title turns red, border pulses |
+
+The pressure is felt before it is consciously noticed — designed to create urgency without anxiety, operating exactly at the optimal point of the Yerkes-Dodson arousal curve.
+
 ### Mission Control — Web HUD
 
 Run `taskflow ui` to launch a local web dashboard with:
@@ -207,6 +315,9 @@ Run `taskflow ui` to launch a local web dashboard with:
 | `taskflow complete <id>` | Mark as done ✓ |
 | `taskflow undo <id>` | Re-open a completed mission |
 | `taskflow delete <id>` | Remove from database |
+| `taskflow note <id>` | Add or edit notes on a mission |
+| `taskflow link <id>` | Manage links and references on a mission |
+| `taskflow check <id>` | Manage checklist items on a mission |
 
 ### Execution & Focus
 
@@ -217,6 +328,11 @@ Run `taskflow ui` to launch a local web dashboard with:
 | `taskflow schedule <id> <date>` | Assign mission to timeline |
 | `taskflow today` | Review today's Prime Target and assignments |
 | `taskflow timeline` | Render 7-day tactical view in terminal |
+| `taskflow missed` | Address missed missions interactively (Execute / Postpone / Drop / Offload) |
+| `taskflow missed --skip` | List all missed missions without prompts |
+| `taskflow postpone <id>` | Proactively reschedule any mission |
+| `taskflow recover` | Enter Recovery Mode manually |
+| `taskflow recover --status` | Check Recovery Mode status |
 | `taskflow ui` | Launch the Mission Control web dashboard |
 
 ### Intelligence & Maintenance
@@ -228,8 +344,51 @@ Run `taskflow ui` to launch a local web dashboard with:
 | `taskflow search <keyword>` | Query mission database |
 | `taskflow tag <id> <tags>` | Categorize missions |
 | `taskflow note <id>` | Append notes to a mission |
+| `taskflow remind <id>` | View or set reminder times for a mission |
+| `taskflow doctor` | Full system health check — Python, dependencies, PATH, tasks |
 | `taskflow backup` | Manual backup to `~/.taskflow/backups/` |
 | `taskflow version` | System info — Python version, data path, mission count |
+
+<br/>
+
+---
+
+<br/>
+
+## 🗺️ What's Built & What's Coming
+
+### ✅ Phase 1 — Complete (v8.0.0)
+The full behavioral execution engine — no AI required.
+
+- Duration estimation and accuracy tracking
+- Natural language deadline parsing
+- Soft/Hard deadline taxonomy
+- Execution pressure system (live color shifts)
+- Today View with 90-minute Now Window
+- Missed task forced confrontation
+- Postpone counter mirror
+- Smart context-matched reminder engine
+- Recovery Mode (auto + manual)
+- Task enrichment (notes, links, checklist)
+
+### 🔄 Phase 2 — In Progress
+History-driven behavioral intelligence.
+
+- Daily Execution Path (energy-curve scheduling)
+- Time Integrity Score (planned vs actual drift)
+- Focus Window Lock (queue-not-block during sessions)
+- Weekly behavioral review
+
+### 🔮 Phase 3 — After LLM Integration
+AI that knows how you actually work.
+
+- Smart duration estimation from your history
+- Auto rescheduling intelligence
+- Natural language goal → task breakdown
+- Proactive daily brief
+- Intelligent Recovery Mode (context-aware triage)
+
+> The AI layer builds on the behavioral data Phase 1 collects silently. The longer you use TaskFlow, the smarter Phase 3 becomes.
 
 <br/>
 
@@ -355,6 +514,24 @@ Update to the latest version:
 pip install --upgrade git+https://github.com/Mohith535/TaskFlow.git
 ```
 </details>
+
+<br/>
+
+---
+
+<br/>
+
+## 🎨 Community Themes
+
+TaskFlow's Web HUD is open for community customization. The UI layer is built with a clean theme system — CSS variables control all colors, spacing, and fonts.
+
+**Want to build a theme?**
+1. Fork the repository
+2. Modify the CSS variables in the `:root` block of `task_manager/web_ui.py` (every color, font, and width token lives there)
+3. Submit a PR with a screenshot
+4. The best theme each month gets featured here
+
+*The theme gallery is coming soon.*
 
 <br/>
 

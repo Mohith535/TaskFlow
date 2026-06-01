@@ -1345,6 +1345,98 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             border-radius: 6px; padding: 6px 14px; font-size: 12px; cursor: pointer; transition: all 150ms ease;
         }
         .btn-exit-recovery:hover { background: rgba(248,81,73,0.08); }
+
+        /* ═══ RECOVERY MODE — UI LAYER (entry points, dialogs, auto-trigger) ═══ */
+        @keyframes recSlideDown { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes recSlideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        @keyframes recScaleIn { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        @keyframes recFadeOut { to { opacity: 0; } }
+        @keyframes recDot { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.8); } }
+
+        /* Pre-recovery warning banner (5pm) */
+        .rec-prewarn {
+            height: 44px; background: rgba(210,153,34,0.06); border-bottom: 1px solid rgba(210,153,34,0.2);
+            display: flex; align-items: center; padding: 0 24px; gap: 12px;
+            animation: recSlideDown 300ms ease-out;
+        }
+        .rec-prewarn .rec-pw-mid { flex: 1; font-size: 13px; }
+        .rec-pw-link { color: #D29922; font-size: 12px; font-weight: 500; background: transparent; border: none; text-decoration: underline; cursor: pointer; }
+        .rec-pw-x { color: #6E7681; font-size: 16px; background: transparent; border: none; cursor: pointer; margin-left: 12px; }
+
+        /* 6pm prompt bottom sheet */
+        .rec-sheet { position: fixed; bottom: 0; left: 0; right: 0; max-height: 320px; background: #161B22;
+            border-top: 1px solid rgba(210,153,34,0.3); border-radius: 20px 20px 0 0; padding: 24px 32px 32px;
+            box-shadow: 0 -8px 40px rgba(0,0,0,0.5); z-index: 1000; animation: recSlideUp 350ms cubic-bezier(0.34,1.56,0.64,1); }
+        .rec-sheet-handle { width: 40px; height: 4px; background: #30363D; border-radius: 4px; margin: 0 auto 20px; }
+
+        /* Entry/exit confirmation dialog */
+        .rec-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+            z-index: 1001; display: flex; align-items: center; justify-content: center; }
+        .rec-dialog { width: 400px; max-width: 92vw; background: #161B22; border: 1px solid #21262D; border-radius: 16px; padding: 28px 28px 24px; text-align: center; }
+        .rec-dialog .rec-d-icon { font-size: 32px; margin-bottom: 12px; }
+        .rec-dialog .rec-d-title { font-size: 18px; font-weight: 400; color: #E6EDF3; }
+        .rec-dialog .rec-d-desc { font-size: 13px; color: #8B949E; line-height: 1.6; margin-top: 8px; }
+        .rec-d-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #6E7681; margin-top: 16px; text-align: left; }
+        .rec-preview-row { background: rgba(255,255,255,0.03); border: 1px solid #21262D; border-radius: 8px; padding: 8px 12px; margin-top: 8px;
+            display: flex; align-items: center; gap: 10px; text-align: left; }
+        .rec-pdot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+        .rec-pdot.high { background: var(--red); } .rec-pdot.medium { background: var(--amber); } .rec-pdot.low { background: var(--blue); }
+        .rec-prow-title { flex: 1; font-size: 13px; color: #C9D1D9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .rec-prow-dur { font-size: 10px; color: var(--blue); font-family: var(--font-mono); }
+        .rec-btn-primary { width: 100%; height: 46px; border-radius: 10px; cursor: pointer; margin-top: 20px; font-size: 14px; font-weight: 600;
+            background: linear-gradient(135deg, rgba(210,153,34,0.15), rgba(248,81,73,0.1)); border: 1px solid rgba(210,153,34,0.4); color: #D29922; transition: all 150ms ease-out; }
+        .rec-btn-primary:hover { background: linear-gradient(135deg, rgba(210,153,34,0.25), rgba(248,81,73,0.15)); border-color: rgba(210,153,34,0.6); transform: translateY(-1px); }
+        .rec-btn-exit { background: rgba(248,81,73,0.08); border-color: rgba(248,81,73,0.3); color: #F85149; }
+        .rec-btn-exit:hover { background: rgba(248,81,73,0.16); }
+        .rec-btn-secondary { background: transparent; border: none; color: #6E7681; font-size: 12px; cursor: pointer; margin-top: 12px; width: 100%; }
+        .rec-btn-secondary:hover { color: #8B949E; }
+        .rec-btn-stay { color: #3FB950; }
+
+        /* Entry point 2 — sidebar nav item */
+        .rec-nav-item { display: flex; align-items: center; gap: 12px; padding: 8px 16px; cursor: pointer; color: #D29922;
+            opacity: 0.7; border-left: 3px solid transparent; font-size: 14px; transition: all 150ms ease; }
+        .rec-nav-item:hover { background: rgba(210,153,34,0.05); opacity: 1; border-left-color: #D29922; }
+        .rec-nav-item.active { background: rgba(248,81,73,0.06); border-left-color: #F85149; color: #F85149; opacity: 1; }
+        .rec-nav-dot { width: 6px; height: 6px; border-radius: 50%; background: #F85149; margin-left: auto; display: none; animation: recDot 2s ease-in-out infinite; }
+        .rec-nav-item.active .rec-nav-dot { display: block; }
+
+        /* Entry point 3 — right-panel salvage button */
+        .rec-salvage-btn { width: 100%; height: 40px; background: rgba(210,153,34,0.06); border: 1px solid rgba(210,153,34,0.2);
+            border-radius: 10px; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; margin-bottom: 10px;
+            color: #D29922; font-size: 11px; font-weight: 500; letter-spacing: 1.5px; text-transform: uppercase; transition: all 150ms ease-out; }
+        .rec-salvage-btn:hover { background: rgba(210,153,34,0.12); border-color: rgba(210,153,34,0.4); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(210,153,34,0.15); }
+        .rec-salvage-btn.active { background: rgba(248,81,73,0.08); border-color: rgba(248,81,73,0.3); color: #F85149; }
+
+        /* Entry point 4 — priority alerts button */
+        .rec-alerts-zone { border-top: 1px solid #21262D; margin-top: 12px; padding-top: 12px; }
+        .rec-alerts-btn { width: 100%; height: 36px; background: transparent; border: 1px dashed rgba(210,153,34,0.3); border-radius: 8px;
+            color: #D29922; font-size: 11px; font-weight: 500; letter-spacing: 1px; cursor: pointer; transition: all 150ms ease; }
+        .rec-alerts-btn:hover { background: rgba(210,153,34,0.06); border-style: solid; }
+        .rec-alerts-btn.active { color: #F85149; border-color: rgba(248,81,73,0.3); }
+
+        /* Right-panel context box + post-recovery badge */
+        .rec-context-box { background: rgba(210,153,34,0.05); border: 1px solid rgba(210,153,34,0.15); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+        .rec-context-box .rcb-t { font-size: 12px; color: #D29922; font-weight: 500; }
+        .rec-context-box .rcb-s { font-size: 11px; color: #8B949E; margin-top: 2px; }
+        .post-rec-badge { background: rgba(63,185,80,0.06); border: 1px solid rgba(63,185,80,0.15); border-radius: 8px; padding: 8px 12px;
+            display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+        .post-rec-badge .prb-t { color: #3FB950; font-size: 12px; font-weight: 500; }
+        .post-rec-badge .prb-s { color: #6E7681; font-size: 11px; }
+
+        /* Celebration overlay */
+        .rec-celebrate { position: fixed; inset: 0; background: rgba(63,185,80,0.03); display: flex; flex-direction: column;
+            align-items: center; justify-content: center; pointer-events: none; z-index: 1002; animation: recFadeOut 500ms ease-out 2000ms forwards; }
+        .rec-celebrate .rc-check { font-size: 48px; color: #3FB950; animation: recScaleIn 400ms cubic-bezier(0.34,1.56,0.64,1); }
+        .rec-celebrate .rc-big { font-size: 22px; color: #3FB950; font-weight: 300; margin-top: 8px; }
+        .rec-celebrate .rc-sub { font-size: 14px; color: #8B949E; margin-top: 4px; }
+
+        /* Transformation 4 — FOCUS NOW badge + on-card complete button */
+        .rec-focus-badge { background: rgba(210,153,34,0.1); border: 1px solid rgba(210,153,34,0.3); color: #D29922; border-radius: 4px;
+            padding: 2px 8px; font-size: 9px; font-weight: 700; flex-shrink: 0; }
+        .rec-card-complete { height: 32px; width: 100%; background: rgba(63,185,80,0.08); border: 1px solid rgba(63,185,80,0.2);
+            border-radius: 6px; color: #3FB950; font-size: 12px; cursor: pointer; margin-top: 10px; transition: all 150ms ease; }
+        .rec-card-complete:hover { background: rgba(63,185,80,0.16); }
+        .recovery-priority-badge { background: rgba(248,81,73,0.1); border: 1px solid rgba(248,81,73,0.25); color: #F85149; border-radius: 4px; padding: 2px 8px; font-size: 9px; font-weight: 700; letter-spacing: 0.5px; flex-shrink: 0; }
         .recovery-suppressed { opacity: 0.25; pointer-events: none; filter: blur(0.5px); transition: all 600ms ease-out; }
         .recovery-highlighted {
             border: 1px solid rgba(248,81,73,0.3) !important;
@@ -1937,6 +2029,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             <div class="nav-item" id="nav-tasks"><span class="nav-icon">✓</span> Missions</div>
             <div class="nav-item" id="nav-timeline"><span class="nav-icon">⏱</span> Timeline</div>
             <div class="nav-item" id="nav-ai"><span class="nav-icon">✦</span> Intelligence</div>
+            <div class="rec-nav-item" id="rec-nav-item" onclick="tfRecSidebarClick()" title="Activate Recovery Mode">
+                <span class="nav-icon">⚡</span> <span id="rec-nav-text">Recovery</span>
+                <span class="rec-nav-dot"></span>
+            </div>
 
             <div class="nav-section-label">SYSTEM</div>
             <div class="nav-item" id="nav-stats"><span class="nav-icon">📊</span> Analytics</div>
@@ -2196,6 +2292,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         </div>
 
         <div style="margin-top:40px;">
+            <div class="rec-context-box" id="rec-context-box" style="display:none;">
+                <div class="rcb-t">Recovery in progress.</div>
+                <div class="rcb-s">Complete your focus tasks to exit.</div>
+            </div>
             <div class="section-label">EXECUTION XP</div>
             <div style="height:6px; background:var(--bg-surface); border-radius:3px; overflow:hidden; margin-bottom:8px;">
                 <div id="xp-fill" style="width:40%; height:100%; background:var(--blue); transition:width 1s ease-out;"></div>
@@ -2203,6 +2303,16 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             <div style="display:flex; justify-content:space-between; font-size:10px; font-weight:700; color:var(--text-disabled);">
                 <span>RANK: 01</span>
                 <span id="xp-text">40 / 100 XP</span>
+            </div>
+            <div class="post-rec-badge" id="post-rec-badge" style="display:none;">
+                <span style="color:#3FB950;font-size:14px;">✓</span>
+                <div>
+                    <div class="prb-t">Day recovered.</div>
+                    <div class="prb-s" id="post-rec-badge-sub"></div>
+                </div>
+            </div>
+            <div class="rec-salvage-btn" id="rec-salvage-btn" onclick="tfRecSalvageClick()">
+                <span style="font-size:12px;">⚡</span> <span id="rec-salvage-text">SALVAGE MY DAY</span>
             </div>
             <button class="btn-deploy btn-execute" onclick="toggleCreateMission()" style="margin-top:20px; font-size:12px; font-weight:700; background: linear-gradient(135deg, rgba(88,166,255,0.15), rgba(88,166,255,0.05)); color: var(--blue); border: 1px solid rgba(88,166,255,0.2); width:100%; transition:all 0.3s cubic-bezier(0.16, 1, 0.3, 1); box-shadow: 0 4px 12px rgba(0,0,0,0.2);">+ CREATE MISSION</button>
         </div>
@@ -2981,6 +3091,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     banner.style.color = 'var(--amber)';
                     banner.innerHTML = `⚡ ${totalPressure} task(s) need attention now.`;
                 }
+                if (!recoveryActive) {
+                    banner.innerHTML += ` <button onclick="tfRecEntryConfirm()" style="margin-left:auto;background:rgba(210,153,34,0.1);border:1px solid rgba(210,153,34,0.3);border-radius:6px;padding:4px 12px;color:#D29922;font-size:11px;font-weight:500;cursor:pointer;">Salvage my day →</button>`;
+                }
             } else {
                 banner.style.display = 'none';
             }
@@ -3024,6 +3137,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 }).join('');
             } else {
                 alertsContainer.innerHTML = '<div style="color:#3FB950; font-size:13px;">✓ All systems nominal. No critical alerts.</div>';
+            }
+            // Entry point 4 — Recovery activation/exit from Priority Alerts
+            if (recoveryActive) {
+                alertsContainer.innerHTML += `<div class="rec-alerts-zone"><button class="rec-alerts-btn active" onclick="tfRecExitConfirm()">⚡ Recovery Mode Active · Exit</button></div>`;
+            } else if (alerts.length > 0) {
+                alertsContainer.innerHTML += `<div class="rec-alerts-zone"><button class="rec-alerts-btn" onclick="tfRecEntryConfirm()">⚡  ACTIVATE RECOVERY MODE</button></div>`;
             }
         }
 
@@ -3088,6 +3207,19 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     </div>`;
                 }).join('')
                 : '<div style="opacity:0.5;">Queue transparent.</div>';
+
+            // S4-H: "Next: <title> · in N min" line below the upcoming list
+            const nextT = upcoming.find(t => t.deadline && new Date(t.deadline) > now) || upcoming[0];
+            if (nextT) {
+                let nextStr;
+                if (nextT.deadline) {
+                    const mins = Math.round((new Date(nextT.deadline) - now) / 60000);
+                    nextStr = mins >= 0 ? `Next: ${nextT.title} · in ${mins} min` : `Next: ${nextT.title} · overdue`;
+                } else {
+                    nextStr = `Next: ${nextT.title}`;
+                }
+                upcomingContainer.innerHTML += `<div style="margin-top:10px;font-size:12px;color:#58A6FF;">${nextStr}</div>`;
+            }
         }
 
         // ── PERFORMANCE: Overdue + Deferred counts ──
@@ -3608,6 +3740,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     if (recoveryTaskIds.includes(t.id)) recoveryClass = ' recovery-highlighted';
                     else recoveryClass = ' recovery-suppressed';
                 }
+                const recoveryBadge = (recoveryActive && recoveryTaskIds.includes(t.id))
+                    ? `<span class="rec-focus-badge">FOCUS NOW</span>` : '';
+                const recoveryComplete = (recoveryActive && recoveryTaskIds.includes(t.id))
+                    ? `<button class="rec-card-complete" onclick="event.stopPropagation(); tfRecMarkComplete(${t.id})">✓ Mark as complete</button>` : '';
 
                 return `
                 <div class="task-card-wrap priority-${np}${wrapExtra}" data-id="${t.id}">
@@ -3616,7 +3752,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                         <div class="card-top">
                             <div class="cb" onclick="event.stopPropagation(); completeTask(${t.id}, this)"></div>
                             <div class="task-title">${t.title}</div>
-                            ${durBadge}${overdueChip}
+                            ${durBadge}${overdueChip}${recoveryBadge}
                         </div>
                         <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px;padding-left:28px;">
                             <span class="badge ${np}">${(t.priority||'Medium').toUpperCase()}</span>
@@ -3626,7 +3762,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                             ${postponeBadge}
                         </div>
                         ${deadlineRow ? '<div style="padding-left:28px;">' + deadlineRow + '</div>' : ''}
-                        ${tfBuildEnrichZone(t)}
+                        ${tfBuildEnrichZone(t)}${recoveryComplete}
                     </div>
                         <div class="task-action-strip">
                             <div class="action-icon" onclick="event.stopPropagation(); startFocusFromCard(${t.id}, this)" title="Deploy Focus Protocol">
@@ -3729,13 +3865,16 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     }
 
     // ── PHASE 1: RECOVERY MODE ────────────────────────────────────────
+    let tfRecWasActive = false;
     async function checkRecoveryStatus() {
         try {
             const res = await fetch('/api/recovery-status');
             if (!res.ok) return;
             const state = await res.json();
-            recoveryActive = !!state.active;
+            const nowActive = !!state.active;
+            recoveryActive = nowActive;
             recoveryTaskIds = (state.session_tasks || []).map(t => typeof t === 'object' ? t.id : t);
+            window.tfRecCompleted = (state.completed_in_recovery || []).length;
             const banner = document.getElementById('recovery-banner');
             if (recoveryActive) {
                 if (banner) banner.classList.add('active');
@@ -3744,7 +3883,222 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 if (banner) banner.classList.remove('active');
                 document.body.style.background = '';
             }
+            // T5: dim sidebar nav (except Control Center + Missions) while in recovery
+            document.querySelectorAll('.nav-item').forEach(el => {
+                const keep = el.id === 'nav-dashboard' || el.id === 'nav-tasks';
+                el.style.opacity = (recoveryActive && !keep) ? '0.35' : '';
+            });
+            tfRecApplyState();
+            if (nowActive !== tfRecWasActive) {
+                tfRecWasActive = nowActive;
+                try { renderTaskList(); } catch(e) {}
+            }
         } catch(e) { /* recovery endpoint not available yet, ignore */ }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // RECOVERY MODE — UI LAYER (entry points, dialogs, auto-trigger)
+    // ═══════════════════════════════════════════════════════════
+    function tfRecApplyState() {
+        const active = !!recoveryActive;
+        const navItem = document.getElementById('rec-nav-item');
+        if (navItem) {
+            navItem.classList.toggle('active', active);
+            const txt = document.getElementById('rec-nav-text');
+            if (txt) txt.textContent = active ? 'Recovery · ACTIVE' : 'Recovery';
+            navItem.title = active ? 'Recovery Mode active' : 'Activate Recovery Mode';
+        }
+        const salv = document.getElementById('rec-salvage-btn');
+        if (salv) {
+            salv.classList.toggle('active', active);
+            const st = document.getElementById('rec-salvage-text');
+            if (st) st.textContent = active ? 'RECOVERY ACTIVE · EXIT' : 'SALVAGE MY DAY';
+        }
+        const ctx = document.getElementById('rec-context-box');
+        if (ctx) ctx.style.display = active ? 'block' : 'none';
+    }
+
+    function tfRecBackdrop() {
+        let b = document.getElementById('rec-backdrop');
+        if (!b) {
+            b = document.createElement('div');
+            b.id = 'rec-backdrop'; b.className = 'rec-backdrop';
+            b.addEventListener('click', e => { if (e.target === b) tfRecCloseDialog(); });
+            document.body.appendChild(b);
+        }
+        return b;
+    }
+    window.tfRecCloseDialog = function() { const b = document.getElementById('rec-backdrop'); if (b) b.remove(); };
+
+    async function tfRecPreviewRows() {
+        try {
+            const res = await fetch('/api/recovery-preview');
+            const data = await res.json();
+            const tasks = data.preview_tasks || [];
+            if (!tasks.length) return '<div style="color:#6E7681;font-size:12px;margin-top:8px;">No actionable tasks found.</div>';
+            return tasks.map(t => {
+                const np = normalizePriority(t.priority);
+                const dur = t.duration ? `<span class="rec-prow-dur">[${t.duration}]</span>` : '';
+                return `<div class="rec-preview-row"><span class="rec-pdot ${np}"></span><span class="rec-prow-title">${tfEsc(t.title)}</span>${dur}</div>`;
+            }).join('');
+        } catch(e) { return ''; }
+    }
+
+    window.tfRecEntryConfirm = async function() {
+        if (recoveryActive) { tfRecExitConfirm(); return; }
+        const b = tfRecBackdrop();
+        b.innerHTML = '<div class="rec-dialog"><div class="rec-d-icon" style="color:#D29922;">⚡</div><div class="rec-d-title">Activate Recovery Mode?</div><div class="rec-d-desc">Loading…</div></div>';
+        const rows = await tfRecPreviewRows();
+        b.innerHTML = `<div class="rec-dialog">
+            <div class="rec-d-icon" style="color:#D29922;">⚡</div>
+            <div class="rec-d-title">Activate Recovery Mode?</div>
+            <div class="rec-d-desc">This will simplify your view to focus on your 2 most important incomplete tasks. Everything else will fade out. You can exit anytime.</div>
+            <div class="rec-d-label">Focusing on:</div>
+            ${rows}
+            <button class="rec-btn-primary" onclick="tfRecActivate('D')">Yes, salvage my day</button>
+            <button class="rec-btn-secondary" onclick="tfRecCloseDialog()">Not now</button>
+        </div>`;
+    };
+
+    window.tfRecExitConfirm = function() {
+        const b = tfRecBackdrop();
+        b.innerHTML = `<div class="rec-dialog">
+            <div class="rec-d-icon" style="color:#8B949E;">←</div>
+            <div class="rec-d-title">Exit Recovery Mode?</div>
+            <div class="rec-d-desc">All tasks will become visible again. You'll lose the simplified view.</div>
+            <button class="rec-btn-primary rec-btn-exit" onclick="tfRecExit(false)">Yes, exit recovery</button>
+            <button class="rec-btn-secondary rec-btn-stay" onclick="tfRecCloseDialog()">Keep going — stay focused</button>
+        </div>`;
+    };
+
+    window.tfRecActivate = async function(reason) {
+        tfRecCloseDialog();
+        try {
+            const res = await fetch('/api/recovery-activate', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({trigger_reason: reason})});
+            if (res.ok) { await checkRecoveryStatus(); try { renderTaskList(); } catch(e) {} if (typeof showToast === 'function') showToast('Recovery Mode active.', '#D29922'); }
+        } catch(e) { if (typeof showToast === 'function') showToast('Could not activate recovery', 'var(--red)'); }
+    };
+
+    window.tfRecExit = async function(isAuto) {
+        tfRecCloseDialog();
+        try {
+            const res = await fetch('/api/recovery-exit', {method:'POST'});
+            let wasSuccessful = false;
+            if (res.ok) { const d = await res.json().catch(()=>({})); wasSuccessful = !!d.was_successful; }
+            const completed = window.tfRecCompleted || 0;
+            await checkRecoveryStatus();
+            try { renderTaskList(); } catch(e) {}
+            if (wasSuccessful || completed > 0) tfRecSetBadge(completed);
+        } catch(e) {}
+    };
+
+    window.tfRecSidebarClick = function() {
+        if (recoveryActive) { if (typeof showView === 'function') showView('tasks'); }
+        else tfRecEntryConfirm();
+    };
+    window.tfRecSalvageClick = function() { recoveryActive ? tfRecExitConfirm() : tfRecEntryConfirm(); };
+
+    window.tfRecMarkComplete = async function(taskId) {
+        try { await fetch(`/api/tasks/${taskId}/complete`, {method:'POST'}); } catch(e) {}
+        const before = recoveryActive;
+        try { await loadTasks(); } catch(e) {}
+        await checkRecoveryStatus();
+        try { renderTaskList(); } catch(e) {}
+        if (before && !recoveryActive) { tfRecCelebrate(); tfRecSetBadge(window.tfRecCompleted || 0); }
+    };
+
+    function tfRecCelebrate() {
+        const o = document.createElement('div');
+        o.className = 'rec-celebrate';
+        o.innerHTML = '<div class="rc-check">✓</div><div class="rc-big">You saved the day.</div><div class="rc-sub">Day recovered.</div>';
+        document.body.appendChild(o);
+        setTimeout(() => o.remove(), 2600);
+    }
+
+    function tfRecSetBadge(n) {
+        const now = new Date();
+        const hhmm = now.toTimeString().slice(0, 5);
+        const today = now.toISOString().split('T')[0];
+        localStorage.setItem('recovery_completed_today', today + '|' + hhmm + '|' + n);
+        tfRecRenderBadge(hhmm, n);
+    }
+    function tfRecRenderBadge(hhmm, n) {
+        const badge = document.getElementById('post-rec-badge');
+        if (!badge) return;
+        badge.style.display = 'flex';
+        const sub = document.getElementById('post-rec-badge-sub');
+        if (sub) sub.textContent = hhmm + ' · ' + n + ' completed in recovery';
+    }
+    function tfRecRestoreBadge() {
+        try {
+            const v = localStorage.getItem('recovery_completed_today');
+            if (!v) return;
+            const parts = v.split('|');
+            const today = new Date().toISOString().split('T')[0];
+            if (parts[0] === today) tfRecRenderBadge(parts[1], parts[2]);
+        } catch(e) {}
+    }
+
+    function tfRecShowPrewarn() {
+        if (document.getElementById('rec-prewarn')) return;
+        const main = document.querySelector('.col-main') || document.body;
+        const el = document.createElement('div');
+        el.id = 'rec-prewarn'; el.className = 'rec-prewarn';
+        el.innerHTML = '<span style="color:#D29922;font-size:14px;">⏳</span>' +
+            '<span class="rec-pw-mid"><span style="color:#D29922;">You haven\\'t completed anything today.</span> <span style="color:#8B949E;">Focus window closing.</span></span>' +
+            '<button class="rec-pw-link" onclick="tfRecActivate(\\'D\\')">Salvage my day →</button>' +
+            '<button class="rec-pw-x" onclick="tfRecDismissPrewarn()">×</button>';
+        main.insertBefore(el, main.firstChild);
+        localStorage.setItem('recovery_warned_date', new Date().toISOString().split('T')[0]);
+    }
+    window.tfRecDismissPrewarn = function() {
+        const el = document.getElementById('rec-prewarn'); if (el) el.remove();
+        localStorage.setItem('recovery_warned_date', new Date().toISOString().split('T')[0]);
+    };
+
+    async function tfRecShowSheet() {
+        if (document.getElementById('rec-sheet')) return;
+        const incomplete = allTasks.filter(t => !t.completed && !t.dropped_at && !t.offloaded_at).length;
+        const rows = await tfRecPreviewRows();
+        const el = document.createElement('div');
+        el.id = 'rec-sheet'; el.className = 'rec-sheet';
+        el.innerHTML = '<div class="rec-sheet-handle"></div>' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+            '<span style="color:#D29922;font-size:20px;">⚡</span>' +
+            '<button class="rec-pw-x" onclick="tfRecDismissSheet(true)">×</button></div>' +
+            '<div style="font-size:20px;color:#E6EDF3;margin-top:8px;">Today\\'s been difficult.</div>' +
+            '<div style="font-size:14px;color:#8B949E;margin-top:4px;">You have ' + incomplete + ' incomplete tasks. Want to simplify?</div>' +
+            rows +
+            '<button class="rec-btn-primary" onclick="tfRecDismissSheet(false); tfRecActivate(\\'auto_6pm\\')">Activate Recovery Mode</button>' +
+            '<button class="rec-btn-secondary" onclick="tfRecDismissSheet(true)">Not now</button>';
+        document.body.appendChild(el);
+    }
+    window.tfRecDismissSheet = function(setDismiss) {
+        const el = document.getElementById('rec-sheet'); if (el) el.remove();
+        if (setDismiss !== false) localStorage.setItem('recovery_auto_dismissed_date', new Date().toISOString().split('T')[0]);
+    };
+
+    async function checkAutoTrigger() {
+        try {
+            const now = new Date();
+            const hour = now.getHours();
+            const day = now.getDay();
+            if (day === 0 || day === 6) return;      // weekend
+            if (recoveryActive) return;               // already active
+            const today = now.toISOString().split('T')[0];
+            const warned = localStorage.getItem('recovery_warned_date');
+            const dismissed = localStorage.getItem('recovery_auto_dismissed_date');
+            const incomplete = allTasks.filter(t => !t.completed && !t.dropped_at && !t.offloaded_at).length;
+            if (incomplete < 1) return;               // nothing to salvage
+            if (hour >= 17 && warned !== today) {
+                const r = await fetch('/api/tasks/completed-today'); const d = await r.json();
+                if ((d.count || 0) === 0) tfRecShowPrewarn();
+            }
+            if (hour >= 18 && dismissed !== today && warned !== today) {
+                const r = await fetch('/api/tasks/completed-today'); const d = await r.json();
+                if ((d.count || 0) === 0) tfRecShowSheet();
+            }
+        } catch(e) {}
     }
 
     // ── PHASE 1: REMINDER TOASTS ──────────────────────────────────────
@@ -4717,10 +5071,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
         // ── PHASE 1: Start pressure, recovery, reminder intervals ──
         checkRecoveryStatus();
+        tfRecRestoreBadge();
+        setTimeout(() => { checkAutoTrigger(); }, 2500);
         setInterval(() => {
-            updateAllPressureLevels();
+            updateAllPressureLevels();   // S2 deadline text + S3 pressure card states
+            updateControlCenter();       // S3-G approaching banner + Upcoming/Next refresh
             checkReminders();
-            checkRecoveryStatus();
+            checkRecoveryStatus();       // S9 recovery status
+            checkAutoTrigger();          // S9 5pm/6pm auto-trigger
         }, 60000);
         setTimeout(() => { checkReminders(); }, 2000);
 

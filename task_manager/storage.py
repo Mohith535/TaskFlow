@@ -221,14 +221,18 @@ class TaskStorage:
             "trigger_reason": None,
             "session_tasks": [],
             "completed_in_recovery": [],
-            "dismissed_at": None
+            "dismissed_at": None,
+            "last_checked_date": None
         }
         if not self.recovery_state_file.exists():
             return default_state
-            
+
         try:
             with open(self.recovery_state_file, 'r') as file:
-                return json.load(file)
+                state = json.load(file)
+            for k, v in default_state.items():
+                state.setdefault(k, v)
+            return state
         except Exception:
             return default_state
 

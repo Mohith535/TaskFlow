@@ -144,6 +144,32 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
                 self.end_headers_json()
                 self.wfile.write(json.dumps({"active": False}).encode('utf-8'))
 
+        elif path == "/api/recovery-preview":
+            try:
+                from task_manager import commands as _cmds
+                preview = _cmds.select_recovery_tasks()
+                self.send_response(200)
+                self.end_headers_json()
+                self.wfile.write(json.dumps({"preview_tasks": [t.to_dict() for t in preview]}).encode('utf-8'))
+            except Exception:
+                self.send_response(200)
+                self.end_headers_json()
+                self.wfile.write(json.dumps({"preview_tasks": []}).encode('utf-8'))
+
+        elif path == "/api/tasks/completed-today":
+            try:
+                from datetime import datetime as _dt
+                today = _dt.now().strftime('%Y-%m-%d')
+                tasks = storage.load_tasks()
+                count = sum(1 for t in tasks if t.completed and getattr(t, 'completed_at', None) and str(t.completed_at).startswith(today))
+                self.send_response(200)
+                self.end_headers_json()
+                self.wfile.write(json.dumps({"count": count}).encode('utf-8'))
+            except Exception:
+                self.send_response(200)
+                self.end_headers_json()
+                self.wfile.write(json.dumps({"count": 0}).encode('utf-8'))
+
         elif path == "/api/stats-full":
             # Extended stats including overdue + deferred counts
             tasks = storage.load_tasks()
@@ -593,14 +619,52 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
             self.end_headers_json()
             self.wfile.write(json.dumps({"success": True}).encode('utf-8'))
 
+        elif path == "/api/recovery-activate" and self.command == 'POST':
+            try:
+                from datetime import datetime as _dt
+                from task_manager import commands as _cmds
+                reason = data.get("trigger_reason") or "D"
+                state = storage.storage.load_recovery_state()
+                if not state.get("active"):
+                    sel = _cmds.select_recovery_tasks()
+                    state["active"] = True
+                    state["triggered_at"] = _dt.now().isoformat()
+                    state["trigger_reason"] = reason
+                    state["session_tasks"] = [t.id for t in sel]
+                    state["completed_in_recovery"] = []
+                    state["dismissed_at"] = None
+                    state["last_checked_date"] = _dt.now().strftime('%Y-%m-%d')
+                    storage.storage.save_recovery_state(state)
+                self.send_response(200)
+                self.end_headers_json()
+                self.wfile.write(json.dumps({"success": True, "session_tasks": state.get("session_tasks", [])}).encode('utf-8'))
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers_json()
+                self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
+
         elif path == "/api/recovery-exit" and self.command == 'POST':
             try:
+                from datetime import datetime as _dt
                 state = storage.storage.load_recovery_state()
+                if state.get("active"):
+                    _comp = state.get("completed_in_recovery", []) or []
+                    storage.storage.append_recovery_log({
+                        "date": _dt.now().strftime('%Y-%m-%d'),
+                        "triggered_at": state.get("triggered_at"),
+                        "trigger_reason": state.get("trigger_reason"),
+                        "session_tasks": state.get("session_tasks", []),
+                        "tasks_completed": len(_comp),
+                        "was_successful": len(_comp) >= 1,
+                        "exited_at": _dt.now().isoformat()
+                    })
+                _was = len(state.get("completed_in_recovery", []) or []) >= 1
                 state["active"] = False
+                state["dismissed_at"] = _dt.now().isoformat()
                 storage.storage.save_recovery_state(state)
                 self.send_response(200)
                 self.end_headers_json()
-                self.wfile.write(json.dumps({"success": True}).encode('utf-8'))
+                self.wfile.write(json.dumps({"success": True, "was_successful": _was}).encode('utf-8'))
             except Exception as e:
                 self.send_response(500)
                 self.end_headers_json()

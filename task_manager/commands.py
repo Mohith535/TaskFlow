@@ -195,7 +195,7 @@ def print_missed_task_block(task: Task):
     print("  [Q]  Quit review     — return to your list")
     print()
 
-def postpone_flow(task: Task, tasks: List[Task], original_deadline: datetime, today_str: str) -> bool:
+def postpone_flow(task: Task, tasks: List[Task], original_deadline: datetime, today_str: str, triggered_by: str = "missed_flow") -> bool:
     count = task.postpone_count
     if count == 2:
         print(Fore.YELLOW + "⚠  Heads up: you've postponed this twice already." + Style.RESET_ALL)
@@ -278,7 +278,8 @@ def postpone_flow(task: Task, tasks: List[Task], original_deadline: datetime, to
                 t2 = datetime.fromisoformat(ph[i])
                 gaps.append((t2-t1).total_seconds() / 3600.0)
             task.average_postpone_gap_hours = round(sum(gaps)/len(gaps), 1)
-            
+            task.postpone_velocity = task.average_postpone_gap_hours
+
         task.last_decision = "P"
         task.last_decision_at = now.isoformat()
         task.last_missed_prompt = today_str
@@ -308,6 +309,8 @@ def postpone_flow(task: Task, tasks: List[Task], original_deadline: datetime, to
             "task_id": task.id,
             "postpone_count": task.postpone_count,
             "new_deadline": task.deadline,
+            "velocity": task.postpone_velocity,
+            "triggered_by": triggered_by,
             "gap_from_original_hours": round((new_dt - original_deadline).total_seconds() / 3600.0, 2)
         })
         return True
@@ -642,7 +645,7 @@ def command_postpone(task_id: int) -> bool:
             })
             return True
     else:
-        return postpone_flow(task, tasks, original_deadline, today_str)
+        return postpone_flow(task, tasks, original_deadline, today_str, triggered_by="postpone_cmd")
 
 
 
@@ -708,6 +711,7 @@ def check_reminders(tasks: List[Task]) -> List[Task]:
             continue
             
         is_due = False
+        fired_second = False
         try:
             r1 = datetime.fromisoformat(task.reminder_time)
             if r1.tzinfo is not None:
@@ -717,7 +721,7 @@ def check_reminders(tasks: List[Task]) -> List[Task]:
                 task.reminder_fired = True
         except ValueError:
             pass
-            
+
         if not is_due and task.reminder_time_2:
             try:
                 r2 = datetime.fromisoformat(task.reminder_time_2)
@@ -725,12 +729,27 @@ def check_reminders(tasks: List[Task]) -> List[Task]:
                     r2 = r2.replace(tzinfo=None)
                 if now >= r2 and not task.reminder_fired_2:
                     is_due = True
+                    fired_second = True
                     task.reminder_fired_2 = True
             except ValueError:
                 pass
-                
+
         if is_due:
             due.append(task)
+            try:
+                _ddt = datetime.fromisoformat(task.deadline)
+                if _ddt.tzinfo is not None:
+                    _ddt = _ddt.replace(tzinfo=None)
+                _hrs = round((_ddt - now).total_seconds() / 3600.0, 1)
+            except Exception:
+                _hrs = None
+            log_behavior({
+                "event": "reminder_fired",
+                "task_id": task.id,
+                "is_second": fired_second,
+                "hours_before_deadline": _hrs,
+                "deadline_type": getattr(task, 'deadline_type', 'soft')
+            })
             
     if due:
         storage.save_tasks(tasks)
@@ -738,6 +757,7 @@ def check_reminders(tasks: List[Task]) -> List[Task]:
             print(Fore.YELLOW + f"You have {len(due)} reminders firing at once. Showing one at a time." + Style.RESET_ALL)
             
         for task in due:
+            show_t = datetime.now()
             try:
                 dt = datetime.fromisoformat(task.deadline)
                 now = datetime.now()
@@ -778,16 +798,36 @@ def check_reminders(tasks: List[Task]) -> List[Task]:
             
             print("\n  [Enter] Noted  ·  [D] Dismiss forever  ·  [S] Start focus now\n")
             choice = get_valid_input("Choice: ", "").strip().upper()
-            
+            _delay = round((datetime.now() - show_t).total_seconds())
+
             if choice == "D":
                 task.reminder_dismissed = True
+                task.reminder_response = "dismissed"
                 print(Fore.WHITE + Style.DIM + "Reminder dismissed. Won't show again." + Style.RESET_ALL)
-                storage.save_tasks(tasks)
             elif choice == "S":
-                print(f"Focus session: taskflow focus --id {task.id}")
+                task.reminder_response = "started_focus"
+                task.actual_start_time = datetime.now().isoformat()
+                try:
+                    _rt = datetime.fromisoformat(task.reminder_time)
+                    if _rt.tzinfo is not None:
+                        _rt = _rt.replace(tzinfo=None)
+                    task.reminder_to_action_gap_minutes = round((datetime.now() - _rt).total_seconds() / 60.0, 1)
+                except Exception:
+                    pass
+                print(Fore.CYAN + f"Starting focus on: {task.title}" + Style.RESET_ALL)
+                print(Fore.CYAN + f"Run: taskflow focus --id {task.id}" + Style.RESET_ALL)
             else:
+                task.reminder_response = "noted"
                 print(Fore.CYAN + Style.DIM + "Reminder noted." + Style.RESET_ALL)
-                
+
+            log_behavior({
+                "event": "reminder_response",
+                "task_id": task.id,
+                "response": task.reminder_response,
+                "response_delay_seconds": _delay
+            })
+            storage.save_tasks(tasks)
+
     return due
 
 
@@ -853,7 +893,9 @@ def command_remind(task_id: int, set_str: str = None, clear: bool = False) -> bo
             print(f"Deadline:   {ddt.strftime('%A %d %b at %I:%M %p')}  {hard_str}")
         except Exception:
             print(f"Deadline:   {task.deadline}  {hard_str}")
-            
+
+    dismissed = "yes" if getattr(task, 'reminder_dismissed', False) else "no"
+    print(f"Dismissed:  {dismissed}")
     return True
 
 
@@ -2793,7 +2835,29 @@ def complete_task(task_id: int):
                     pass
             elif not task.actual_start_time:
                 task.duration_accuracy_ratio = None
-                
+
+            # S8-H: behavior log on completion
+            _actual_min = None
+            _est_min = None
+            try:
+                if task.actual_start_time and task.actual_end_time:
+                    _s = datetime.fromisoformat(task.actual_start_time)
+                    _e = datetime.fromisoformat(task.actual_end_time)
+                    _actual_min = round((_e - _s).total_seconds() / 60.0, 1)
+                if task.duration:
+                    _est_min = {"15m": 15, "30m": 30, "1h": 60, "2h": 120, "3h": 180, "4h+": 240}.get(task.duration.lower())
+            except Exception:
+                pass
+            log_behavior({
+                "event": "task_completed",
+                "task_id": task.id,
+                "pressure_level": getattr(task, 'pressure_level_at_completion', None),
+                "completed_under_pressure": getattr(task, 'completed_under_pressure', None),
+                "duration_actual_minutes": _actual_min,
+                "duration_estimated_minutes": _est_min,
+                "accuracy_ratio": getattr(task, 'duration_accuracy_ratio', None)
+            })
+
             storage.save_tasks(tasks)
 
             dopamine = _generate_dopamine(task_id, increment=True)
@@ -2870,14 +2934,36 @@ def stats_tasks() -> None:
         print(f"  High   : {stats['priorities']['High']:3d} ({stats['priorities']['High']/stats['total']*100:.1f}%)")
         print(f"  Medium : {stats['priorities']['Medium']:3d} ({stats['priorities']['Medium']/stats['total']*100:.1f}%)")
         print(f"  Low    : {stats['priorities']['Low']:3d} ({stats['priorities']['Low']/stats['total']*100:.1f}%)")
-    
+
+    # S9-K: Recovery sessions (last 7 days)
+    rlog = []
+    try:
+        if storage.recovery_log_file.exists():
+            with open(storage.recovery_log_file, 'r') as _f:
+                rlog = json.load(_f)
+    except Exception:
+        rlog = []
+    cutoff = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
+    recent = [s for s in rlog if isinstance(s, dict) and (s.get('date') or '') >= cutoff]
+    print("\nRecovery (last 7 days):")
+    if not recent:
+        print("  No recovery sessions this week.")
+    else:
+        total_sessions = len(recent)
+        tasks_completed = sum(int(s.get('tasks_completed', 0) or 0) for s in recent)
+        successful = sum(1 for s in recent if s.get('was_successful'))
+        rate = round(successful / total_sessions * 100) if total_sessions else 0
+        print(f"  Recovery sessions this week:  {total_sessions}")
+        print(f"  Tasks completed in recovery:  {tasks_completed}")
+        print(f"  Recovery success rate:        {rate}%")
+
     print(f"{'='*40}")
 
 
 def show_help() -> None:
     """Show comprehensive help with premium formatting."""
     print(f"""
-  TaskFlow v3.2.0 — Calm, Powerful CLI Task Assistant
+  TaskFlow v8.5.0 — The Execution Engine
   {"─" * 60}
 
   CORE COMMANDS:
@@ -4359,13 +4445,18 @@ def run_today_view():
                 
         print(f"{started_str}{dur_str}{ends_str}")
     else:
-        uncompleted_timed = [t for t in timed_tasks]
-        if not uncompleted_timed and untimed_tasks:
-            pass 
-        elif not uncompleted_timed:
-            pass
-        else:
-            print("All scheduled windows have passed.")
+        # S4-F edge cases (no NOW task and no upcoming timed task)
+        if not timed_tasks and not untimed_tasks and completed_today:
+            # Everything scheduled for today is done
+            print(Fore.GREEN + Style.BRIGHT + "All missions complete. Excellent execution today. ✓" + Style.RESET_ALL)
+        elif timed_tasks:
+            # All scheduled windows have already passed
+            print(Fore.YELLOW + "All scheduled windows have passed." + Style.RESET_ALL)
+            print(Fore.YELLOW + "Consider: taskflow recover" + Style.RESET_ALL)
+        elif untimed_tasks:
+            # Only no-deadline tasks remain — surface the highest-priority one
+            nt = untimed_tasks[0][0]
+            print(Fore.CYAN + Style.BRIGHT + f"Next mission: {nt.title}" + Style.RESET_ALL)
     print()
     print_today_missed_notice(tasks)  # PASSIVE bottom notice — never prompts (see: taskflow missed)
 
@@ -4374,186 +4465,342 @@ def run_today_view():
 # FEATURE 9: RECOVERY MODE
 # =========================================================
 
-def should_trigger_recovery() -> bool:
-    """Evaluate if the user's day has collapsed."""
-    tasks = storage.load_tasks()
-    timeline = storage.load_timeline()
-    today_str = datetime.now().strftime('%Y-%m-%d')
-    
-    # Condition 1: 3+ tasks missed today
-    missed_count = 0
+def _recovery_pending(t) -> bool:
+    """A task is pending (eligible for recovery) if not completed/dropped/offloaded."""
+    if t.completed or getattr(t, 'dropped_at', None) or getattr(t, 'offloaded_at', None):
+        return False
+    if getattr(t, 'status', None) in ['completed', 'done', 'dropped', 'offloaded']:
+        return False
+    return True
+
+
+def _task_deadline_dt(t):
+    """Parse a task deadline to a naive datetime, or None."""
+    if not getattr(t, 'deadline', None):
+        return None
+    try:
+        dt = datetime.fromisoformat(t.deadline)
+        if dt.tzinfo is not None:
+            dt = dt.replace(tzinfo=None)
+        return dt
+    except (ValueError, TypeError):
+        return None
+
+
+def should_trigger_recovery(tasks=None) -> bool:
+    """S9-B: decide if the day has collapsed. Also auto-clears stale recovery state."""
+    if tasks is None:
+        tasks = storage.load_tasks()
     now = datetime.now()
-    
-    for task in tasks:
-        if not task.completed and task.deadline:
-            try:
-                dt = datetime.fromisoformat(task.deadline)
-                if dt.tzinfo is not None:
-                    dt = dt.replace(tzinfo=None)
-                if dt < now and dt.strftime('%Y-%m-%d') == today_str:
-                    missed_count += 1
-            except ValueError:
-                pass
-                
-    if missed_count >= 3:
+    today_str = now.strftime('%Y-%m-%d')
+    state = storage.load_recovery_state()
+
+    # Auto-clear stale recovery state when a new day starts
+    if state.get('last_checked_date') != today_str:
+        if state.get('active'):
+            state['active'] = False
+            state['dismissed_at'] = now.isoformat()
+            _append_recovery_log(state)
+            print(Fore.GREEN + Style.DIM + "New day. Recovery Mode cleared." + Style.RESET_ALL)
+        state['last_checked_date'] = today_str
+        storage.save_recovery_state(state)
+        state = storage.load_recovery_state()
+
+    if state.get('active'):
+        return False  # already in recovery — don't re-trigger
+
+    # Today's past-due pending tasks
+    past_today = []
+    for t in tasks:
+        if not _recovery_pending(t):
+            continue
+        dt = _task_deadline_dt(t)
+        if dt and dt.strftime('%Y-%m-%d') == today_str and dt < now:
+            past_today.append((t, dt))
+
+    # Condition A: 3+ missed today
+    if len(past_today) >= 3:
         return True
-        
-    # Condition 2: 5+ pending tasks scheduled before 12 PM today, and it is past 2 PM
-    if now.hour >= 14:
-        morning_pending = 0
-        today_task_ids = {int(tid) for tid, tslot in timeline.items() if tslot.startswith(today_str)}
-        
-        for task in tasks:
-            if not task.completed and task.id in today_task_ids:
-                if task.deadline:
-                    try:
-                        dt = datetime.fromisoformat(task.deadline)
-                        if dt.tzinfo is not None:
-                            dt = dt.replace(tzinfo=None)
-                        if dt.hour < 12:
-                            morning_pending += 1
-                    except ValueError:
-                        pass
-                        
-        if morning_pending >= 5:
+
+    # Condition B: any HARD deadline missed today
+    if any(getattr(t, 'deadline_type', None) == 'hard' for t, _ in past_today):
+        return True
+
+    # Condition C: 2+ morning (06:00–12:00) tasks today, all past, none completed
+    morning_today = []
+    for t in tasks:
+        dt = _task_deadline_dt(t)
+        if dt and dt.strftime('%Y-%m-%d') == today_str and 6 <= dt.hour < 12:
+            morning_today.append((t, dt))
+    if len(morning_today) >= 2:
+        all_past = all(dt < now for _, dt in morning_today)
+        none_completed = all(_recovery_pending(t) for t, _ in morning_today)
+        if all_past and none_completed:
             return True
-            
+
     return False
 
 
-def select_recovery_tasks() -> List[Task]:
-    """Select the 2 most critical tasks to salvage the day."""
-    tasks = storage.load_tasks()
-    timeline = storage.load_timeline()
-    today_str = datetime.now().strftime('%Y-%m-%d')
-    today_task_ids = {int(tid) for tid, tslot in timeline.items() if tslot.startswith(today_str)}
-    
-    today_pending = [t for t in tasks if not t.completed and t.id in today_task_ids]
-    
-    # 1. Hard deadlines today
-    hard_deadlines = [t for t in today_pending if getattr(t, 'deadline_type', None) == 'hard']
-    
-    # 2. Critical/High priority today
-    high_priority = [t for t in today_pending if (t.priority or "").lower() in ["critical", "high"] and t not in hard_deadlines]
-    
-    # 3. Quick wins (<= 30m)
-    quick_wins = []
-    for t in today_pending:
-        if t not in hard_deadlines and t not in high_priority:
-            if t.duration in ["15m", "30m"]:
-                quick_wins.append(t)
-                
-    # 4. Remaining today
-    remaining = [t for t in today_pending if t not in hard_deadlines and t not in high_priority and t not in quick_wins]
-    
-    pool = hard_deadlines + high_priority + quick_wins + remaining
-    
-    # If we don't have enough today tasks, pull from general backlog (high priority first)
-    if len(pool) < 2:
-        backlog_high = [t for t in tasks if not t.completed and t.id not in today_task_ids and (t.priority or "").lower() in ["critical", "high"]]
-        pool.extend(backlog_high)
-        
-    return pool[:2]
+def select_recovery_tasks(tasks=None) -> List[Task]:
+    """S9-C: score tasks and return the top 1–2 to salvage the day."""
+    if tasks is None:
+        tasks = storage.load_tasks()
+    now = datetime.now()
+    today_str = now.strftime('%Y-%m-%d')
+
+    candidates = [t for t in tasks if _recovery_pending(t)]
+    scored = []
+    for t in candidates:
+        score = 0
+        dt = _task_deadline_dt(t)
+        is_today = bool(dt and dt.strftime('%Y-%m-%d') == today_str)
+        if getattr(t, 'deadline_type', None) == 'hard' and is_today:
+            score += 100
+        if (t.priority or "").lower() in ["critical", "high"]:
+            score += 50
+        if dt and abs((dt - now).total_seconds()) <= 7200:   # within 2 hours either side
+            score += 30
+        if getattr(t, 'duration', None) in ["15m", "30m"]:
+            score += 20
+        if getattr(t, 'postpone_count', 0) >= 2:
+            score -= 10
+        scored.append((score, t))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return [t for _, t in scored[:2]]
+
+
+def _append_recovery_log(state):
+    """Append a recovery session record (S9-A schema) to recovery_log.json."""
+    comp = state.get('completed_in_recovery', []) or []
+    storage.append_recovery_log({
+        "date": datetime.now().strftime('%Y-%m-%d'),
+        "triggered_at": state.get('triggered_at'),
+        "trigger_reason": state.get('trigger_reason'),
+        "session_tasks": state.get('session_tasks', []),
+        "tasks_completed": len(comp),
+        "was_successful": len(comp) >= 1,
+        "exited_at": datetime.now().isoformat()
+    })
+
+
+def _recovery_pressure_color(task):
+    p = get_pressure_level(task)
+    if p >= 3:
+        return Fore.RED + Style.BRIGHT
+    if p == 2:
+        return Fore.YELLOW + Style.BRIGHT
+    if p == 1:
+        return Fore.YELLOW
+    return Fore.CYAN
+
+
+def _recovery_render(recovery_tasks, focus_idx):
+    R = Style.RESET_ALL
+    bar = Fore.YELLOW + "━" * 40 + R
+    print()
+    print(bar)
+    print(Fore.YELLOW + Style.BRIGHT + "⚡  RECOVERY MODE" + R)
+    print(bar)
+    print(Fore.WHITE + "Today's been rough. Let's salvage what matters." + R)
+    print(bar)
+    print()
+    print(f"Your {len(recovery_tasks)} remaining mission(s):")
+    print()
+    for idx, t in enumerate(recovery_tasks, 1):
+        dtype = getattr(t, 'deadline_type', None) or 'soft'
+        dur = t.duration or 'no est.'
+        marker = "▶" if (idx - 1) == focus_idx else " "
+        print(f"  {marker} {idx}.  " + Fore.WHITE + Style.BRIGHT + f"{t.title}" + R + f"   {Fore.CYAN}[{t.priority} · {dtype} · {dur}]{R}")
+        dt = _task_deadline_dt(t)
+        if dt:
+            rem = format_time_remaining(dt - datetime.now())
+            print(f"      {_recovery_pressure_color(t)}Due: {dt.strftime('%a %d %b at %I:%M %p')} · {rem}{R}")
+    print()
+    print(bar)
+    print(Fore.WHITE + Style.DIM + "Everything else is paused. Focus on these." + R)
+    print(bar)
+    print()
+    fnum = focus_idx + 1
+    print(f"  {Fore.CYAN}[F]{R} Start focus on mission {fnum}")
+    print(f"  {Fore.CYAN}[C]{R} Mark mission {fnum} as complete")
+    if len(recovery_tasks) > 1:
+        print(f"  {Fore.CYAN}[N]{R} View next mission")
+    print(f"  {Fore.CYAN}[A]{R} Show all tasks anyway")
+    print(f"  {Fore.CYAN}[X]{R} Exit recovery mode")
+
+
+def _recovery_complete(task_id):
+    """Complete a task within recovery and record it in completed_in_recovery."""
+    complete_task(task_id)
+    state = storage.load_recovery_state()
+    comp = state.get('completed_in_recovery', []) or []
+    if task_id not in comp:
+        comp.append(task_id)
+    state['completed_in_recovery'] = comp
+    storage.save_recovery_state(state)
+
+
+def _recovery_auto_exit(state):
+    """S9-H: every session task is done — exit and celebrate."""
+    state['active'] = False
+    state['dismissed_at'] = datetime.now().isoformat()
+    _append_recovery_log(state)
+    storage.save_recovery_state(state)
+    R = Style.RESET_ALL
+    bar = Fore.GREEN + "━" * 40 + R
+    n = len(state.get('completed_in_recovery', []) or [])
+    print()
+    print(bar)
+    print(Fore.GREEN + Style.BRIGHT + "✓  RECOVERY COMPLETE" + R)
+    print(bar)
+    print(Fore.WHITE + "You saved the day." + R)
+    print(Fore.WHITE + f"Completed in recovery: {n}" + R)
+    print(bar)
 
 
 def run_recovery_view():
-    """Display the Recovery Dashboard."""
-    state = storage.load_recovery_state()
-    if not state.get('active'):
-        return
-        
-    tasks = storage.load_tasks()
-    mission_ids = state.get('mission_ids', [])
-    recovery_tasks = [t for t in tasks if t.id in mission_ids and not t.completed]
-    
-    print(Fore.RED + "\n" + "═" * 60)
-    print(" SYSTEM RECOVERY MODE INITIATED")
-    print("═" * 60 + Style.RESET_ALL)
-    print("\n" + Fore.WHITE + Style.DIM + "The schedule has collapsed. All other tasks are hidden." + Style.RESET_ALL)
-    print("To salvage today, execute these missions:\n")
-    
-    if not recovery_tasks:
-        print(Fore.GREEN + "Recovery missions complete! Run 'taskflow recover --exit' to return to normal." + Style.RESET_ALL)
-        return
-        
-    for idx, t in enumerate(recovery_tasks, 1):
-        print(f"  [{idx}]  " + Fore.WHITE + Style.BRIGHT + f"{t.title:<30}" + Style.RESET_ALL + f"  ·  {t.priority}  ·  {t.duration or 'Unknown time'}")
-        
-    print("\nOptions:")
-    for t in recovery_tasks:
-        print(f"  taskflow focus --id {t.id}")
-    print(f"\n  taskflow recover --exit    {Style.DIM}(Abort recovery mode){Style.RESET_ALL}\n")
+    """S9-E/F/H: interactive Recovery Mode dashboard. Never traps — [X] always exits."""
+    focus_idx = 0
+    while True:
+        state = storage.load_recovery_state()
+        if not state.get('active'):
+            return
+        tasks = storage.load_tasks()
+        session_ids = state.get('session_tasks', []) or []
+        recovery_tasks = [t for t in tasks if t.id in session_ids and _recovery_pending(t)]
+
+        if not recovery_tasks:
+            _recovery_auto_exit(state)
+            return
+
+        if focus_idx >= len(recovery_tasks):
+            focus_idx = 0
+
+        _recovery_render(recovery_tasks, focus_idx)
+        choice = get_valid_input("  Choice: ").strip().upper()
+        target = recovery_tasks[focus_idx]
+        R = Style.RESET_ALL
+
+        if choice == 'F':
+            target.actual_start_time = datetime.now().isoformat()
+            storage.save_tasks(tasks)
+            print(Fore.CYAN + f"\nStarting focus: {target.title}" + R)
+            print(Fore.CYAN + f"Run: taskflow focus --id {target.id} to begin." + R)
+        elif choice == 'C':
+            confirm = get_valid_input(f"Mark '{target.title}' complete? [Y/n]: ", "y").strip().lower()
+            if confirm in ('y', ''):
+                _recovery_complete(target.id)
+                print(Fore.GREEN + Style.BRIGHT + "Mission complete." + R)
+                focus_idx = 0
+            # loop re-renders remaining (or auto-exits when none remain)
+        elif choice == 'N':
+            if len(recovery_tasks) > 1:
+                focus_idx = (focus_idx + 1) % len(recovery_tasks)
+            else:
+                print(Fore.WHITE + Style.DIM + "Only one mission. Stay on it." + R)
+        elif choice == 'A':
+            print(Fore.YELLOW + "\nShowing all tasks. Recovery Mode still active." + R)
+            list_tasks()
+            return
+        elif choice == 'X':
+            confirm = get_valid_input("Exit Recovery Mode? [Y/n]: ", "y").strip().lower()
+            if confirm in ('y', ''):
+                state['active'] = False
+                state['dismissed_at'] = datetime.now().isoformat()
+                _append_recovery_log(state)
+                storage.save_recovery_state(state)
+                print(Fore.WHITE + Style.DIM + "Recovery Mode exited. You're on your own now." + R)
+                return
+            print(Fore.CYAN + "Good call. Stay focused." + R)
+        else:
+            # Unrecognized input — avoid trapping in non-interactive contexts
+            return
 
 
-def command_recover(trigger: bool = False, exit_mode: bool = False):
-    """Handle recovery commands."""
+def command_recover(trigger: bool = False, exit_mode: bool = False, status: bool = False):
+    """S9-I: handle the recover command (default trigger / --exit / --status)."""
+    R = Style.RESET_ALL
     state = storage.load_recovery_state()
-    
+
+    if status:
+        if state.get('active'):
+            since = "recently"
+            try:
+                tdt = datetime.fromisoformat(state.get('triggered_at'))
+                mins = int((datetime.now() - tdt).total_seconds() / 60)
+                since = f"{mins} min ago" if mins < 120 else f"{mins // 60}h ago"
+            except Exception:
+                pass
+            tasks = storage.load_tasks()
+            remaining = len([t for t in tasks if t.id in (state.get('session_tasks') or []) and _recovery_pending(t)])
+            print(Fore.YELLOW + f"Recovery Mode active since {since}. {remaining} mission(s) remaining." + R)
+        else:
+            print(Fore.WHITE + Style.DIM + "Recovery Mode is not active." + R)
+        return
+
     if exit_mode:
         if not state.get('active'):
-            print("Not currently in Recovery Mode.")
+            print("Recovery Mode is not active.")
             return
-            
-        # Log analytics
-        log_entry = {
-            "triggered_at": state.get('triggered_at'),
-            "exited_at": datetime.now().isoformat(),
-            "reason": state.get('reason'),
-            "missions_assigned": len(state.get('mission_ids', [])),
-            "missions_completed": sum(1 for t in storage.load_tasks() if t.id in state.get('mission_ids', []) and t.completed)
-        }
-        storage.append_recovery_log(log_entry)
-        
-        storage.save_recovery_state({"active": False})
-        print(Fore.GREEN + "Recovery Mode deactivated. Standard schedule restored." + Style.RESET_ALL)
+        state['active'] = False
+        state['dismissed_at'] = datetime.now().isoformat()
+        _append_recovery_log(state)
+        storage.save_recovery_state(state)
+        print(Fore.WHITE + Style.DIM + "Recovery Mode exited. You're on your own now." + R)
         return
-        
-    if trigger:
-        if state.get('active'):
-            print("Recovery Mode is already active.")
-            return
-            
-        recovery_tasks = select_recovery_tasks()
-        if not recovery_tasks:
-            print("No pending tasks available for recovery.")
-            return
-            
-        new_state = {
-            "active": True,
-            "triggered_at": datetime.now().isoformat(),
-            "reason": "manual trigger",
-            "mission_ids": [t.id for t in recovery_tasks]
-        }
-        storage.save_recovery_state(new_state)
-        print(Fore.RED + "Recovery Mode manually engaged." + Style.RESET_ALL)
-        run_recovery_view()
-        return
-        
-    # Default: Show view if active, else print status
+
+    # Default / --trigger: show view if active, else manually engage (reason "D")
     if state.get('active'):
         run_recovery_view()
-    else:
-        print("System nominal. No recovery needed.")
+        return
+
+    recovery_tasks = select_recovery_tasks()
+    if not recovery_tasks:
+        print(Fore.GREEN + "No actionable tasks. Recovery complete." + R)
+        return
+    state['active'] = True
+    state['triggered_at'] = datetime.now().isoformat()
+    state['trigger_reason'] = "D"
+    state['session_tasks'] = [t.id for t in recovery_tasks]
+    state['completed_in_recovery'] = []
+    state['dismissed_at'] = None
+    state['last_checked_date'] = datetime.now().strftime('%Y-%m-%d')
+    storage.save_recovery_state(state)
+    run_recovery_view()
 
 
 def check_recovery_mode() -> bool:
-    """Check if recovery mode should trigger or is active."""
+    """Auto-activate recovery if the day has collapsed (S9-D). Returns True if active."""
     state = storage.load_recovery_state()
     if state.get('active'):
         return True
-        
-    if should_trigger_recovery():
-        recovery_tasks = select_recovery_tasks()
+
+    tasks = storage.load_tasks()
+    if should_trigger_recovery(tasks):
+        recovery_tasks = select_recovery_tasks(tasks)
         if recovery_tasks:
-            new_state = {
-                "active": True,
-                "triggered_at": datetime.now().isoformat(),
-                "reason": "auto trigger — day collapsed",
-                "mission_ids": [t.id for t in recovery_tasks]
-            }
-            storage.save_recovery_state(new_state)
+            now = datetime.now()
+            today = now.strftime('%Y-%m-%d')
+            past_today = [t for t in tasks if _recovery_pending(t) and _task_deadline_dt(t)
+                          and _task_deadline_dt(t).strftime('%Y-%m-%d') == today and _task_deadline_dt(t) < now]
+            if any(getattr(t, 'deadline_type', None) == 'hard' for t in past_today):
+                reason = "B"
+            elif len(past_today) >= 3:
+                reason = "A"
+            else:
+                reason = "C"
+            st = storage.load_recovery_state()
+            st['active'] = True
+            st['triggered_at'] = now.isoformat()
+            st['trigger_reason'] = reason
+            st['session_tasks'] = [t.id for t in recovery_tasks]
+            st['completed_in_recovery'] = []
+            st['dismissed_at'] = None
+            st['last_checked_date'] = today
+            storage.save_recovery_state(st)
             return True
-            
+
     return False
 
 

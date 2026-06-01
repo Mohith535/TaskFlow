@@ -35,7 +35,9 @@ class Task:
     reminder_fired: bool = False
     reminder_fired_2: bool = False
     reminder_dismissed: bool = False
-    
+    reminder_response: Optional[str] = None
+    reminder_to_action_gap_minutes: Optional[float] = None
+
     # NEW S1 TRACKING FIELDS
     actual_start_time: Optional[str] = None
     actual_end_time: Optional[str] = None
@@ -62,6 +64,7 @@ class Task:
     last_decision: Optional[str] = None
     last_decision_at: Optional[str] = None
     average_postpone_gap_hours: Optional[float] = None
+    postpone_velocity: Optional[float] = None
     status: str = "todo"
     
     # ENRICHMENT NEW FIELDS
@@ -151,6 +154,8 @@ class Task:
             "reminder_fired": self.reminder_fired,
             "reminder_fired_2": self.reminder_fired_2,
             "reminder_dismissed": self.reminder_dismissed,
+            "reminder_response": self.reminder_response,
+            "reminder_to_action_gap_minutes": self.reminder_to_action_gap_minutes,
             "mission_type": self.mission_type,
             "date": self.date,
             "start_time": self.start_time,
@@ -165,6 +170,7 @@ class Task:
             "last_decision": self.last_decision,
             "last_decision_at": self.last_decision_at,
             "average_postpone_gap_hours": self.average_postpone_gap_hours,
+            "postpone_velocity": self.postpone_velocity,
             "status": self.status,
             
             # Enrichment fields
@@ -211,6 +217,8 @@ class Task:
         data["reminder_fired"] = data.get("reminder_fired", False)
         data["reminder_fired_2"] = data.get("reminder_fired_2", False)
         data["reminder_dismissed"] = data.get("reminder_dismissed", False)
+        data["reminder_response"] = data.get("reminder_response")
+        data["reminder_to_action_gap_minutes"] = data.get("reminder_to_action_gap_minutes")
         
         data["mission_type"] = data.get("mission_type", "Task")
         data["date"] = data.get("date")
@@ -227,6 +235,7 @@ class Task:
         data["last_decision"] = data.get("last_decision")
         data["last_decision_at"] = data.get("last_decision_at")
         data["average_postpone_gap_hours"] = data.get("average_postpone_gap_hours")
+        data["postpone_velocity"] = data.get("postpone_velocity")
         data["status"] = data.get("status", "todo")
         
         # Enrichment fields

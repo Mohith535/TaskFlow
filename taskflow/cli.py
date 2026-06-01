@@ -95,14 +95,14 @@ from task_manager.storage import storage
 import colorama
 
 APP_NAME = "TaskFlow"
-APP_VERSION = "v8.0.0"
-APP_TAGLINE = "The Temporal Engine"
+APP_VERSION = "v8.5.0"
+APP_TAGLINE = "The Execution Engine"
 
 
 def show_help() -> None:
     """Show comprehensive help with premium formatting."""
     print(f"""
-  TaskFlow v7.5.0 — The Temporal Engine
+  TaskFlow v8.5.0 — The Execution Engine
   {"─" * 60}
 
   CORE COMMANDS:
@@ -299,11 +299,11 @@ def show_version():
         print(f"  • Missions:       (unable to read)")
     
     print(f"\n  \033[1mWHAT'S NEW IN {APP_VERSION}:\033[0m")
-    print("  • \033[33mModern Infrastructure\033[0m: Full pyproject.toml migration")
-    print("  • \033[31mNew Install Pathway\033[0m: Native 'python -m taskflow' support")
-    print("  • \033[32mGuided Onboarding\033[0m: Intelligent first-run welcome experience")
-    print("  • \033[36mPremium Docs\033[0m: New Psychology Deep-Dive & README overhaul")
-    print("  • \033[35mUX Refinement\033[0m: Enriched telemetry and premium HUD launching")
+    print("  • \033[33mPhase 1 Complete\033[0m: The full behavioral execution engine")
+    print("  • \033[31mRecovery Mode\033[0m: Auto + manual triage with 4 Web HUD entry points")
+    print("  • \033[32mSmart Reminders\033[0m: Context-matched timing (priority × deadline type)")
+    print("  • \033[36mTask Enrichment\033[0m: Notes, links & checklists on every mission")
+    print("  • \033[35mExecution Pressure\033[0m: Live deadline color-shifts (Now Window + today view)")
     print(f"  \033[90m{'─' * 60}\033[0m")
     print("  \033[3mBuilt for deep work. Engineered for execution.\033[0m\n")
 
@@ -409,6 +409,7 @@ Examples:
     recover_parser = subparsers.add_parser('recover', help='Manage system recovery mode')
     recover_parser.add_argument('--trigger', action='store_true', help='Manually trigger recovery mode')
     recover_parser.add_argument('--exit', action='store_true', help='Exit recovery mode')
+    recover_parser.add_argument('--status', action='store_true', help='Show recovery mode status')
 
     # Missed mission review — the ONLY interactive E/P/D/O flow (user-invoked, escapable)
     missed_parser = subparsers.add_parser('missed', help='Review & address missed missions interactively')
@@ -583,11 +584,15 @@ def main():
     
     # Route commands
     try:
-        # STARTUP HOOKS (Features 7 and 9)
+        # STARTUP HOOKS — S7 (reminders) + S9 (recovery)
+        # S7-D: reminders fire at the start of EVERY command (silent if none due)
+        if getattr(args, 'command', None):
+            try:
+                check_reminders(storage.load_tasks())
+            except Exception:
+                pass
+        # S9-D: recovery check intercepts the read views only
         if args.command in ['list', 'status', 'today']:
-            tasks_for_startup = storage.load_tasks()
-            check_reminders(tasks_for_startup)
-            
             if check_recovery_mode():
                 # Intercept normal views if recovery mode is active
                 args.command = 'recover'
@@ -773,9 +778,11 @@ def main():
             command_remind(args.id, args.set_str, args.clear)
             
         elif args.command == 'recover':
-            trigger = getattr(args, 'trigger', False)
-            exit_mode = getattr(args, 'exit', False)
-            command_recover(trigger, exit_mode)
+            command_recover(
+                trigger=getattr(args, 'trigger', False),
+                exit_mode=getattr(args, 'exit', False),
+                status=getattr(args, 'status', False)
+            )
 
         elif args.command == 'missed':
             command_missed(

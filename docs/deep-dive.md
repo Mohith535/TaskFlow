@@ -15,12 +15,20 @@
 - [The Core Problem](#-the-core-problem)
 - [1. The Matrix — Eisenhower Prioritization](#-1-the-matrix--eisenhower-prioritization)
 - [2. The One Frog Protocol — Parkinson's Law](#-2-the-one-frog-protocol--parkinsons-law)
-- [3. Temporal Pressure — Urgency & The Deadline Effect](#-3-temporal-pressure--urgency--the-deadline-effect)
-- [4. Focus Protocol — Flow State Engineering](#-4-focus-protocol--flow-state-engineering)
-- [5. Frictionless Capture — The Zeigarnik Effect](#-5-frictionless-capture--the-zeigarnik-effect)
-- [6. Dopamine & Momentum — Behavioral Persistence](#-6-dopamine--momentum--behavioral-persistence)
-- [7. Recovery Mode — Cognitive Overload Defense](#-7-recovery-mode--cognitive-overload-defense)
-- [8. Dual-Mode Reality Engine — Temporal Structuring](#-8-dual-mode-reality-engine--temporal-structuring)
+- [3. Duration Estimation — Defeating the Planning Fallacy](#-3-duration-estimation--defeating-the-planning-fallacy)
+- [4. Natural Language Deadlines — Friction is the Enemy of Commitment](#-4-natural-language-deadlines--friction-is-the-enemy-of-commitment)
+- [5. Deadline Taxonomy — Why Treating All Deadlines the Same is a Design Failure](#-5-deadline-taxonomy--why-treating-all-deadlines-the-same-is-a-design-failure)
+- [6. Temporal Pressure — Urgency & The Deadline Effect](#-6-temporal-pressure--urgency--the-deadline-effect)
+- [7. Calibrated Urgency — The Yerkes-Dodson Law Applied to UI Design](#-7-calibrated-urgency--the-yerkes-dodson-law-applied-to-ui-design)
+- [8. The Now Window — Eliminating the Most Expensive Question in Productivity](#-8-the-now-window--eliminating-the-most-expensive-question-in-productivity)
+- [9. Forced Confrontation — Why Silent "Overdue" Labels Are a Design Failure](#-9-forced-confrontation--why-silent-overdue-labels-are-a-design-failure)
+- [10. The Postpone Mirror — Accountability Without Judgment](#-10-the-postpone-mirror--accountability-without-judgment)
+- [11. The Signal Problem — Why Fixed Reminders Train You to Ignore Everything](#-11-the-signal-problem--why-fixed-reminders-train-you-to-ignore-everything)
+- [12. Focus Protocol — Flow State Engineering](#-12-focus-protocol--flow-state-engineering)
+- [13. Frictionless Capture — The Zeigarnik Effect](#-13-frictionless-capture--the-zeigarnik-effect)
+- [14. Dopamine & Momentum — Behavioral Persistence](#-14-dopamine--momentum--behavioral-persistence)
+- [15. Recovery Mode — Cognitive Overload Defense](#-15-recovery-mode--cognitive-overload-defense)
+- [16. Dual-Mode Reality Engine — Temporal Structuring](#-16-dual-mode-reality-engine--temporal-structuring)
 - [Technical Architecture](#-technical-architecture)
 - [References](#-references)
 
@@ -106,7 +114,109 @@ Secondary tasks exist as supporting missions, but the Prime Target is your non-n
 
 ---
 
-## ⏱️ 3. Temporal Pressure — Urgency & The Deadline Effect
+## ⏳ 3. Duration Estimation — Defeating the Planning Fallacy
+
+### The Psychology
+
+The **Planning Fallacy** (Kahneman & Tversky, 1979) is one of the most replicated findings in behavioral economics: humans systematically underestimate how long tasks take — by **25–50% on average**. This is not carelessness; it is a fundamental feature of how the brain projects the future. We imagine the *ideal* scenario, not the realistic one. We recall our *intentions*, not our actual history.
+
+The cost of this bias is concrete: over-planned days, chronic under-execution, and a growing backlog that feeds the **Productivity Anxiety Loop** described in [The Core Problem](#-the-core-problem).
+
+The act of estimating duration — *even imperfectly* — forces the brain to make a **cognitive commitment**. People who write down a time estimate complete tasks at a measurably higher rate than those who don't. Not because the estimate is accurate, but because the act of estimating creates a psychological contract with the future self. It activates what Gollwitzer (1999) calls an **implementation intention** — a mental link between a situation ("when I start this task") and a response ("I will spend 1 hour on it").
+
+A second mechanism is at work: **visible duration creates honest confrontation.** When a task that has lingered on your list for a week shows `[2h]` next to it, the brain can no longer pretend it is a 5-minute job. Avoidance thrives on ambiguity. Duration destroys it.
+
+> *"It always takes longer than you expect, even when you take into account Hofstadter's Law."* — Hofstadter's Law
+
+### Historical Precedent
+
+Elite project managers use **reference class forecasting** (Flyvbjerg, 2006) — instead of asking "how long will *this* take?" they ask "how long did *similar* tasks take in the past?" TaskFlow's duration-accuracy tracking (actual vs. estimated) builds this personal reference class automatically over time, turning your own history into a forecasting instrument.
+
+### How TaskFlow Implements This
+
+- A **duration field** on every task: `15m` / `30m` / `1h` / `2h` / `3h` / `4h+`
+- **Actual time** captured when a focus session starts and when the task completes
+- A `duration_accuracy_ratio` (actual ÷ estimated) stored per task
+- Over time, a **personal accuracy profile** emerges — your own calibration curve
+
+```bash
+taskflow add
+Task title: Write API documentation
+Duration (15m/30m/1h/2h/3h/4h+) [skip]: 2h
+→ Task #9 added. Est. 2h.
+```
+
+The estimate is shown everywhere the task appears — in `taskflow list`, `taskflow today`, and on the Web HUD cards — so the cost of the work is never hidden from the person deciding whether to start it.
+
+> **See also:** the `duration_accuracy_ratio` is the raw material for the Phase 2 AI estimation layer, which will quietly auto-correct your estimates using your own reference class.
+
+---
+
+## 💬 4. Natural Language Deadlines — Friction is the Enemy of Commitment
+
+### The Psychology
+
+**BJ Fogg's Behavior Model** (2009) identifies three components required for *any* behavior to occur: **Motivation, Ability, and a Prompt** (B = MAP). When Ability drops — i.e., the action becomes harder — even high-Motivation people fail to act.
+
+Asking a user to type `2026-04-25 15:00` to set a deadline is a friction point that taxes working memory, interrupts flow, and — most critically — creates a pause long enough for the brain to rationalize skipping it. *"I'll set the deadline later"* is how tasks become perpetually undated. **Undated tasks are almost never done.**
+
+The **2-Second Rule** (a heuristic used in GTD and grounded in Fogg's research) states: if a behavior requires more than ~2 seconds of friction, completion rate drops dramatically. Natural-language parsing collapses the deadline-setting action to the same cognitive cost as a normal sentence. The user says what they mean; the system handles the rest.
+
+Confirmation of the parsed result serves a second purpose: it creates a moment of **conscious acknowledgment**. The user sees the deadline as a real, concrete thing — not an abstract form field — which strengthens commitment (Cialdini's **Commitment & Consistency Principle**, 1984; see also [Section 2](#-2-the-one-frog-protocol--parkinsons-law)).
+
+### How TaskFlow Implements This
+
+```bash
+Deadline: tomorrow 3pm
+→ Parsed: Thursday, 25 Apr 2026 at 15:00
+  Confirm? [Y/n]: Y
+```
+
+Supported patterns include `tomorrow 3pm`, `Friday`, `in 2 hours`, `next Monday`, `April 30`, and bare time-of-day words like `morning` and `evening`. The same parser powers frictionless capture (see [Section 13](#-13-frictionless-capture--the-zeigarnik-effect)), so a deadline can be set in the same breath as the thought:
+
+```bash
+taskflow dump "Deploy server tomorrow 3pm #work !h"
+```
+
+If the phrase can't be understood, the system re-prompts once with an example rather than silently failing — preserving the user's momentum instead of dumping them into a date-format manual.
+
+---
+
+## 🚦 5. Deadline Taxonomy — Why Treating All Deadlines the Same is a Design Failure
+
+### The Psychology
+
+**Signal detection theory** (Green & Swets, 1966) explains a phenomenon every overwhelmed professional knows intuitively: *when everything is urgent, nothing is.* This is the **signal-to-noise collapse**. Systems that treat a flexible personal deadline ("finish the article this week") identically to a hard external commitment ("client presentation at 2pm Friday") train users to ignore all deadline indicators equally — the *boy who cried wolf* effect, where every warning gets tuned out.
+
+The neurological basis is **habituation**: repeated identical stimuli produce a decreasing neural response. The same red `OVERDUE` badge on a trivial task and a critical one causes the brain to stop responding to *either*. Differentiation restores the salience of genuine urgency.
+
+There is also a profound difference in *how* people experience the two kinds of deadline:
+
+- **Soft deadlines** create **optimization pressure** — *"I should try to do this by then."*
+- **Hard deadlines** create **loss-aversion pressure** — *"if I miss this, something bad happens."*
+
+Both are motivating, but through completely different mechanisms. Conflating them destroys both signals at once.
+
+### How TaskFlow Implements This
+
+Every deadline is typed at creation, and the type propagates through every surface:
+
+| Type | CLI Display | UI Signal | System Response |
+|:---|:---|:---|:---|
+| **Soft** | `[soft]` (clean — default) | Calm blue | Gentle `ℹ` notice |
+| **Hard** | `[HARD]` in red | Pulsing red | `⚠` Block alert |
+
+```bash
+taskflow add --deadline "Friday 3pm" --hard
+→ [HARD] Client presentation — Fri 25 Apr at 15:00
+   ⚠ Hard deadline. System will alert if missed.
+```
+
+Soft is the silent default — a clean, low-noise state. The `[HARD]` tag is the only one rendered loudly, which is precisely what keeps it meaningful. This taxonomy is the foundation the entire [Execution Pressure System](#-7-calibrated-urgency--the-yerkes-dodson-law-applied-to-ui-design) and [Smart Reminder Engine](#-11-the-signal-problem--why-fixed-reminders-train-you-to-ignore-everything) build upon.
+
+---
+
+## ⏱️ 6. Temporal Pressure — Urgency & The Deadline Effect
 
 ### The Psychology
 
@@ -126,9 +236,182 @@ TaskFlow's **Temporal Pressure System** makes time *visible and visceral*:
 
 The **Postpone Mirror** adds social accountability to yourself: if you defer a task more than 3 times, a visible `postponed ×3 ⚠` badge appears — holding a mirror to your avoidance pattern and prompting a conscious decision.
 
+> This section is the overview. The exact arousal calibration is detailed in [Section 7](#-7-calibrated-urgency--the-yerkes-dodson-law-applied-to-ui-design), the confrontation flow in [Section 9](#-9-forced-confrontation--why-silent-overdue-labels-are-a-design-failure), and the mirror in [Section 10](#-10-the-postpone-mirror--accountability-without-judgment).
+
 ---
 
-## 🛡️ 4. Focus Protocol — Flow State Engineering
+## 🌡️ 7. Calibrated Urgency — The Yerkes-Dodson Law Applied to UI Design
+
+### The Psychology
+
+The **Yerkes-Dodson Law** (1908) — one of the oldest findings in experimental psychology — describes the **inverted-U relationship** between arousal and performance. Too little arousal: boredom, disengagement, no action. Too much arousal: anxiety, cognitive narrowing, impaired decision-making. Peak performance requires *optimal* arousal — enough urgency to motivate, not enough to panic.
+
+This is precisely the failure mode of aggressive notification systems: flashing red alerts, modal popups, alarm sounds. They create *high* arousal that tips over the peak of the curve into anxiety — activating the amygdala and impairing the prefrontal cortex, the very cognitive resources needed to execute under time pressure.
+
+The execution pressure system is deliberately engineered to operate on the **rising slope** of the Yerkes-Dodson curve: enough signal to nudge arousal *toward* optimal performance, never enough to tip into stress.
+
+**Color** is the chosen instrument because it operates through the **pre-attentive processing system** — the brain registers a color change *before* conscious attention is directed at it. Amber registers as "caution" and red as "danger" through deeply conditioned associations (traffic lights, warning systems). The transition from normal → amber → red mirrors the emotional escalation appropriate to the time remaining, but does so through color rather than sound or modal interruption — entirely within the user's peripheral awareness.
+
+The **pressure line** — a barely-visible hairline above a Level-3 HARD-deadline card — exploits **subliminal priming**: the user *senses* urgency before they consciously notice it, which is more effective at motivating action than a banner they have learned to ignore.
+
+### How TaskFlow Implements This
+
+Pressure is computed *live* from time-remaining (never cached) and rendered identically in the CLI and the Web HUD:
+
+| Time Remaining | Pressure Level | CLI | UI |
+|:---|:---|:---|:---|
+| 3h+ | **0 — None** | Normal | Normal |
+| 1h–3h | **1 — Approaching** | Amber suffix | Amber border |
+| 15min–1h | **2 — Near** | Bright amber title | Amber glow |
+| < 15min | **3 — Critical** | Red title + message | Red pulse |
+| Past due | **Overdue** | `OVERDUE` badge | Red card tint |
+
+```bash
+▶  Deploy server  [HARD]  ← 8m left ⚠
+   → Hard deadline. Execute or reschedule now.
+```
+
+The second line ("Execute or reschedule now") appears **only** for HARD deadlines at Level 3 — for SOFT deadlines, the color shift alone carries the signal. Restraint is the point: the loudest treatment is reserved for the rarest, most genuine emergency.
+
+---
+
+## 🎯 8. The Now Window — Eliminating the Most Expensive Question in Productivity
+
+### The Psychology
+
+The most expensive question a knowledge worker asks is: **"What should I work on right now?"**
+
+**Decision fatigue** (Baumeister et al., 1998) compounds through the day. Every micro-decision draws down the same finite cognitive resource. By the time a user opens their task list and scans 20+ items to decide what to do next, they have already spent executive function on the wrong problem — *choosing* — leaving less for *doing*.
+
+The solution is not better prioritization; it is the **elimination of the decision entirely**. This is the principle behind **pre-commitment devices** (Ariely & Wertenbroch, 2002): decisions made in advance, when executive function is available, are more rational and more likely to be honored than decisions made in the moment.
+
+The **Now Window** — a 90-minute rolling block centered on the current time — answers *"what should I do right now"* with a single answer. Not a list. Not a priority stack. **One task.** The user doesn't decide; they execute.
+
+The 90-minute span is not arbitrary. It maps directly to the **Ultradian rhythm** (Kleitman, 1963) — the brain's natural 90–120 minute cycle of high-focus to low-focus states. The Now Window is sized to match the brain's own concentration architecture.
+
+### Historical Precedent
+
+Military mission briefings operate on the same principle. A soldier is never handed a list of objectives and told to prioritize under fire. They are given **one objective for this moment**, with context. TaskFlow's Today View is a *mission briefing*, not a to-do list.
+
+### How TaskFlow Implements This
+
+```bash
+taskflow today
+
+── TODAY · Thursday, 25 Apr ──────────────────────
+✓  09:00  Write API docs            [done]
+▶  11:00  Review PR for backend     [NOW ← you are here]
+          High · #work · 1h · ends ~12:00
+   14:00  Team standup
+   16:00  Deploy to staging         ⚠ HARD · 4h left
+──────────────────────────────────────────────────
+Next mission: Review PR (started 11 min ago)
+```
+
+A single `▶ [NOW ← you are here]` marker is placed on the one task whose deadline falls inside the window. If multiple tasks fall inside it, the earliest gets `[NOW]` and the rest are marked `[WINDOW]` — the user still sees only one *primary* answer. If nothing is in the window, the next upcoming mission is surfaced instead. The list informs; the marker decides.
+
+---
+
+## ⚖️ 9. Forced Confrontation — Why Silent "Overdue" Labels Are a Design Failure
+
+### The Psychology
+
+Most productivity apps mark a missed deadline as "overdue" and leave it in the list indefinitely. This is psychologically catastrophic for two reasons.
+
+**First: habituation.** The red "overdue" badge, seen daily for weeks, becomes invisible. The brain learns to filter it. Avoidance thrives in what psychologists call **commitment-free zones** — states where a task exists but no decision has been made about it.
+
+**Second: the open loop.** The task sits in what Bluma **Zeigarnik (1927)** described as an open loop — consuming working memory even when unattended (see also [Section 13](#-13-frictionless-capture--the-zeigarnik-effect)). The brain cannot fully release a task until a conscious decision is made about it. An "overdue" label makes no such demand. The loop stays open. The cognitive drain continues indefinitely.
+
+The **Execute / Postpone / Drop / Offload** framework forces a *closure decision*. It is built on David Allen's GTD "next action" principle but adds a crucial fourth dimension: **Offload**. Most task systems assume every task either gets done or gets dropped. The real world has a third state: *"this is no longer my responsibility."* Naming it explicitly — Offload — converts passive neglect into **conscious release**.
+
+The Offload option specifically addresses **task-ownership confusion**: the lingering cognitive cost of tasks you feel you *should* do but aren't actually accountable for. Naming it closes the loop and frees the mental space.
+
+### How TaskFlow Implements This
+
+```bash
+⚠  Mission window missed: Review PR
+What do you want to do?
+  [E]  Execute now
+  [P]  Postpone
+  [D]  Drop
+  [O]  Offload / not my job
+```
+
+Crucially, this confrontation lives in a **dedicated `taskflow missed` command**, not inside `taskflow list`. A read command must stay a read command: `taskflow list` *shows* information and never traps the user in a prompt. The confrontation is something the user opts into when they are ready to make decisions — preserving both the integrity of the list view and the user's sense of agency (a theme that returns in [Recovery Mode](#-15-recovery-mode--cognitive-overload-defense)).
+
+---
+
+## 🪞 10. The Postpone Mirror — Accountability Without Judgment
+
+### The Psychology
+
+**Self-confrontation** is one of the most powerful behavior-change mechanisms known to psychology (Silvia & Duval, 2001). When people are made aware of a discrepancy between their *intentions* and their *behavior* — **without external judgment** — they self-correct far more effectively than when corrected by external pressure or shame. This is the theoretical basis of motivational interviewing, therapeutic reflection, and journaling: **the mirror is more powerful than the lecture.**
+
+The neuroscience explains *why*. Shame and external judgment activate the brain's **threat response (amygdala)**, which suppresses the prefrontal cortex — the very region needed for rational planning and behavior change. Self-reflection, by contrast, activates the **medial prefrontal cortex**, the region associated with self-awareness and intentional change. A guilt message makes the problem worse at the neural level; a neutral mirror makes it better.
+
+The number **"Postponed 4×"** requires no commentary. No warning. No lecture. It simply holds up a mirror. The user sees their own pattern, and the judgment is *entirely self-generated* — and therefore far more powerful than any system-generated guilt.
+
+The escalation system applies the principle of **graduated response** — consequences increase in proportion to the behavior, which research shows is more behavior-modifying than constant high-level warnings (habituation, again): a gentle note at 2×, a reflective box at 3–4×, and the removal of the easy way out at 5×.
+
+### How TaskFlow Implements This
+
+```bash
+┌─────────────────────────────────────────┐
+│  ⚠  Postponed 4 times.                  │
+│  This keeps getting pushed back.        │
+│  Is it actually going to happen?        │
+└─────────────────────────────────────────┘
+  [E]  Execute now — just do it
+  [D]  Drop it — it's not happening
+  [O]  Offload — not your responsibility
+```
+
+After the **fifth** postpone, the Postpone option is *no longer offered* — the system stops enabling the pattern and forces a real decision (Execute, Drop, or Offload). The counter is mirrored everywhere the task appears: a `(postponed ×N)` suffix in `taskflow list` and `taskflow today`, and an amber→red `postponed ×N` badge on the Web HUD card. The `postpone_velocity` (average hours between deferrals) is recorded silently as a future avoidance signal — rapid re-postponing is a far stronger tell than a high count alone.
+
+---
+
+## 🔔 11. The Signal Problem — Why Fixed Reminders Train You to Ignore Everything
+
+### The Psychology
+
+Notification overload is a well-documented crisis in modern productivity. Research by **Stothart et al. (2015)** found that *even receiving a notification — without reading it —* significantly impairs cognitive performance. The mere presence of an alert consumes attention.
+
+The deeper problem is **habituation through repetition**. A system that fires the same reminder for a 15-minute low-priority task and a 2-hour critical presentation trains the brain to treat all reminders as noise. This is **operant extinction**: when a stimulus produces no reward-relevant signal often enough, the brain stops processing it. The fix is not *fewer* reminders — it is **contextually intelligent** reminders. A reminder must *earn* its interruption by being precisely matched to the stakes and timing of what it is reminding about.
+
+This is the psychology of the **thoughtful colleague**. A trusted co-worker who says *"hey, that presentation is in 2 hours — you might want to start preparing"* is not annoying; they are helpful. The same person saying *"reminder: you have tasks"* every hour regardless of context would be insufferable. TaskFlow's reminder engine models the thoughtful colleague, not the alarm.
+
+The **once-per-task firing model** — combined with an explicit *"Dismiss forever"* — respects a critical psychological boundary: **autonomy**. Systems that respect user autonomy build trust; systems that ignore it build resentment.
+
+> A note on honesty: TaskFlow is CLI-first with no always-on background process. Reminders are calculated and stored on the task, then *checked at the start of every command* and fired if due. This is honest, on-demand checking — not a fake push service.
+
+### How TaskFlow Implements This
+
+Reminder timing is derived from the **deadline type** ([Section 5](#-5-deadline-taxonomy--why-treating-all-deadlines-the-same-is-a-design-failure)) crossed with priority — the higher the stakes, the earlier and more layered the warning:
+
+| Priority + Deadline Type | Primary Reminder | Secondary Reminder |
+|:---|:---|:---|
+| HIGH/CRITICAL + HARD | 2h before | 30min before |
+| MEDIUM + HARD | 1h before | 20min before |
+| LOW + HARD | 30min before | — |
+| HIGH/CRITICAL + SOFT | 1h before | — |
+| MEDIUM + SOFT | 30min before | — |
+| LOW + SOFT | 15min before | — |
+
+```bash
+╔══════════════════════════════════════════════╗
+║  🔔  REMINDER                                 ║
+║  Task:     Prepare client demo                ║
+║  Due:      Today at 15:00 (in 1h 47m)         ║
+║  Priority: High  ·  Duration: 2h  · HARD      ║
+╚══════════════════════════════════════════════╝
+  [Enter] Noted  ·  [D] Dismiss forever  ·  [S] Start focus
+```
+
+Only HARD + HIGH/CRITICAL tasks earn a *second* reminder — the rarest, highest-stakes work gets the most attention, and everything else stays quiet. The system also records the gap between a reminder firing and the user actually starting the task (`reminder_to_action_gap_minutes`), a quiet measure of whether the timing is genuinely helpful.
+
+---
+
+## 🛡️ 12. Focus Protocol — Flow State Engineering
 
 ### The Psychology
 
@@ -163,7 +446,7 @@ taskflow focus --id 7 --minutes 45 --mode strict --block-sites youtube.com,twitt
 
 ---
 
-## 📥 5. Frictionless Capture — The Zeigarnik Effect
+## 📥 13. Frictionless Capture — The Zeigarnik Effect
 
 ### The Psychology
 
@@ -190,7 +473,7 @@ The **2-Second Rule**: if the thought can leave your head in under 2 seconds, yo
 
 ---
 
-## 📈 6. Dopamine & Momentum — Behavioral Persistence
+## 📈 14. Dopamine & Momentum — Behavioral Persistence
 
 ### The Psychology
 
@@ -212,7 +495,7 @@ Video games exploit this brilliantly:
 
 ---
 
-## 🚨 7. Recovery Mode — Cognitive Overload Defense
+## 🚨 15. Recovery Mode — Cognitive Overload Defense
 
 ### The Psychology
 
@@ -234,9 +517,88 @@ When the system detects too many missed deadlines in a single day, it triggers *
 
 This is the digital equivalent of a **combat medic performing triage** — you can't save everything, so the system forces you to save what matters most.
 
+### The Two Functions of Recovery Mode
+
+Recovery Mode serves two psychologically *distinct* functions that must never be confused:
+
+**Function 1 — Involuntary rescue (system-triggered).** When the system detects 3+ missed tasks, or any missed HARD deadline, it offers recovery automatically. This is the amygdala-hijack intervention described above: forced triage when the brain's threat response has overwhelmed its planning capacity.
+
+**Function 2 — Voluntary simplification (user-triggered).** Some users enter Recovery Mode by *conscious choice* — not because their day collapsed, but because they feel overwhelmed and want to deliberately reduce cognitive load. The ability to trigger it manually serves an entirely different psychological function: **agency**.
+
+The psychology of agency is critical. Langer & Rodin (1976) demonstrated that people with a sense of control over their environment show measurably better outcomes across virtually every dimension measured — from productivity to health. *"This happened to me"* (involuntary) breeds learned helplessness. *"I chose this"* (voluntary) breeds empowerment. The two states can look identical from the outside; the internal experience is completely different. TaskFlow therefore makes recovery **opt-in even when auto-detected** — it asks, it never forces.
+
+### The Temporal Trigger — 5pm and 6pm
+
+The time-based auto-trigger is not arbitrary. **5pm–6pm is the decision-fatigue trough** of the standard cognitive day — the window when willpower resources are at their lowest (Baumeister, 2011) and avoidance is at its highest. It is also the **salvage window**: the user still has 3–4 hours of day remaining. *Enough to do something. Not enough to do everything.*
+
+A system that triggers recovery at 2pm says *"you failed."* A system that triggers it at 6pm says *"there's still time."* The emotional framing is completely different even when the trigger condition is identical.
+
+The **pre-recovery warning at 5pm** applies the **implementation-intention** research (Gollwitzer, 1999): a warning *before* a threshold drives more behavior change than the threshold itself. *"Focus window closing in 1 hour"* prompts action. *"You've missed everything"* prompts shame.
+
+### Task Selection Science
+
+The scoring algorithm that selects the 1–2 recovery missions reflects two principles:
+
+| Signal | Score | Rationale |
+|:---|:---:|:---|
+| HARD deadline, due today | **+100** | Highest external consequence |
+| CRITICAL / HIGH priority | **+50** | Pareto-weighted importance |
+| Deadline within 2 hours | **+30** | Immediacy |
+| Duration ≤ 30m (quick win) | **+20** | Momentum / self-efficacy |
+| Postponed ≥ 2× | **−10** | Chronic avoiders deprioritized |
+
+1. **Pareto-weighted urgency** surfaces the tasks with the highest external consequence first (HARD deadlines, HIGH priority).
+2. **Quick-win momentum** — the `+20` bonus for short tasks is deliberate. Bandura's **self-efficacy** research (1977) shows that completing a small task first restores the belief *"I can do this,"* the psychological state required to then tackle the harder items. Recovery is as much about rebuilding confidence as clearing work.
+
+### The Post-Recovery Badge
+
+The *"Day recovered"* badge that persists after a recovery session is not decorative. It serves the **Progress Principle** (Amabile & Kramer, 2011) — making progress visible — but more importantly it **reframes the narrative of the day**. *"I had a difficult day and I recovered"* is psychologically very different from *"I missed a lot of tasks today."* Same facts; different story. The badge changes the story.
+
+### The Reversibility Principle
+
+Recovery Mode can **always** be exited. This is not a technical convenience — it is a psychological requirement. Systems that trap users provoke **reactance** (Brehm, 1966): resistance to a perceived loss of freedom. The Exit control is clearly visible, always accessible, and never buried behind multiple confirmations. (Notice the exit dialog even frames *staying* as the positive choice — *"Keep going — stay focused"* — nudging without trapping.) Respecting reversibility is how the system keeps the user's trust.
+
+### How TaskFlow Implements This
+
+**Trigger conditions (automatic):**
+
+| Code | Condition |
+|:---:|:---|
+| **A** | 3+ missed tasks today |
+| **B** | Any HARD deadline missed today |
+| **C** | All morning tasks (6am–12pm) missed |
+| **D** | Manual trigger (`taskflow recover` / UI button) |
+
+**Time-based triggers (UI):**
+- **5:00pm** — Pre-recovery warning banner (gentle amber)
+- **6:00pm** — Recovery prompt overlay (opt-in, never forced)
+- **Weekends** — Never triggers automatically
+
+**Entry points in the Web HUD** (agency made tangible — four ways in):
+- Attention banner: `Salvage my day →` button
+- Sidebar: a `Recovery` nav item (amber, always visible)
+- Right panel: `SALVAGE MY DAY` button
+- Priority Alerts: `Activate Recovery Mode` button
+
+```bash
+⚡  RECOVERY MODE
+Today's been rough. Let's salvage what matters.
+
+Your 2 remaining missions:
+  Client demo prep     [HIGH · HARD · 45m]
+  Due: Today at 17:00 · 2h 12m left
+  Reply to client      [HIGH · 10m]
+  Due: Today at 18:00 · 3h 12m left
+
+Everything else is paused. Focus on these.
+  [F] Start focus   [C] Complete   [A] Show all   [X] Exit
+```
+
+When the last session task is completed, recovery **auto-exits** with a brief celebration (*"You saved the day."*) and writes the day-recovered badge — closing the loop on a high note rather than dropping the user back into a wall of deferred work.
+
 ---
 
-## ⚡ 8. Dual-Mode Reality Engine — Temporal Structuring
+## ⚡ 16. Dual-Mode Reality Engine — Temporal Structuring
 
 ### The Psychology
 
@@ -318,6 +680,19 @@ graph TD
 | The Progress Principle | Amabile, T. & Kramer, S. (2011) |
 | Mere Urgency Effect | Zhu, M., Yang, Y., & Hsee, C. (2018) |
 | Dopamine & Motivation | Schultz, W. (1997). *Predictive Reward Signal of Dopamine Neurons* |
+| Implementation Intentions | Gollwitzer, P.M. (1999). *Implementation intentions* |
+| Reference Class Forecasting | Flyvbjerg, B. (2006). *From Nobel Prize to project management* |
+| Behavior Model (Fogg) | Fogg, B.J. (2009). *A behavior model for persuasive design* |
+| Signal Detection Theory | Green, D.M. & Swets, J.A. (1966). *Signal detection theory* |
+| Decision Fatigue | Baumeister, R. et al. (1998). *Ego depletion* |
+| Ultradian Rhythms | Kleitman, N. (1963). *Sleep and Wakefulness* |
+| Pre-commitment Devices | Ariely, D. & Wertenbroch, K. (2002) |
+| Self-confrontation | Silvia, P.J. & Duval, T.S. (2001) |
+| Notification Impairment | Stothart, C. et al. (2015). *The attentional cost of receiving a cell phone notification* |
+| Yerkes-Dodson Law | Yerkes, R.M. & Dodson, J.D. (1908) |
+| Agency and Control | Langer, E. & Rodin, J. (1976). *The effects of choice and enhanced personal responsibility* |
+| Self-efficacy | Bandura, A. (1977). *Self-efficacy: Toward a unifying theory* |
+| Psychological Reactance | Brehm, J.W. (1966). *A Theory of Psychological Reactance* |
 
 ---
 
