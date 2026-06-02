@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>TaskFlow — LinkedIn Card</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #07090d;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    padding: 40px 20px;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  /* ─── THE CARD (1200 × 628 — LinkedIn link preview) ─── */
+  #card {
+    position: relative;
+    width: 1200px;
+    height: 628px;
+    background: #0D1117;
+    overflow: hidden;
+    border-radius: 4px;
+  }
+
+  /* Ambient radial blobs */
+  .blob { position: absolute; border-radius: 50%; pointer-events: none; }
+  .blob-tl { top: -160px; left: -120px; width: 400px; height: 400px;
+    background: radial-gradient(circle, rgba(31,111,235,0.06) 0%, transparent 70%); }
+  .blob-br { bottom: -150px; right: -100px; width: 350px; height: 350px;
+    background: radial-gradient(circle, rgba(124,58,237,0.04) 0%, transparent 70%); }
+  .blob-c { top: 50%; left: 50%; width: 250px; height: 250px; transform: translate(-50%, -60%);
+    background: radial-gradient(circle, rgba(31,111,235,0.02) 0%, transparent 70%); }
+
+  /* Content row: three zones */
+  .content {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    gap: 20px;
+    padding: 0 30px;
+    height: 596px;           /* 628 − 32px bottom strip */
+    align-items: center;
+  }
+
+  /* ── LEFT ZONE ── */
+  .zone-left { width: 450px; display: flex; flex-direction: column; }
+  .logo { font-size: 32px; letter-spacing: -1px; line-height: 1; }
+  .logo .t { color: #8B949E; font-weight: 300; }
+  .logo .f { color: #58A6FF; font-weight: 600; }
+  .ver { color: #6E7681; font-size: 14px; font-family: 'DM Mono', monospace; margin-top: 8px; }
+  .headline {
+    margin-top: 32px;
+    font-size: 31px; font-weight: 300; color: #E6EDF3;
+    letter-spacing: -0.5px; line-height: 1.2;
+  }
+  .pills { margin-top: 20px; display: grid; grid-template-columns: repeat(2, max-content); gap: 8px; }
+  .pill {
+    background: rgba(88,166,255,0.08);
+    border: 1px solid rgba(88,166,255,0.15);
+    border-radius: 20px; padding: 4px 12px;
+    font-size: 12px; color: #58A6FF; white-space: nowrap;
+  }
+  .repo { margin-top: 32px; color: #6E7681; font-size: 13px; font-family: 'DM Mono', monospace; }
+
+  /* ── CENTER ZONE — terminal ── */
+  .zone-center { width: 320px; display: flex; align-items: center; justify-content: center; }
+  .terminal {
+    width: 100%;
+    background: #161B22;
+    border: 1px solid #21262D;
+    border-radius: 10px;
+    padding: 16px;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.5);
+  }
+  .term-bar { display: flex; align-items: center; margin-bottom: 14px; }
+  .dots { display: flex; gap: 6px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .dot.r { background: #F85149; } .dot.a { background: #D29922; } .dot.g { background: #3FB950; }
+  .term-title { margin-left: auto; color: #6E7681; font-size: 11px; font-family: 'DM Mono', monospace; }
+  .term-body { font-family: 'DM Mono', monospace; font-size: 12px; line-height: 1.8; white-space: pre; }
+  .term-body .rule { color: #30363D; }
+  .term-body .done { color: #6E7681; }
+  .term-body .now-row { color: #E6EDF3; }
+  .term-body .now-tag { color: #58A6FF; }
+  .term-body .normal { color: #8B949E; }
+  .term-body .hard { color: #F85149; }
+  .term-body .next { color: #58A6FF; }
+
+  /* ── RIGHT ZONE — stat cards ── */
+  .zone-right { width: 330px; display: flex; flex-direction: column; gap: 12px; }
+  .stat {
+    position: relative;
+    background: #161B22;
+    border: 1px solid #21262D;
+    border-radius: 8px;
+    padding: 12px 16px;
+  }
+  .stat.blue   { border-left: 3px solid #58A6FF; }
+  .stat.amber  { border-left: 3px solid #D29922; }
+  .stat.purple { border-left: 3px solid #A371F7; }
+  .stat .label { color: #6E7681; font-size: 9px; letter-spacing: 1px; text-transform: uppercase; font-weight: 600; }
+  .stat .body  { color: #C9D1D9; font-size: 13px; margin-top: 5px; line-height: 1.4; }
+  .stat .phase-badge {
+    position: absolute; top: 12px; right: 12px;
+    background: rgba(163,113,247,0.12); border: 1px solid rgba(163,113,247,0.3);
+    color: #A371F7; border-radius: 20px; padding: 2px 10px; font-size: 10px; font-weight: 600;
+  }
+
+  /* ── BOTTOM STRIP ── */
+  .strip {
+    position: absolute; bottom: 0; left: 0; right: 0; height: 32px; z-index: 2;
+    background: #161B22; border-top: 1px solid #21262D;
+    display: flex; align-items: center; justify-content: center;
+    color: #6E7681; font-size: 11px; font-family: 'DM Mono', monospace;
+  }
+
+  /* ── Download control (not captured) ── */
+  .controls { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  #download {
+    background: linear-gradient(135deg, #1F6FEB, #388BFD);
+    color: #fff; border: none; border-radius: 10px;
+    padding: 12px 28px; font-size: 14px; font-weight: 600; cursor: pointer;
+    font-family: 'Inter', sans-serif; transition: all 150ms ease;
+    box-shadow: 0 4px 16px rgba(31,111,235,0.35);
+  }
+  #download:hover { transform: translateY(-1px); box-shadow: 0 8px 28px rgba(31,111,235,0.55); }
+  #download:active { transform: translateY(0); }
+  .hint { color: #6E7681; font-size: 12px; font-family: 'DM Mono', monospace; }
+</style>
+</head>
+<body>
+
+  <div id="card">
+    <div class="blob blob-tl"></div>
+    <div class="blob blob-br"></div>
+    <div class="blob blob-c"></div>
+
+    <div class="content">
+
+      <!-- LEFT -->
+      <div class="zone-left">
+        <div class="logo"><span class="t">task</span><span class="f">Flow</span></div>
+        <div class="ver">v8.5.0</div>
+
+        <div class="headline">The task manager that works<br/>with your brain.</div>
+
+        <div class="pills">
+          <span class="pill">100% Offline</span>
+          <span class="pill">CLI-first</span>
+          <span class="pill">Open Source</span>
+          <span class="pill">Psychology-driven</span>
+        </div>
+
+        <div class="repo">github.com/Mohith535/TaskFlow</div>
+      </div>
+
+      <!-- CENTER -->
+      <div class="zone-center">
+        <div class="terminal">
+          <div class="term-bar">
+            <div class="dots">
+              <span class="dot r"></span><span class="dot a"></span><span class="dot g"></span>
+            </div>
+            <span class="term-title">taskflow today</span>
+          </div>
+          <div class="term-body"><span class="rule">── TODAY · Thursday ─────────</span>
+<span class="done">✓  09:00  Write docs</span>
+<span class="now-row">▶  11:00  Review PR  </span><span class="now-tag">[NOW]</span>
+<span class="normal">   14:00  Team standup</span>
+<span class="normal">   16:00  Deploy  </span><span class="hard">⚠ HARD</span>
+<span class="rule">──────────────────────────────</span>
+<span class="next">Next: Review PR · 1h · ends ~12:00</span></div>
+        </div>
+      </div>
+
+      <!-- RIGHT -->
+      <div class="zone-right">
+        <div class="stat blue">
+          <div class="label">EXECUTION PRESSURE</div>
+          <div class="body">Calm color shifts · no alarms</div>
+        </div>
+        <div class="stat amber">
+          <div class="label">RECOVERY MODE</div>
+          <div class="body">Bad day? Salvage the next 3 hours.</div>
+        </div>
+        <div class="stat purple">
+          <span class="phase-badge">Phase 3</span>
+          <div class="label">COMING SOON · AI LAYER</div>
+          <div class="body">Learns how you actually work.</div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="strip">Built by K Mohith Kannan · MIT License</div>
+  </div>
+
+  <div class="controls">
+    <button id="download">⬇  Download as PNG</button>
+    <div class="hint">1200 × 628 · exported at 2× for crisp LinkedIn previews</div>
+  </div>
+
+<script>
+  const btn = document.getElementById('download');
+  btn.addEventListener('click', async () => {
+    const original = btn.textContent;
+    btn.textContent = 'Rendering…';
+    btn.disabled = true;
+    try {
+      // Make sure the web fonts are loaded before we snapshot the card.
+      if (document.fonts && document.fonts.ready) { await document.fonts.ready; }
+      const card = document.getElementById('card');
+      const canvas = await html2canvas(card, {
+        scale: 2,
+        backgroundColor: '#0D1117',
+        useCORS: true,
+        logging: false,
+        width: 1200,
+        height: 628
+      });
+      const link = document.createElement('a');
+      link.download = 'taskflow-v8.5.0-linkedin.png';
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    } catch (e) {
+      alert('Export failed: ' + e.message + '\nTip: open this file over http:// (not file://) if the browser blocks the font/CDN.');
+    } finally {
+      btn.textContent = original;
+      btn.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>
