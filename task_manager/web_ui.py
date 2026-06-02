@@ -2059,12 +2059,30 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     </div>
                 </div>
 
+                <!-- 1. TODAY'S EXECUTION PATH (top priority) -->
+                <div class="mission-panel" id="cc-path-panel" style="padding: 24px; margin-top: 24px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <div class="section-label" style="margin:0; font-size:10px; letter-spacing:2px;">TODAY'S EXECUTION PATH</div>
+                        <div id="cc-path-meta" style="font-size:10px; color:var(--text-disabled); font-family:var(--font-mono);"></div>
+                    </div>
+                    <div id="cc-path-body" style="margin-top:16px; display:flex; flex-direction:column; gap:12px;">
+                        <!-- Filled by JS via /api/path -->
+                    </div>
+                    <button id="cc-path-regen" onclick="regeneratePath()"
+                        style="margin-top:16px; width:100%; background:transparent; border:1px dashed #30363D; color:#6E7681; font-size:11px; padding:10px; border-radius:8px; cursor:pointer; font-family:'DM Mono',monospace; letter-spacing:1px;">
+                        ↻ REGENERATE PATH
+                    </button>
+                </div>
+
+                <!-- 2. NOW WINDOW (what to do right now) -->
+                <div id="cc-now" style="margin-top:16px;"></div>
+
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 32px;">
                     
                     <!-- 2. UPCOMING MISSIONS -->
                     <div class="mission-panel" style="padding: 24px;">
                         <div id="cc-approaching-banner" style="margin-bottom: 12px; padding: 10px; border-radius: 8px; font-weight: 700; font-size: 12px; display: none; align-items: center; gap: 8px;"></div>
-                        <div class="section-label">UPCOMING MISSIONS</div>
+                        <div class="section-label">TODAY'S MISSIONS</div>
                         <div id="cc-upcoming" style="min-height: 120px; color: var(--text-muted); font-size: 12px; display: flex; flex-direction: column; gap: 8px; margin-top: 16px;">
                             <!-- Filled by JS -->
                         </div>
@@ -2116,21 +2134,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                         </div>
                     </div>
 
-                </div>
-
-                <!-- S10: DAILY EXECUTION PATH -->
-                <div class="mission-panel" id="cc-path-panel" style="padding: 24px; margin-top: 24px;">
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <div class="section-label" style="margin:0; font-size:10px; letter-spacing:2px;">EXECUTION PATH</div>
-                        <div id="cc-path-meta" style="font-size:10px; color:var(--text-disabled); font-family:var(--font-mono);"></div>
-                    </div>
-                    <div id="cc-path-body" style="margin-top:16px; display:flex; flex-direction:column; gap:12px;">
-                        <!-- Filled by JS via /api/path -->
-                    </div>
-                    <button id="cc-path-regen" onclick="regeneratePath()"
-                        style="margin-top:16px; width:100%; background:transparent; border:1px dashed #30363D; color:#6E7681; font-size:11px; padding:10px; border-radius:8px; cursor:pointer; font-family:'DM Mono',monospace; letter-spacing:1px;">
-                        ↻ REGENERATE PATH
-                    </button>
                 </div>
             </div>
         </div>
@@ -2590,7 +2593,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
             if (diffMs < 0) {
                 isOverdue = true; pressureLevel = 3;
-                text = 'OVERDUE · ' + (isToday ? 'Today ' + timeStr : dateStr + ' · ' + timeStr);
+                const overdueDays = Math.abs(diffMs) / 86400000;
+                if (overdueDays > 1) {
+                    // Fix 4: more than a day overdue → show the date, never hours
+                    text = 'OVERDUE — ' + deadline.toLocaleDateString([], {day:'numeric', month:'short'});
+                } else {
+                    text = 'OVERDUE · ' + (isToday ? 'Today ' + timeStr : dateStr + ' · ' + timeStr);
+                }
                 color = '#F85149';
             } else if (isToday) {
                 if (diffHr > 3) { text = 'Today at ' + timeStr; color = '#8B949E'; pressureLevel = 0; }
@@ -3152,6 +3161,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             if (data && data.adherence != null) m += ` · adherence ${Math.round(data.adherence * 100)}%`;
             meta.textContent = m;
         }
+        // stash today's path task IDs so TODAY'S MISSIONS can include them
+        try { window.tfPathIds = [].concat(prime, sec, low).map(x => x.id); } catch (e) {}
     }
     function loadPath() {
         fetch('/api/path').then(r => r.json()).then(renderPath).catch(() => {});
@@ -3197,6 +3208,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         }).catch(() => {});
     }
 
+    function tfStartFocus(id) {
+        fetch('/api/focus/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task_id: id, minutes: 25 }) })
+            .then(r => r.json())
+            .then(() => { try { showToast('Focus started · 25 min', 'var(--blue)'); } catch (e) {} setTimeout(() => { try { tfSyncFocusLock(); } catch (e) {} }, 400); })
+            .catch(() => {});
+    }
+
     function updateControlCenter() {
         const now = new Date();
         const activeTasks = allTasks.filter(t => !t.completed && t.status !== 'completed' && t.status !== 'done' && !t.dropped_at && !t.offloaded_at);
@@ -3233,49 +3251,55 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             }
         }
 
-        // ── PRIORITY ALERTS (Phase 1: Real alerts from data) ──
+        // ── PRIORITY ALERTS (Fix 1: today-focused, MAX 3, old overdue collapsed) ──
         const alertsContainer = document.getElementById('cc-alerts');
         if (alertsContainer) {
+            const todayStr = now.toDateString();
             let alerts = [];
+            let oldMissed = 0;
             activeTasks.forEach(t => {
                 const dl = formatDeadline(t.deadline);
-                if (dl && dl.isOverdue && t.deadline_type === 'hard') {
-                    alerts.push({type:'missed', title:t.title, meta:'Was due: '+dl.text.replace('OVERDUE · ',''), sort:0});
-                } else if (dl && dl.pressureLevel >= 2 && t.deadline_type === 'hard') {
-                    alerts.push({type:'urgent', title:t.title, meta:dl.text, sort:1});
+                if (!dl) return;
+                const dlDate = new Date(t.deadline);
+                if (isNaN(dlDate.getTime())) return;
+                const overdueDays = (now - dlDate) / 86400000;
+                const isHard = t.deadline_type === 'hard';
+                const dueToday = dlDate.toDateString() === todayStr;
+                // Collapse anything overdue by more than 3 days into one summary line
+                if (dl.isOverdue && overdueDays > 3) { oldMissed++; return; }
+                if (isHard && dueToday && dl.isOverdue) {
+                    alerts.push({title:t.title, meta:'Hard deadline · due today, overdue', icon:'⚠ HARD DEADLINE TODAY', color:'#F85149', sort:0});
+                } else if (isHard && dueToday && dl.pressureLevel >= 2) {
+                    alerts.push({title:t.title, meta:dl.text, icon:'⚡ HARD DEADLINE APPROACHING', color:'#D29922', sort:1});
+                } else if (isHard && dl.isOverdue) {
+                    alerts.push({title:t.title, meta:'Was due: '+dl.text.replace(/OVERDUE [·—]\s*/, ''), icon:'⚠ HARD DEADLINE MISSED', color:'#F85149', sort:1.5});
                 } else if ((t.postpone_count||0) >= 3) {
-                    const isSevere = t.postpone_count >= 5;
-                    alerts.push({
-                        type: isSevere ? 'deferred-severe' : 'deferred',
-                        title: t.title,
-                        meta: 'Postponed ' + t.postpone_count + '×' + (isSevere ? ' ⚠⚠' : ' ⚠'),
-                        sort: isSevere ? 0.5 : 2
-                    });
-                } else if (dl && dl.isOverdue) {
-                    alerts.push({type:'soft-passed', title:t.title, meta:'Soft deadline passed · '+dl.text.replace('OVERDUE · ',''), sort:2.5});
+                    const severe = t.postpone_count >= 5;
+                    alerts.push({title:t.title, meta:'Postponed '+t.postpone_count+'×'+(severe?' ⚠⚠':' ⚠'), icon: severe?'🚨 REPEATEDLY DEFERRED':'↩ REPEATEDLY DEFERRED', color: severe?'#F85149':'#D29922', sort:2});
                 }
             });
             alerts.sort((a,b) => a.sort - b.sort);
-            alerts = alerts.slice(0, 5);
+            alerts = alerts.slice(0, 3);
 
+            let html = '';
             if (alerts.length > 0) {
-                alertsContainer.innerHTML = alerts.map(a => {
-                    const cls = a.type === 'missed' ? 'missed' : (a.type === 'deferred-severe' ? 'deferred-severe' : (a.type === 'urgent' ? 'urgent' : (a.type === 'soft-passed' ? 'soft' : 'deferred')));
-                    const icon = a.type === 'missed' ? '⚠ HARD DEADLINE MISSED' : (a.type === 'deferred-severe' ? '🚨 REPEATEDLY DEFERRED (5+ TIMES)' : (a.type === 'urgent' ? '⚡ DEADLINE APPROACHING' : (a.type === 'soft-passed' ? 'ℹ SOFT DEADLINE PASSED' : '↩ REPEATEDLY DEFERRED')));
-                    const iconColor = a.type === 'deferred' ? '#D29922' : (a.type === 'deferred-severe' ? '#F85149' : (a.type === 'missed' ? '#F85149' : (a.type === 'soft-passed' ? '#8B949E' : '#D29922')));
-                    return `<div class="alert-card ${cls}">
-                        <div class="alert-type" style="color:${iconColor}">${icon}</div>
+                html = alerts.map(a => `<div class="alert-card">
+                        <div class="alert-type" style="color:${a.color}">${a.icon}</div>
                         <div class="alert-title">${a.title}</div>
                         <div class="alert-meta">${a.meta}</div>
-                    </div>`;
-                }).join('');
-            } else {
-                alertsContainer.innerHTML = '<div style="color:#3FB950; font-size:13px;">✓ All systems nominal. No critical alerts.</div>';
+                    </div>`).join('');
+            } else if (oldMissed === 0) {
+                html = '<div style="color:#3FB950; font-size:13px;">✓ All systems nominal.</div>';
             }
+            if (oldMissed > 0) {
+                html += `<div style="margin-top:8px;background:rgba(248,81,73,0.04);border:1px solid rgba(248,81,73,0.1);color:#F85149;font-size:12px;border-radius:8px;padding:8px 14px;">⚠ ${oldMissed} older missed deadline${oldMissed!==1?'s':''} pending review<br><span style="opacity:0.7;">Run: <span style="font-family:'DM Mono',monospace;">taskflow missed</span> to address them</span></div>`;
+            }
+            alertsContainer.innerHTML = html;
+
             // Entry point 4 — Recovery activation/exit from Priority Alerts
             if (recoveryActive) {
                 alertsContainer.innerHTML += `<div class="rec-alerts-zone"><button class="rec-alerts-btn active" onclick="tfRecExitConfirm()">⚡ Recovery Mode Active · Exit</button></div>`;
-            } else if (alerts.length > 0) {
+            } else if (alerts.length > 0 || oldMissed > 0) {
                 alertsContainer.innerHTML += `<div class="rec-alerts-zone"><button class="rec-alerts-btn" onclick="tfRecEntryConfirm()">⚡  ACTIVATE RECOVERY MODE</button></div>`;
             }
         }
@@ -3285,79 +3309,94 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         // S11: keep the focus-lock UI (deploy button + queue badge) in sync
         try { tfSyncFocusLock(); } catch (e) {}
 
-        // ── UPCOMING MISSIONS ──
+        // helper: is a task within the ±45-min NOW window
+        function isInNowWindow(t) {
+            if (!t.deadline) return false;
+            const d = new Date(t.deadline);
+            if (isNaN(d.getTime())) return false;
+            const m = (d - now) / 60000;
+            return m >= -45 && m <= 45;
+        }
+
+        // ── NOW WINDOW (Fix 1: the single task to work on right now) ──
+        const nowEl = document.getElementById('cc-now');
+        if (nowEl) {
+            const inWindow = activeTasks.filter(isInNowWindow).sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
+            const futureNow = activeTasks.filter(t => t.deadline && new Date(t.deadline) > now).sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
+            if (inWindow.length > 0) {
+                const t = inWindow[0];
+                const dl = formatDeadline(t.deadline);
+                const durStr = t.duration ? (' · ' + t.duration) : '';
+                nowEl.innerHTML = `<div style="background:rgba(88,166,255,0.06);border:1px solid rgba(88,166,255,0.2);border-left:3px solid #58A6FF;border-radius:10px;padding:16px 20px;display:flex;align-items:center;gap:16px;">
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-size:10px;color:#58A6FF;letter-spacing:2px;font-weight:700;">NOW ← YOU ARE HERE</div>
+                        <div style="font-size:16px;color:#E6EDF3;font-weight:500;margin-top:4px;">${t.title}</div>
+                        <div style="font-size:11px;color:var(--text-disabled);margin-top:4px;font-family:'DM Mono',monospace;">${t.priority}${durStr}${dl ? ' · ' + dl.text : ''}</div>
+                    </div>
+                    <button onclick="tfStartFocus(${t.id})" style="background:linear-gradient(135deg,#1F6FEB,#388BFD);border:none;border-radius:8px;height:36px;width:120px;color:#fff;font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0;">Start Focus</button>
+                </div>`;
+            } else if (futureNow.length > 0) {
+                const t = futureNow[0];
+                const mins = Math.round((new Date(t.deadline) - now) / 60000);
+                nowEl.innerHTML = `<div style="font-size:12px;color:var(--text-muted);padding:4px 2px;">Next mission: <span style="color:#58A6FF;">${t.title}</span> · in ${mins} min</div>`;
+            } else {
+                nowEl.innerHTML = '';
+            }
+        }
+
+        // ── TODAY'S MISSIONS (Fix 1: strictly today — never weeks-old overdue) ──
         const upcomingContainer = document.getElementById('cc-upcoming');
         if (upcomingContainer) {
-            const upcomingTasks = [...activeTasks];
-            upcomingTasks.sort((a, b) => {
-                if (a.deadline && b.deadline) {
-                    return new Date(a.deadline) - new Date(b.deadline);
+            const todayIso = now.toISOString().slice(0, 10);
+            const todayStr2 = now.toDateString();
+            const pathIds = window.tfPathIds || [];
+            const todays = activeTasks.filter(t => {
+                if (t.deadline) {
+                    const d = new Date(t.deadline);
+                    if (!isNaN(d.getTime()) && d.toDateString() === todayStr2) return true;
                 }
+                if (t.scheduled_date && t.scheduled_date === todayIso) return true;
+                if (pathIds.indexOf(t.id) !== -1) return true;
+                if (!t.deadline && t.created_at && String(t.created_at).slice(0, 10) === todayIso) return true;
+                return false;
+            });
+            todays.sort((a, b) => {
+                const aw = isInNowWindow(a), bw = isInNowWindow(b);
+                if (aw !== bw) return aw ? -1 : 1;
+                if (a.deadline && b.deadline) return new Date(a.deadline) - new Date(b.deadline);
                 if (a.deadline) return -1;
                 if (b.deadline) return 1;
-                const pOrder = {critical: 0, strategic: 1, noise: 2, purge: 3, high: 0, medium: 1, low: 2};
-                return (pOrder[(a.priority||'medium').toLowerCase()]||1) - (pOrder[(b.priority||'medium').toLowerCase()]||1);
+                return 0;
             });
-            
-            const upcoming = upcomingTasks.slice(0, 4);
-            
-            function isTaskInWindow(task) {
-                if (!task.deadline) return false;
-                const deadline = new Date(task.deadline);
-                if (isNaN(deadline.getTime())) return false;
-                const diffMin = (deadline - new Date()) / 60000;
-                return diffMin >= -45 && diffMin <= 45;
-            }
 
-            upcomingContainer.innerHTML = upcoming.length > 0
-                ? upcoming.map((t, idx) => {
+            if (todays.length === 0) {
+                upcomingContainer.innerHTML = `<div style="opacity:0.6;font-size:13px;">No missions for today.</div>
+                    <button onclick="toggleCreateMission()" style="margin-top:10px;background:rgba(88,166,255,0.1);border:1px solid rgba(88,166,255,0.2);color:var(--blue);border-radius:8px;padding:8px 14px;font-size:12px;cursor:pointer;">+ Create Mission</button>`;
+            } else {
+                upcomingContainer.innerHTML = todays.slice(0, 6).map(t => {
                     const np = normalizePriority(t.priority);
-                    const isNow = isTaskInWindow(t);
+                    const isNow = isInNowWindow(t);
                     const borderColor = isNow ? 'var(--blue)' : (np === 'high' ? 'var(--red)' : np === 'medium' ? 'var(--amber)' : 'var(--blue)');
                     const dlInfo = formatDeadline(t.deadline);
                     const dlStr = dlInfo ? `<span style="font-size:10px;color:${dlInfo.color};margin-left:8px;font-family:'DM Mono',monospace;">${dlInfo.text}</span>` : '';
-                    
                     const nowBadge = isNow ? `<span style="background:rgba(88,166,255,0.2);color:var(--blue);font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;margin-right:6px;letter-spacing:0.5px;">NOW</span>` : '';
-                    
-                    let detailsLine = '';
-                    if (idx === 0) {
-                        const duration = t.duration || 'No estimated duration';
-                        let endsStr = '';
-                        if (t.duration && t.deadline) {
-                            try {
-                                const durVal = t.duration.toLowerCase();
-                                let mins = 0;
-                                if (durVal.includes('m')) mins = parseInt(durVal);
-                                else if (durVal.includes('h')) mins = parseFloat(durVal) * 60;
-                                if (mins > 0) {
-                                    const endDt = new Date(new Date(t.deadline).getTime() + mins * 60000);
-                                    endsStr = ` · Ends ~${endDt.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'})}`;
-                                }
-                            } catch(err) {}
-                        }
-                        detailsLine = `<div style="font-size:11px;color:var(--text-disabled);margin-top:6px;font-family:'DM Mono',monospace;">Est. duration: ${duration}${endsStr}</div>`;
-                    }
-                    
+                    // Fix 3: only show a duration line when one is actually set
+                    const durLine = t.duration ? `<div style="font-size:11px;color:var(--text-disabled);margin-top:6px;font-family:'DM Mono',monospace;">Est. ${t.duration}</div>` : '';
                     return `<div style="padding:12px;background:rgba(255,255,255,0.02);border-radius:8px;border-left:3px solid ${borderColor};">
-                        <div style="display:flex;align-items:center;flex-wrap:wrap;">
-                            ${nowBadge}${t.title}${dlStr}
-                        </div>
-                        ${detailsLine}
+                        <div style="display:flex;align-items:center;flex-wrap:wrap;">${nowBadge}${t.title}${dlStr}</div>
+                        ${durLine}
                     </div>`;
-                }).join('')
-                : '<div style="opacity:0.5;">Queue transparent.</div>';
+                }).join('');
 
-            // S4-H: "Next: <title> · in N min" line below the upcoming list
-            const nextT = upcoming.find(t => t.deadline && new Date(t.deadline) > now) || upcoming[0];
-            if (nextT) {
-                let nextStr;
-                if (nextT.deadline) {
-                    const mins = Math.round((new Date(nextT.deadline) - now) / 60000);
-                    nextStr = mins >= 0 ? `Next: ${nextT.title} · in ${mins} min` : `Next: ${nextT.title} · overdue`;
-                } else {
-                    nextStr = `Next: ${nextT.title}`;
+                // Fix 3: Next = earliest deadline >= now; if all overdue → taskflow missed (not "Next: overdue")
+                const future2 = todays.filter(t => t.deadline && new Date(t.deadline) >= now).sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
+                if (future2.length > 0) {
+                    const nt = future2[0];
+                    const mins = Math.round((new Date(nt.deadline) - now) / 60000);
+                    upcomingContainer.innerHTML += `<div style="margin-top:10px;font-size:12px;color:#58A6FF;">Next: ${nt.title} · in ${mins} min</div>`;
+                } else if (todays.some(t => t.deadline && new Date(t.deadline) < now)) {
+                    upcomingContainer.innerHTML += `<div style="margin-top:10px;font-size:12px;color:#D29922;">All scheduled missions overdue. Run: <span style="font-family:'DM Mono',monospace;">taskflow missed</span></div>`;
                 }
-                upcomingContainer.innerHTML += `<div style="margin-top:10px;font-size:12px;color:#58A6FF;">${nextStr}</div>`;
             }
         }
 

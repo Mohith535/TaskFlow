@@ -94,8 +94,11 @@ def format_deadline_display(task: Task) -> str:
         hard_tag = " ⚠ HARD" if is_hard else ""
         
         if dt < now:
-            # Overdue
-            date_formatted = dt.strftime('%b %d, %I:%M %p').replace(" 0", " ")
+            # Overdue — Fix 4: drop the clock time once it's more than a day late
+            if (now - dt).total_seconds() > 86400:
+                date_formatted = dt.strftime('%b %d').replace(" 0", " ")
+            else:
+                date_formatted = dt.strftime('%b %d, %I:%M %p').replace(" 0", " ")
             color = Fore.RED
             res = f"OVERDUE — {date_formatted}"
         elif task_date == today:
@@ -2339,26 +2342,32 @@ def open_web_ui(force=False):
         print(f"❌ Failed to reach Mission Control: {e}")
 
 
-def format_time_remaining(td: timedelta) -> str:
-    """Format timedelta for pressure warnings."""
-    if td.total_seconds() < 0:
-        total = abs(td.total_seconds())
+def format_time_remaining(td: timedelta, deadline_dt=None) -> str:
+    """Format a timedelta for pressure warnings.
+
+    Fix 4: if overdue by more than 24h, NEVER show hours — show the due DATE
+    (when `deadline_dt` is provided) or a day count fallback. Big hour numbers
+    ("OVERDUE 865h") quantify failure in a crushing unit; a date is just a fact.
+    """
+    secs = td.total_seconds()
+    if secs < 0:
+        total = abs(secs)
+        if total > 86400:  # overdue by more than a day
+            if deadline_dt is not None:
+                return f"OVERDUE — {deadline_dt.strftime('%b %d').replace(' 0', ' ')}"
+            return f"OVERDUE {int(total // 86400)}d"
         if total > 3600:
             h = int(total // 3600)
             m = int((total % 3600) // 60)
-            return f"OVERDUE {h}h {m}m"
-        else:
-            m = int(total // 60)
-            return f"OVERDUE {m}m"
-            
-    secs = td.total_seconds()
+            return f"OVERDUE {h}h {m}m" if m else f"OVERDUE {h}h"
+        return f"OVERDUE {int(total // 60)}m"
+
     if secs > 3600:
         h = int(secs // 3600)
         m = int((secs % 3600) // 60)
         return f"{h}h {m}m left"
     elif secs >= 60:
-        m = int(secs // 60)
-        return f"{m}m left"
+        return f"{int(secs // 60)}m left"
     else:
         return f"{int(secs)}s left"
 
@@ -2452,239 +2461,242 @@ def print_today_missed_notice(tasks: List[Task]) -> None:
     print(dim + "─" * 50 + R)
 
 
+def _list_deadline_dt(t):
+    """Parsed naive deadline datetime, or None."""
+    if not getattr(t, 'deadline', None):
+        return None
+    try:
+        dt = datetime.fromisoformat(t.deadline)
+        return dt.replace(tzinfo=None) if dt.tzinfo else dt
+    except Exception:
+        return None
+
+
+def _enrichment_indicators(t) -> str:
+    """`📝 · 🔗 ×N · ☑ N/N` (ascii fallback if stdout can't render emoji)."""
+    supports_emoji = False
+    try:
+        enc = (sys.stdout.encoding or 'ascii').lower()
+        supports_emoji = ('utf' in enc or 'cp65001' in enc)
+    except Exception:
+        pass
+    parts = []
+    if getattr(t, 'description', None):
+        parts.append("📝" if supports_emoji else "[note]")
+    if getattr(t, 'links', None):
+        parts.append(f"🔗 ×{len(t.links)}" if supports_emoji else f"[{len(t.links)} links]")
+    if getattr(t, 'checklist', None):
+        done = sum(1 for x in t.checklist if x.get('done'))
+        parts.append(f"☑ {done}/{len(t.checklist)}" if supports_emoji else f"[{done}/{len(t.checklist)}]")
+    return " · ".join(parts)
+
+
+def _list_group_header(title, count, color):
+    bar = "━" * 38
+    plural = "task" if count == 1 else "tasks"
+    print(color + bar + Style.RESET_ALL)
+    print(color + f"  {title}  ({count} {plural})" + Style.RESET_ALL)
+    print(color + bar + Style.RESET_ALL)
+
+
+def _list_priority_color(t):
+    p = (t.priority or "").lower()
+    if p in ("critical", "high"):
+        return Fore.RED
+    if p in ("strategic", "medium"):
+        return Fore.CYAN
+    if p in ("noise", "low", "purge"):
+        return Fore.WHITE + Style.DIM
+    return Fore.WHITE
+
+
+def _print_list_active_task(t, now, show_detail=False):
+    pressure = get_pressure_level(t)
+    title_color = Fore.WHITE
+    if pressure == 3:
+        title_color = Fore.RED + Style.BRIGHT
+    elif pressure == 2:
+        title_color = Fore.YELLOW + Style.BRIGHT
+
+    dur = f"  {Fore.CYAN}[{t.duration}]{Style.RESET_ALL}" if t.duration else ""
+    tags = f" · {Fore.BLUE}#{', #'.join(t.tags)}{Style.RESET_ALL}" if t.tags else ""
+    pc = t.postpone_count or 0
+    postpone = ""
+    if pc >= 5:
+        postpone = f"  {Fore.RED}(postponed ×{pc}) ⚠⚠{Style.RESET_ALL}"
+    elif pc >= 3:
+        postpone = f"  {Fore.YELLOW}(postponed ×{pc}) ⚠{Style.RESET_ALL}"
+    elif pc == 2:
+        postpone = f"  {Fore.YELLOW}(postponed ×2){Style.RESET_ALL}"
+
+    id_str = f"{Fore.GREEN}#{t.id}{Style.RESET_ALL}"
+    p_color = _list_priority_color(t)
+    print(f"{id_str} · {title_color}{t.title}{Style.RESET_ALL}{dur} · {p_color}{t.priority}{Style.RESET_ALL}{tags}{postpone}")
+
+    dt = _list_deadline_dt(t)
+    if dt is not None:
+        deadline_disp = format_deadline_display(t)  # colored; overdue→date via Fix 4
+        suffix = ""
+        if pressure >= 1:
+            td = dt - now
+            if td.total_seconds() >= 0:
+                suffix = f" · {format_time_remaining(td, dt)}"
+        print(f"       {deadline_disp}{suffix}")
+
+    ind = _enrichment_indicators(t)
+    if ind:
+        print(f"     {Style.DIM}{ind}{Style.RESET_ALL}")
+
+    if show_detail:
+        if getattr(t, 'description', None):
+            preview = t.description.replace('\n', ' ')
+            if len(preview) > 80:
+                preview = preview[:77] + "..."
+            print(f"     {Style.DIM}Notes: {preview}{Style.RESET_ALL}")
+        for l in (getattr(t, 'links', None) or []):
+            tp = f" (\"{l.get('title')}\")" if l.get('title') else ""
+            print(f"     {Style.DIM}Link: [{l.get('id')}] {l.get('type')} → {l.get('url')}{tp}{Style.RESET_ALL}")
+        for idx, item in enumerate(getattr(t, 'checklist', None) or []):
+            chk = "✓" if item.get('done') else "·"
+            print(f"     {Style.DIM}Subtask {idx+1}: [{chk}] {item.get('text')}{Style.RESET_ALL}")
+
+
+def _print_list_done_task(t):
+    dur = f"  {Style.DIM}[{t.duration}]{Style.RESET_ALL}" if t.duration else ""
+    tags = f" · #{', #'.join(t.tags)}" if t.tags else ""
+    print(f"{Fore.GREEN}✓{Style.RESET_ALL} {Style.DIM}#{t.id} · {t.title}{dur} · {t.priority}{tags}{Style.RESET_ALL}")
+
+
+def _render_done_view(done, now, today_str):
+    week_ago = (now - timedelta(days=7)).strftime('%Y-%m-%d')
+    g_today, g_week, g_earlier = [], [], []
+    for t in done:
+        d = (getattr(t, 'completed_at', None) or '')[:10]
+        if d == today_str:
+            g_today.append(t)
+        elif d >= week_ago:
+            g_week.append(t)
+        else:
+            g_earlier.append(t)
+    print()
+    for title, items in (("COMPLETED TODAY", g_today),
+                         ("COMPLETED THIS WEEK", g_week),
+                         ("COMPLETED EARLIER", g_earlier)):
+        if not items:
+            continue
+        _list_group_header(title, len(items), Fore.GREEN + Style.DIM)
+        for t in items:
+            _print_list_done_task(t)
+        print()
+    print(f"{Style.DIM}Total: {len(done)} completed{Style.RESET_ALL}")
+
+
 def list_tasks(filter_status: Optional[str] = None,
                filter_priority: Optional[str] = None,
                filter_tag: Optional[str] = None,
                show_all: bool = False,
                sort_by: Optional[str] = None,
                show_detail: bool = False) -> None:
-    """List tasks with advanced filtering and optional enrichment details."""
+    """Grouped, today-first list (Fix 2). Completed hidden by default; --done / --all to see them."""
     tasks = storage.load_tasks()
     print_list_missed_banner(tasks)  # PASSIVE notice only — never prompts (see: taskflow missed)
-
     if not tasks:
         Messenger.empty_list()
         return
-        
-    # Apply filters
-    filtered_tasks = []
-    for task in tasks:
-        if not show_all and (task.dropped_at or task.offloaded_at):
-            continue
-            
-        # Status filter
-        if filter_status == "todo" and task.completed:
-            continue
-        if filter_status == "done" and not task.completed:
-            continue
-        
-        # Priority filter
-        if filter_priority and task.priority.lower() != filter_priority.lower():
-            continue
-        
-        # Tag filter
-        if filter_tag and filter_tag not in task.tags:
-            continue
-        
-        filtered_tasks.append(task)
 
-    # Apply sorting if requested
-    if sort_by == "priority":
-        priority_order = {"high": 0, "medium": 1, "low": 2}
-        filtered_tasks.sort(
-            key=lambda t: priority_order.get(
-                (t.priority or "").lower(), 1
-            )
-        )
+    now = datetime.now()
+    today_str = now.strftime('%Y-%m-%d')
 
-    elif sort_by == "created":
-        filtered_tasks.sort(
-            key=lambda t: t.created_at or ""
-        )
+    def passes(t):
+        if filter_priority and (t.priority or '').lower() != filter_priority.lower():
+            return False
+        if filter_tag and filter_tag not in (t.tags or []):
+            return False
+        return True
 
-    elif sort_by == "due":
-        filtered_tasks.sort(
-            key=lambda t: t.deadline or "9999-12-31"
-        )
-
-    if sort_by:
-        Messenger.note(f"Sorted by {sort_by}.")
-
-    if not filtered_tasks:
-        if filter_status == "done":
+    # --done : completed only, grouped by recency
+    if filter_status == 'done':
+        done = [t for t in tasks if t.completed and passes(t)]
+        if not done:
             Messenger.note("You haven't completed any tasks yet.")
-        elif filter_status == "todo":
-            Messenger.no_pending_tasks()
-        else:
-            Messenger.note("No tasks match your filters.")
+            return
+        _render_done_view(done, now, today_str)
         return
-    
-    def get_indicator_str(t) -> str:
-        import sys
-        supports_emoji = False
-        try:
-            encoding = sys.stdout.encoding or 'ascii'
-            if 'utf' in encoding.lower() or 'cp65001' in encoding.lower():
-                supports_emoji = True
-        except Exception:
-            pass
-            
-        parts = []
-        if getattr(t, 'description', None):
-            parts.append("📝" if supports_emoji else "[note]")
-        if getattr(t, 'links', None):
-            count = len(t.links)
-            parts.append(f"🔗 ×{count}" if supports_emoji else f"[{count} links]")
-        if getattr(t, 'checklist', None):
-            done = sum(1 for x in t.checklist if x.get("done"))
-            total = len(t.checklist)
-            parts.append(f"☑ {done}/{total}" if supports_emoji else f"[{done}/{total}]")
-            
-        if not parts:
-            return ""
-        return "     " + " · ".join(parts)
 
-    shown = 0
+    def is_active(t):
+        return not t.completed and not getattr(t, 'dropped_at', None) and not getattr(t, 'offloaded_at', None)
+
+    active = [t for t in tasks if is_active(t) and passes(t)]
+    completed_count = sum(1 for t in tasks if t.completed and passes(t))
+    path_ids = set(storage.load_config().get('path_tasks') or [])
+
+    today_g, overdue_g, upcoming_g, nodl_g = [], [], [], []
+    for t in active:
+        dt = _list_deadline_dt(t)
+        scheduled_today = (getattr(t, 'scheduled_date', None) == today_str)
+        in_path = t.id in path_ids
+        if dt is not None:
+            d = dt.strftime('%Y-%m-%d')
+            if d == today_str:
+                today_g.append((t, dt))
+            elif d < today_str:
+                overdue_g.append((t, dt))
+            elif scheduled_today or in_path:
+                today_g.append((t, dt))
+            else:
+                upcoming_g.append((t, dt))
+        else:
+            # List TODAY = deadline/scheduled today or in today's path; bare no-deadline → NO DEADLINE
+            if scheduled_today or in_path:
+                today_g.append((t, None))
+            else:
+                nodl_g.append((t, None))
+
+    today_g.sort(key=lambda x: (x[1] is None, x[1] or now))
+    overdue_g.sort(key=lambda x: x[1])      # oldest-overdue first (matches spec example)
+    upcoming_g.sort(key=lambda x: x[1])     # soonest first
+    prio_rank = {'critical': 0, 'high': 0, 'strategic': 1, 'medium': 1, 'noise': 2, 'low': 2, 'purge': 3}
+    nodl_g.sort(key=lambda x: (prio_rank.get((x[0].priority or '').lower(), 1), x[0].created_at or ''))
+
     print()
-    for task in filtered_tasks:
-        if not show_all and shown >= MAX_VISIBLE_TASKS:
-            Messenger.note(f"Showing first {MAX_VISIBLE_TASKS} tasks. Use '--all' to view everything.")
-            break
-        
-        title_color = Fore.WHITE + Style.BRIGHT
-        pressure_suffix = ""
-        hard_pressure_line = ""
-        
-        if not task.completed and not task.dropped_at and not task.offloaded_at:
-            pressure = get_pressure_level(task)
-            if pressure > 0 and task.deadline:
-                try:
-                    dt = datetime.fromisoformat(task.deadline)
-                    if dt.tzinfo is not None:
-                        dt = dt.replace(tzinfo=None)
-                    td = dt - datetime.now()
-                    rem_str = format_time_remaining(td)
-                    
-                    if pressure == 3:
-                        title_color = Fore.RED + Style.BRIGHT
-                        if td.total_seconds() < 0:
-                            pressure_suffix = f" · {Fore.RED + Style.BRIGHT}{rem_str}{Style.RESET_ALL}"
-                        else:
-                            pressure_suffix = f" · {Fore.RED + Style.BRIGHT}{rem_str} ⚠{Style.RESET_ALL}"
-                        if getattr(task, 'deadline_type', None) == "hard":
-                            hard_pressure_line = f"\n     → {Fore.RED}Hard deadline. Execute or reschedule now.{Style.RESET_ALL}"
-                    elif pressure == 2:
-                        title_color = Fore.YELLOW + Style.BRIGHT
-                        pressure_suffix = f" · {Fore.YELLOW + Style.BRIGHT}{rem_str}{Style.RESET_ALL}"
-                        if getattr(task, 'deadline_type', None) == "hard":
-                            hard_pressure_line = f"\n     → {Fore.RED}Hard deadline. Execute or reschedule now.{Style.RESET_ALL}"
-                    elif pressure == 1:
-                        pressure_suffix = f" · {Fore.YELLOW}{rem_str}{Style.RESET_ALL}"
-                except ValueError:
-                    pass
-                    
-        if task.completed or task.dropped_at or task.offloaded_at:
-            title_color = Style.DIM
-            
-        postpone_suffix = ""
-        if task.postpone_count >= 5:
-            postpone_suffix = f"  {Fore.RED}(postponed ×{task.postpone_count}) ⚠⚠{Style.RESET_ALL}"
-        elif task.postpone_count >= 3:
-            postpone_suffix = f"  {Fore.YELLOW}(postponed ×{task.postpone_count}) ⚠{Style.RESET_ALL}"
-        elif task.postpone_count == 2:
-            postpone_suffix = f"  {Fore.YELLOW}(postponed ×2){Style.RESET_ALL}"
-            
-        duration_str = f"  {Style.DIM}[{task.duration}]{Style.RESET_ALL}" if task.duration else ""
-        
-        # Priority colors
-        p_lower = (task.priority or "").lower()
-        if p_lower in ["critical", "high"]:
-            p_color = Fore.RED
-        elif p_lower in ["strategic", "medium"]:
-            p_color = Fore.CYAN
-        elif p_lower in ["noise", "low", "purge"]:
-            p_color = Fore.WHITE + Style.DIM
-        else:
-            p_color = Fore.WHITE
-            
-        priority_str = f" · {p_color}{task.priority}{Style.RESET_ALL}"
-        
-        # Tags colors
-        if task.tags:
-            formatted_tags = ", #".join(task.tags)
-            tags_str = f" · {Fore.BLUE}#{formatted_tags}{Style.RESET_ALL}"
-        else:
-            tags_str = ""
-        
-        # Build the final string
-        id_str = f"{Fore.GREEN}#{task.id}{Style.RESET_ALL}"
-        
-        # S1-D: Duration appears between title and priority.
-        duration_part = f"  [{task.duration}] " if task.duration else ""
-        
-        deadline_str = format_deadline_display(task)
-        if deadline_str:
-            deadline_str = f" · {deadline_str}"
-            
-        base = f"{id_str} · {title_color}{task.title}{Style.RESET_ALL}{duration_part}{priority_str}{tags_str}{pressure_suffix}{postpone_suffix}\n     Deadline: {deadline_str.strip(' ·')}"
-        if not getattr(task, 'deadline', None):
-            base = f"{id_str} · {title_color}{task.title}{Style.RESET_ALL}{duration_part}{priority_str}{tags_str}{pressure_suffix}{postpone_suffix}"
-        
-        base += hard_pressure_line
-        
-        detail_lines = []
-        if show_detail:
-            if getattr(task, 'description', None):
-                preview = task.description.replace('\n', ' ')
-                if len(preview) > 80:
-                    preview = preview[:77] + "..."
-                detail_lines.append(f"     Notes: {preview}")
-            if getattr(task, 'links', None):
-                for l in task.links:
-                    title_part = f" (\"{l.get('title')}\")" if l.get('title') else ""
-                    detail_lines.append(f"     Link: [{l.get('id')}] {l.get('type')} → {l.get('url')}{title_part}")
-            if getattr(task, 'checklist', None):
-                for idx, item in enumerate(task.checklist):
-                    chk = "✓" if item.get("done") else "·"
-                    detail_lines.append(f"     Subtask {idx+1}: [{chk}] {item.get('text')}")
-        
-        if task.completed:
-            # Overwrite base format for completed tasks to match old style but dim
-            base = f"{id_str} · {title_color}{task.title}{Style.RESET_ALL}{duration_part}{priority_str}{tags_str}{deadline_str}"
-            print(f"{Fore.GREEN}✓{Style.RESET_ALL} {Style.DIM}{base}{Style.RESET_ALL}")
-            ind = get_indicator_str(task)
-            if ind:
-                print(Style.DIM + ind + Style.RESET_ALL)
-            if show_detail:
-                for dl in detail_lines:
-                    print(Style.DIM + dl + Style.RESET_ALL)
-        elif task.dropped_at or task.offloaded_at:
-            base = f"{id_str} · {title_color}{task.title}{Style.RESET_ALL}{duration_part}{priority_str}{tags_str}{deadline_str}"
-            print(f"{Fore.RED}x{Style.RESET_ALL} {Style.DIM}{base}{Style.RESET_ALL}")
-            ind = get_indicator_str(task)
-            if ind:
-                print(Style.DIM + ind + Style.RESET_ALL)
-            if show_detail:
-                for dl in detail_lines:
-                    print(Style.DIM + dl + Style.RESET_ALL)
-        else:
-            print(f"{Fore.YELLOW}○{Style.RESET_ALL} {base}")
-            ind = get_indicator_str(task)
-            if ind:
-                print(ind)
-            if show_detail:
-                for dl in detail_lines:
-                    print(dl)
-            
-        shown += 1
-    
-    print(f"\n{Style.DIM}Total: {len(filtered_tasks)} task(s){Style.RESET_ALL}")
+    printed = False
+    for title, items, color in (
+        ("TODAY", today_g, Fore.CYAN + Style.BRIGHT),
+        ("OVERDUE", overdue_g, Fore.RED),
+        ("UPCOMING", upcoming_g, Fore.CYAN + Style.DIM),
+        ("NO DEADLINE", nodl_g, Fore.CYAN + Style.DIM),
+    ):
+        if not items:
+            continue
+        printed = True
+        _list_group_header(title, len(items), color)
+        for t, _dt in items:
+            _print_list_active_task(t, now, show_detail)
+        print()
 
-    # Gentle UX hint for sorting (only when useful)
-    if not sort_by and len(filtered_tasks) > 5:
-        Messenger.note(
-            "Tip: Use --sort priority or --sort due to organize tasks."
-        )
+    if not printed:
+        if filter_priority or filter_tag:
+            Messenger.note("No tasks match your filters.")
+        else:
+            Messenger.no_pending_tasks()
+
+    total_active = len(today_g) + len(overdue_g) + len(upcoming_g) + len(nodl_g)
+
+    if show_all and completed_count:
+        done = [t for t in tasks if t.completed and passes(t)]
+        done.sort(key=lambda t: (getattr(t, 'completed_at', None) or ''), reverse=True)
+        _list_group_header("COMPLETED", len(done), Fore.GREEN + Style.DIM)
+        for t in done:
+            _print_list_done_task(t)
+        print()
+        print(f"{Style.DIM}Total: {total_active} active · {completed_count} completed{Style.RESET_ALL}")
+    else:
+        line = f"Total: {total_active} active · {completed_count} completed"
+        if not show_all and completed_count:
+            line += " (hidden)"
+        print(f"{Style.DIM}{line}{Style.RESET_ALL}")
+        if not show_all and completed_count:
+            print(f"{Style.DIM}Use --done to see completed tasks · --all to see everything{Style.RESET_ALL}")
 
     print_list_missed_footer(tasks)  # PASSIVE soft-deadline notice at bottom — never prompts
 
@@ -4388,7 +4400,7 @@ def _due_phrase(task) -> Optional[str]:
         human = f"Tomorrow at {tstr}"
     else:
         human = dt.strftime('%a %d %b').replace(' 0', ' ') + f" at {tstr}"
-    return f"{human} · {format_time_remaining(dt - now)}"
+    return f"{human} · {format_time_remaining(dt - now, dt)}"
 
 
 def _path_bar():
