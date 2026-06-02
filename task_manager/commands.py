@@ -2858,6 +2858,12 @@ def complete_task(task_id: int):
                 "accuracy_ratio": getattr(task, 'duration_accuracy_ratio', None)
             })
 
+            # S10-E: Daily Execution Path adherence — record which slot this was actually done in
+            if getattr(task, 'planned_slot', None):
+                _now_slot = datetime.now()
+                task.actual_slot = _time_bucket(_now_slot.hour)
+                task.slot_drift = _slot_drift_minutes(task.planned_slot, _now_slot)
+
             storage.save_tasks(tasks)
 
             dopamine = _generate_dopamine(task_id, increment=True)
@@ -2914,50 +2920,24 @@ def rename_task(task_id: int) -> bool:
     return False
 
 
-def stats_tasks() -> None:
-    """Show detailed statistics with focus minutes."""
-    tasks = storage.load_tasks()
-    manager = TaskManager(tasks)
-    stats = manager.get_stats()
-    
-    print(f"\n{'='*40}")
-    print("TASK STATISTICS")
-    print(f"{'='*40}")
-    print(f"Total tasks    : {stats['total']}")
-    print(f"Completed      : {stats['completed']}")
-    print(f"Pending        : {stats['pending']}")
-    
-    if stats['total'] > 0:
-        print(f"Completion rate: {stats['completion_rate']:.1f}%")
-        print(f"Total focus time: {stats['total_focus_minutes']} minutes")  # NEW
-        print(f"\nPriority Distribution:")
-        print(f"  High   : {stats['priorities']['High']:3d} ({stats['priorities']['High']/stats['total']*100:.1f}%)")
-        print(f"  Medium : {stats['priorities']['Medium']:3d} ({stats['priorities']['Medium']/stats['total']*100:.1f}%)")
-        print(f"  Low    : {stats['priorities']['Low']:3d} ({stats['priorities']['Low']/stats['total']*100:.1f}%)")
-
-    # S9-K: Recovery sessions (last 7 days)
-    rlog = []
-    try:
-        if storage.recovery_log_file.exists():
-            with open(storage.recovery_log_file, 'r') as _f:
-                rlog = json.load(_f)
-    except Exception:
-        rlog = []
-    cutoff = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
-    recent = [s for s in rlog if isinstance(s, dict) and (s.get('date') or '') >= cutoff]
-    print("\nRecovery (last 7 days):")
-    if not recent:
-        print("  No recovery sessions this week.")
-    else:
-        total_sessions = len(recent)
-        tasks_completed = sum(int(s.get('tasks_completed', 0) or 0) for s in recent)
-        successful = sum(1 for s in recent if s.get('was_successful'))
-        rate = round(successful / total_sessions * 100) if total_sessions else 0
-        print(f"  Recovery sessions this week:  {total_sessions}")
-        print(f"  Tasks completed in recovery:  {tasks_completed}")
-        print(f"  Recovery success rate:        {rate}%")
-
-    print(f"{'='*40}")
+def stats_tasks(today=False, week=False, export=False, compute=False, accuracy=False, tags=False) -> None:
+    """S12-D: Performance Telemetry — Time Integrity Score + behavior aggregates."""
+    if compute:
+        ensure_daily_summaries(force=True)
+        print("Daily summaries recomputed.")
+        return
+    ensure_daily_summaries()  # keep the derived layer fresh (once per new day)
+    if accuracy:
+        return render_stats_accuracy()
+    if tags:
+        return render_stats_tags()
+    if export:
+        return export_stats_csv()
+    if week:
+        return render_stats_week()
+    if today:
+        return render_stats_today()
+    return render_stats_main()
 
 
 def show_help() -> None:
@@ -3415,6 +3395,7 @@ def focus_task(task_id: int, minutes: int = 25,
             )
             
             if success:
+                begin_focus_lock(task_id)  # S11: open the focus lock/queue window
                 print(f"\n🎯 Now focusing on: {task.title}")
                 if block_sites or block_apps:
                     print("   Distraction blocking activated!")
@@ -3525,8 +3506,13 @@ def end_focus(force=False):
                 break
             else:
                 print("Please type 'resume' or 'stop'.")
-    
-    return focus_manager.end_focus_session()
+
+    result = focus_manager.end_focus_session()
+    try:
+        _flush_focus_queue()  # S11-D: process queued captures + focus stats
+    except Exception:
+        pass
+    return result
 
 
 def focus_blocking_status():
@@ -4068,6 +4054,1362 @@ def normalize_priority(priority: str) -> str:
     
     return priority_map.get(priority, 'Strategic')
 
+# =========================================================
+# S10: DAILY EXECUTION PATH
+# =========================================================
+
+DURATION_MINUTES = {"15m": 15, "30m": 30, "1h": 60, "2h": 120, "3h": 180, "4h+": 240}
+PATH_DEEP_WORK_TAGS = {"deep-work", "deep_work", "deepwork", "code", "coding", "write",
+                       "writing", "design", "build", "architect", "research"}
+PATH_COMM_TAGS = {"meeting", "call", "standup", "email", "reply", "review", "sync"}
+PATH_ADMIN_TAGS = {"admin", "housekeeping", "chore", "chores", "logs", "ops",
+                   "cleanup", "misc", "inbox", "errand"}
+
+# Planned-slot → expected time-of-day bucket (energy curve: hard first, light last)
+_SLOT_EXPECTED_BUCKET = {"prime": "morning", "secondary": "midday", "low_effort": "evening"}
+# Canonical target hour for each planned slot (used for slot_drift)
+_SLOT_TARGET_HOUR = {"prime": 9, "secondary": 13, "low_effort": 17}
+
+
+def _duration_minutes(task, default=30) -> int:
+    """Minutes for a task's duration. No duration → `default` (S10-B step 4)."""
+    d = (getattr(task, 'duration', None) or "").lower()
+    return DURATION_MINUTES.get(d, default)
+
+
+def _priority_tier(task) -> str:
+    """Map TaskFlow's internal priorities to high/medium/low tiers."""
+    p = (getattr(task, 'priority', None) or "").lower()
+    if p in ("critical", "high"):
+        return "high"
+    if p in ("strategic", "medium"):
+        return "medium"
+    return "low"  # noise, low, purge, unknown
+
+
+def _task_tags_lower(task) -> set:
+    return {str(t).lower() for t in (getattr(task, 'tags', None) or [])}
+
+
+def _is_comm(task) -> bool:
+    return bool(_task_tags_lower(task) & PATH_COMM_TAGS)
+
+
+def _is_short(task) -> bool:
+    return (getattr(task, 'duration', None) or "").lower() in ("15m", "30m")
+
+
+def score_for_path(task) -> int:
+    """Cognitive-load score that determines PRIME eligibility (S10-B step 2)."""
+    score = 0
+    dur = (getattr(task, 'duration', None) or "").lower()
+    if dur in ("2h", "3h", "4h+"):
+        score += 40
+    elif dur == "1h":
+        score += 20
+    if _priority_tier(task) == "high":
+        score += 30
+    if getattr(task, 'deadline_type', None) == "hard":
+        score += 20
+    if _task_tags_lower(task) & PATH_DEEP_WORK_TAGS:
+        score += 15
+    return score
+
+
+def _path_deadline_key(task):
+    """Sort key: tasks with a deadline first (soonest first), undated last."""
+    if getattr(task, 'deadline', None):
+        try:
+            dt = datetime.fromisoformat(task.deadline)
+            if dt.tzinfo is not None:
+                dt = dt.replace(tzinfo=None)
+            return (0, dt)
+        except Exception:
+            return (1, datetime.max)
+    return (1, datetime.max)
+
+
+def _qualifies_secondary(task) -> bool:
+    if _priority_tier(task) in ("high", "medium"):
+        return True
+    if _is_comm(task):
+        return True
+    if (getattr(task, 'duration', None) or "").lower() == "1h":
+        return True
+    if getattr(task, 'deadline_type', None) == "hard":
+        return True
+    return False
+
+
+def _qualifies_low(task) -> bool:
+    if _is_short(task):
+        return True
+    if _priority_tier(task) == "low":
+        return True
+    if _task_tags_lower(task) & PATH_ADMIN_TAGS:
+        return True
+    return False
+
+
+def _path_eligible(tasks, timeline, today_str):
+    """Tasks eligible for today's path — mirrors run_today_view inclusion (S10-B step 1)."""
+    elig = []
+    for task in tasks:
+        if task.completed:
+            continue
+        if getattr(task, 'dropped_at', None) or getattr(task, 'offloaded_at', None):
+            continue
+        if getattr(task, 'status', None) in ('completed', 'done', 'dropped', 'offloaded'):
+            continue
+
+        included = False
+        # (a) deadline date is today (future-beyond-today excluded here)
+        if task.deadline:
+            try:
+                dt = datetime.fromisoformat(task.deadline)
+                if dt.tzinfo is not None:
+                    dt = dt.replace(tzinfo=None)
+                if dt.strftime('%Y-%m-%d') == today_str:
+                    included = True
+            except Exception:
+                pass
+        # (b) scheduled today
+        if not included:
+            tslot = timeline.get(str(task.id))
+            if tslot and tslot.startswith(today_str):
+                included = True
+            elif getattr(task, 'scheduled_date', None) == today_str:
+                included = True
+        # (c) prime today
+        if not included:
+            tslot = timeline.get(str(task.id))
+            if tslot == f"{today_str}_prime" or getattr(task, 'prime_target_date', None) == today_str:
+                included = True
+        # (d) untimed, created today (float task)
+        if not included and not task.deadline:
+            if task.created_at and task.created_at.startswith(today_str):
+                included = True
+
+        if included:
+            elig.append(task)
+    return elig
+
+
+def _today_prime_task(elig, timeline, today_str):
+    """The task explicitly set as PRIME for today, if it's eligible."""
+    for t in elig:
+        tslot = timeline.get(str(t.id))
+        if tslot == f"{today_str}_prime" or getattr(t, 'prime_target_date', None) == today_str:
+            return t
+    return None
+
+
+def generate_execution_path(tasks, config) -> dict:
+    """Build today's execution path (S10-B). Pure: returns id-lists, no persistence."""
+    timeline = storage.load_timeline()
+    today_str = datetime.now().strftime('%Y-%m-%d')
+    sections = {"prime": [], "secondary": [], "low_effort": [], "unscheduled": []}
+
+    elig = _path_eligible(tasks, timeline, today_str)
+    if not elig:
+        return sections
+
+    # PRIME — honor explicit prime, else highest cognitive-load score
+    prime_task = _today_prime_task(elig, timeline, today_str)
+    if prime_task is None:
+        prime_task = max(elig, key=score_for_path)
+    sections["prime"] = [prime_task.id]
+    remaining = [t for t in elig if t.id != prime_task.id]
+
+    # SECONDARY (max 4) — deadline asc, then heavier load first
+    secondary = []
+    for t in sorted(remaining, key=lambda x: (_path_deadline_key(x), -score_for_path(x))):
+        if len(secondary) >= 4:
+            break
+        if _qualifies_secondary(t):
+            secondary.append(t)
+    sec_ids = {t.id for t in secondary}
+    sections["secondary"] = [t.id for t in secondary]
+
+    # LOW EFFORT (max 6) — wind-down work
+    rem2 = [t for t in remaining if t.id not in sec_ids]
+    low = []
+    for t in rem2:
+        if len(low) >= 6:
+            break
+        if _qualifies_low(t):
+            low.append(t)
+    low_ids = {t.id for t in low}
+    sections["low_effort"] = [t.id for t in low]
+
+    # UNSCHEDULED — eligible but unplaced
+    sections["unscheduled"] = [t.id for t in rem2 if t.id not in low_ids]
+    return sections
+
+
+def _section_minutes(by_id, id_list) -> int:
+    return sum(_duration_minutes(by_id[i]) for i in id_list if i in by_id)
+
+
+def _time_bucket(hour: int) -> str:
+    """Map an hour-of-day to a slot bucket (S10-A actual_slot)."""
+    if 6 <= hour < 12:
+        return "morning"
+    if 12 <= hour < 16:
+        return "midday"
+    return "evening"  # 16:00–05:59 (late work folds into evening)
+
+
+def _slot_drift_minutes(planned_slot, dt) -> Optional[int]:
+    """Minutes between the planned slot's canonical target time and `dt`."""
+    h = _SLOT_TARGET_HOUR.get(planned_slot)
+    if h is None:
+        return None
+    target = dt.replace(hour=h, minute=0, second=0, microsecond=0)
+    return int((dt - target).total_seconds() // 60)
+
+
+def _compute_path_adherence(tasks, config) -> Optional[float]:
+    """Fraction of completed path tasks done in their planned time-of-day bucket."""
+    path_ids = config.get('path_tasks') or []
+    if not path_ids:
+        return None
+    by_id = {t.id: t for t in tasks}
+    completed = [by_id[i] for i in path_ids if i in by_id and by_id[i].completed]
+    if not completed:
+        return None
+    hits = 0
+    for t in completed:
+        expected = _SLOT_EXPECTED_BUCKET.get(getattr(t, 'planned_slot', None))
+        if expected and getattr(t, 'actual_slot', None) == expected:
+            hits += 1
+    return round(hits / len(completed), 2)
+
+
+def generate_and_persist_path(compute_prev_adherence: bool = True):
+    """Generate today's path, stamp planned_slot on tasks, persist to config.
+
+    Returns (sections, total_minutes). Used by `taskflow path` and POST /api/path/generate.
+    """
+    tasks = storage.load_tasks()
+    config = storage.load_config()
+    today_str = datetime.now().strftime('%Y-%m-%d')
+
+    # S10-E: settle adherence for the previous day's path before regenerating
+    if compute_prev_adherence:
+        prev_date = config.get('path_generated_date')
+        if prev_date and prev_date != today_str:
+            adh = _compute_path_adherence(tasks, config)
+            if adh is not None:
+                config['path_adherence_today'] = adh
+
+    sections = generate_execution_path(tasks, config)
+
+    # Stamp planned_slot (None clears stale slots from previous days)
+    slot_of = {}
+    for s in ("prime", "secondary", "low_effort"):
+        for i in sections[s]:
+            slot_of[i] = s
+    for t in tasks:
+        t.planned_slot = slot_of.get(t.id)
+    storage.save_tasks(tasks)
+
+    config['path_generated_date'] = today_str
+    config['path_tasks'] = (sections['prime'] + sections['secondary']
+                            + sections['low_effort'] + sections['unscheduled'])
+    config['path_sections'] = sections
+    storage.save_config(config)
+
+    by_id = {t.id: t for t in tasks}
+    total = (_section_minutes(by_id, sections['prime'])
+             + _section_minutes(by_id, sections['secondary'])
+             + _section_minutes(by_id, sections['low_effort']))
+    return sections, total
+
+
+# ---- S10-C rendering helpers ----
+
+def _fmt_minutes(m: int) -> str:
+    if m <= 0:
+        return "0m"
+    h, mm = divmod(m, 60)
+    if h and mm:
+        return f"{h}h {mm}m"
+    if h:
+        return f"{h}h"
+    return f"{mm}m"
+
+
+def _path_prio_color(task):
+    tier = _priority_tier(task)
+    if tier == "high":
+        return Fore.RED
+    if tier == "medium":
+        return Fore.YELLOW
+    return Fore.WHITE + Style.DIM
+
+
+def _path_task_line(task) -> str:
+    """`  → Title              [dur · PRIO · HARD]` with spec colors."""
+    dur = task.duration if getattr(task, 'duration', None) else "—"
+    prio = (task.priority or "").upper()
+    arrow = f"{_path_prio_color(task)}→{Style.RESET_ALL}"
+    title = (task.title or "")[:34]
+    dur_c = f"{Fore.CYAN}{dur}{Style.RESET_ALL}"
+    prio_c = f"{_path_prio_color(task)}{prio}{Style.RESET_ALL}"
+    hard_c = f" · {Fore.RED}HARD{Style.RESET_ALL}" if getattr(task, 'deadline_type', None) == "hard" else ""
+    return f"  {arrow} {title:<34}  [{dur_c} · {prio_c}{hard_c}]"
+
+
+def _path_unscheduled_line(task) -> str:
+    prio = (task.priority or "").capitalize()
+    tagp = f" · #{task.tags[0]}" if getattr(task, 'tags', None) else ""
+    arrow = f"{_path_prio_color(task)}→{Style.RESET_ALL}"
+    title = (task.title or "")[:34]
+    return f"  {arrow} {title:<34}  {Fore.WHITE + Style.DIM}[{prio}{tagp}]{Style.RESET_ALL}"
+
+
+def _due_phrase(task) -> Optional[str]:
+    if not getattr(task, 'deadline', None):
+        return None
+    try:
+        dt = datetime.fromisoformat(task.deadline)
+        if dt.tzinfo is not None:
+            dt = dt.replace(tzinfo=None)
+    except Exception:
+        return None
+    now = datetime.now()
+    today0 = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    d0 = dt.replace(hour=0, minute=0, second=0, microsecond=0)
+    tstr = dt.strftime('%H:%M')
+    if d0 == today0:
+        human = f"Today at {tstr}"
+    elif d0 == today0 + timedelta(days=1):
+        human = f"Tomorrow at {tstr}"
+    else:
+        human = dt.strftime('%a %d %b').replace(' 0', ' ') + f" at {tstr}"
+    return f"{human} · {format_time_remaining(dt - now)}"
+
+
+def _path_bar():
+    return Fore.CYAN + ("━" * 44) + Style.RESET_ALL
+
+
+def _path_daystr():
+    now = datetime.now()
+    return now.strftime('%A, ') + str(now.day) + now.strftime(' %b')
+
+
+def _render_path_full(by_id, sections):
+    bar = _path_bar()
+    print()
+    print(bar)
+    print(f"{Fore.CYAN + Style.BRIGHT}⚡  EXECUTION PATH · {_path_daystr()}{Style.RESET_ALL}")
+    print(bar)
+    print("Generated for today. Run --refresh to regenerate.")
+    print(bar)
+    print()
+
+    prime_tasks = [by_id[i] for i in sections.get('prime', []) if i in by_id]
+    if prime_tasks:
+        pt = prime_tasks[0]
+        est = _fmt_minutes(_duration_minutes(pt))
+        print(f"{Fore.YELLOW + Style.BRIGHT}[★ PRIME TARGET]{Style.RESET_ALL}  — deep work · est. {est}")
+        print(_path_task_line(pt))
+        due = _due_phrase(pt)
+        if due:
+            print(f"    {Fore.WHITE + Style.DIM}Due: {due}{Style.RESET_ALL}")
+        print()
+
+    sec = [by_id[i] for i in sections.get('secondary', []) if i in by_id]
+    if sec:
+        est = _fmt_minutes(sum(_duration_minutes(t) for t in sec))
+        print(f"{Fore.WHITE + Style.BRIGHT}[SECONDARY]{Style.RESET_ALL}  — est. {est}")
+        for t in sec:
+            print(_path_task_line(t))
+        print()
+
+    low = [by_id[i] for i in sections.get('low_effort', []) if i in by_id]
+    if low:
+        est = _fmt_minutes(sum(_duration_minutes(t) for t in low))
+        print(f"{Fore.WHITE + Style.DIM}[LOW EFFORT]{Style.RESET_ALL}  — est. {est}")
+        for t in low:
+            print(_path_task_line(t))
+        print()
+
+    uns = [by_id[i] for i in sections.get('unscheduled', []) if i in by_id]
+    if uns:
+        print(f"{Fore.WHITE + Style.DIM}[UNSCHEDULED]{Style.RESET_ALL}")
+        for t in uns:
+            print(_path_unscheduled_line(t))
+        print()
+
+    total = (sum(_duration_minutes(t) for t in prime_tasks)
+             + sum(_duration_minutes(t) for t in sec)
+             + sum(_duration_minutes(t) for t in low))
+    print(bar)
+    print(f"{Fore.CYAN}Total estimated: {_fmt_minutes(total)}{Style.RESET_ALL}")
+    if total < 360:
+        print(f"{Fore.GREEN}Your day has capacity. Execute in this order.{Style.RESET_ALL}")
+    else:
+        print(f"{Fore.YELLOW}Heavy day. Consider moving LOW EFFORT tasks.{Style.RESET_ALL}")
+    print(bar)
+    print()
+
+
+def _render_path_focus(by_id, sections):
+    bar = _path_bar()
+    prime_tasks = [by_id[i] for i in sections.get('prime', []) if i in by_id]
+    print()
+    print(bar)
+    print(f"{Fore.YELLOW + Style.BRIGHT}⚡  PRIME TARGET · {_path_daystr()}{Style.RESET_ALL}")
+    print(bar)
+    if prime_tasks:
+        pt = prime_tasks[0]
+        print(_path_task_line(pt))
+        due = _due_phrase(pt)
+        if due:
+            print(f"    {Fore.WHITE + Style.DIM}Due: {due}{Style.RESET_ALL}")
+    print(bar)
+    print()
+
+
+def command_path(refresh: bool = False, focus: bool = False):
+    """`taskflow path` — show/generate the Daily Execution Path (S10-C)."""
+    config = storage.load_config()
+    today_str = datetime.now().strftime('%Y-%m-%d')
+    already = (config.get('path_generated_date') == today_str and config.get('path_sections'))
+
+    if already and not refresh:
+        sections = config.get('path_sections') or {}
+    else:
+        sections, _total = generate_and_persist_path()
+
+    tasks = storage.load_tasks()
+    by_id = {t.id: t for t in tasks}
+
+    if not sections.get('prime'):
+        print(f"\n{Fore.WHITE}No missions for today. Add one: {Fore.CYAN}taskflow add{Style.RESET_ALL}\n")
+        return
+
+    if focus:
+        _render_path_focus(by_id, sections)
+    else:
+        _render_path_full(by_id, sections)
+
+
+# =========================================================
+# S11: FOCUS WINDOW LOCK
+# =========================================================
+# NOTE: TimeTracker already owns ~/.taskflow/focus_state.json (active_session/start_time),
+# so the S11 lock+queue layer lives in a separate ~/.taskflow/focus_lock.json. Active state,
+# task_id and ends_at are DERIVED from the live TimeTracker session — single source of truth.
+
+def _default_focus_lock():
+    return {"task_id": None, "started_at": None, "queued_tasks": [], "queued_actions": []}
+
+
+def _focus_session_info():
+    """Active focus info derived from TimeTracker, or None. No queue side effects."""
+    try:
+        st = time_tracker.check_focus()
+    except Exception:
+        st = None
+    if st and st.get('status') == 'active':
+        return {
+            "active": True,
+            "task_id": st.get('task_id'),
+            "task_title": st.get('task_title'),
+            "minutes_left": st.get('remaining_minutes'),
+            "seconds_left": st.get('remaining_seconds'),
+            "mode": st.get('mode', 'gentle'),
+        }
+    return None
+
+
+def _focus_remaining_str(info):
+    if not info:
+        return "--:--"
+    m = info.get('minutes_left') or 0
+    s = info.get('seconds_left') or 0
+    return f"{int(m):02d}:{int(s):02d}"
+
+
+def _flush_focus_queue(lock=None):
+    """Process queued captures + update the focused task's focus stats, then reset the lock.
+
+    Runs when a session ends (timer expiry detected lazily, or explicit `focus --end`).
+    """
+    if lock is None:
+        lock = storage.load_focus_lock()
+    queued = lock.get('queued_tasks') or []
+    task_id = lock.get('task_id')
+    started = lock.get('started_at')
+
+    added = []
+    if queued:
+        tasks = storage.load_tasks()
+        manager = TaskManager(tasks)
+        for q in queued:
+            try:
+                t = Task(id=0,
+                         title=q.get('title') or 'Captured thought',
+                         priority=normalize_priority(q.get('priority') or 'Medium'),
+                         tags=q.get('tags') or [])
+                if q.get('duration'):
+                    t.duration = str(q['duration']).lower()
+                if q.get('deadline'):
+                    t.deadline = q['deadline']
+                    t.deadline_type = q.get('deadline_type', 'soft')
+                tid = manager.add_task(t)
+                added.append((t.title, tid))
+            except Exception:
+                continue
+        storage.save_tasks(manager.tasks)
+
+    # S11-D step 4: update the focused task's focus stats
+    if task_id is not None and started:
+        try:
+            tasks = storage.load_tasks()
+            for t in tasks:
+                if t.id == task_id:
+                    t.focus_session_count = (getattr(t, 'focus_session_count', 0) or 0) + 1
+                    try:
+                        mins = (datetime.now() - datetime.fromisoformat(started)).total_seconds() / 60.0
+                        t.focus_total_minutes = (getattr(t, 'focus_total_minutes', 0) or 0) + max(0, int(mins))
+                    except Exception:
+                        pass
+                    t.last_focus_at = datetime.now().isoformat()
+                    break
+            storage.save_tasks(tasks)
+        except Exception:
+            pass
+
+    # S11-D step 2: report queued missions that were added
+    if added:
+        bar = Fore.CYAN + ("─" * 44) + Style.RESET_ALL
+        print("\n" + bar)
+        print(f"{Fore.GREEN}✓ Focus session ended.{Style.RESET_ALL}")
+        print(f"{len(added)} queued mission(s) added to your board:\n")
+        for title, tid in added:
+            label = (title or "")[:34]
+            print(f"{Fore.GREEN}  · {label:<34} (#{tid}){Style.RESET_ALL}")
+        print(bar + "\n")
+
+    storage.save_focus_lock(_default_focus_lock())
+    return added
+
+
+def focus_lock_active():
+    """Return active focus info, or None. Flushes an orphaned queue once a session is over.
+
+    Called at CLI startup on every command (lazy expiry handling — there is no daemon).
+    """
+    info = _focus_session_info()
+    if info:
+        return info
+    lock = storage.load_focus_lock()
+    if (lock.get('queued_tasks') or lock.get('task_id') is not None):
+        _flush_focus_queue(lock)
+    return None
+
+
+def begin_focus_lock(task_id):
+    """Record the start of a focus session for the lock/queue layer (called from focus_task)."""
+    storage.save_focus_lock({
+        "task_id": task_id,
+        "started_at": datetime.now().isoformat(),
+        "queued_tasks": [],
+        "queued_actions": []
+    })
+
+
+def print_focus_header(info):
+    """`── Focus session active (MM:SS remaining) ──` prepended to list/today during focus."""
+    mmss = _focus_remaining_str(info)
+    print(f"{Fore.CYAN}── Focus session active ({mmss} remaining) ──{Style.RESET_ALL}")
+
+
+def focus_complete_nudge():
+    print(f"{Fore.GREEN}✓ Mission complete during focus. Stay locked in.{Style.RESET_ALL}")
+
+
+def focus_capture_add(info=None):
+    """`taskflow add` during focus → capture a single title into the queue (no full flow)."""
+    mmss = _focus_remaining_str(info)
+    print(f"{Fore.CYAN}── Focus session active ({mmss} remaining) ──{Style.RESET_ALL}")
+    print(f"{Fore.WHITE}Adding tasks is locked during focus.{Style.RESET_ALL}")
+    print(f"{Fore.WHITE}Your thought has been queued.{Style.RESET_ALL}\n")
+    title = get_valid_input("Capture (title): ").strip()
+    title = validate_title(title)
+    if not title:
+        print("Nothing captured.")
+        return
+    lock = storage.load_focus_lock()
+    lock.setdefault('queued_tasks', []).append({"title": title, "priority": "Medium", "source": "add"})
+    storage.save_focus_lock(lock)
+    print(f"\n{Fore.GREEN}Task queued: {title}{Style.RESET_ALL}\n")
+    print("It will be added automatically when focus ends.")
+    print(f"Run: {Fore.CYAN}taskflow queue{Style.RESET_ALL}  to see all queued items.")
+
+
+def focus_capture_dump(info, text, duration=None, deadline=None, is_hard=False):
+    """`taskflow dump` during focus → queue the parsed thought (fast path stays fast)."""
+    import re
+    text = text or ""
+    tags = ["inbox"]
+    for t in re.findall(r'#(\w+)', text):
+        if t.lower() not in [x.lower() for x in tags]:
+            tags.append(t)
+    priority = "Medium"
+    pr = re.findall(r'!(low|medium|high|noise|strategic|critical|l|m|h|p|purge)(?!\w)', text, re.IGNORECASE)
+    if pr:
+        priority = pr[-1]
+    clean = re.sub(r'#\w+', '', text)
+    clean = re.sub(r'!(low|medium|high|noise|strategic|critical|l|m|h|p|purge)(?!\w)', '', clean, flags=re.IGNORECASE)
+    clean = re.sub(r'\s+', ' ', clean).strip()
+    clean = validate_title(clean)
+    if not clean:
+        print("Nothing captured.")
+        return
+    entry = {"title": clean, "priority": normalize_priority(priority.capitalize()), "tags": tags, "source": "dump"}
+    if duration:
+        entry["duration"] = duration.lower()
+    if deadline:
+        pd = parse_deadline(deadline)
+        if pd:
+            entry["deadline"] = pd.isoformat()
+            entry["deadline_type"] = "hard" if is_hard else "soft"
+    lock = storage.load_focus_lock()
+    lock.setdefault('queued_tasks', []).append(entry)
+    storage.save_focus_lock(lock)
+    print(f'{Fore.CYAN}── Focus active ──{Style.RESET_ALL} "{clean}" queued.')
+
+
+def command_queue(clear=False):
+    """`taskflow queue` — view (or --clear) items captured during focus (S11-C)."""
+    info = _focus_session_info()
+    lock = storage.load_focus_lock()
+    queued = lock.get('queued_tasks') or []
+
+    if clear:
+        if not queued:
+            print("No queued items to clear.")
+            return
+        n = len(queued)
+        confirm = get_valid_input(f"Clear {n} queued items? [Y/n]: ", "y").strip().lower()
+        if confirm in ("y", "yes", ""):
+            lock['queued_tasks'] = []
+            storage.save_focus_lock(lock)
+            print(f"{n} queued items cleared.")
+        else:
+            print("Cancelled.")
+        return
+
+    if not info:
+        print("No active focus session. Queue is empty.")
+        return
+
+    mmss = _focus_remaining_str(info)
+    head = f"── Focus active · {mmss} remaining "
+    head += "─" * max(0, 46 - len(head))
+    print(f"{Fore.CYAN}{head}{Style.RESET_ALL}")
+    print(f"Queued for after focus ({len(queued)} items):\n")
+    if queued:
+        for i, q in enumerate(queued, 1):
+            print(f"  [{i}]  {q.get('title')}")
+    else:
+        print("  (nothing queued yet)")
+    print("\nThese will be added automatically when focus ends.")
+    print(f"{Fore.CYAN}{'─' * 46}{Style.RESET_ALL}")
+
+
+# ---- S11-F API helpers (used by server.py) ----
+
+def focus_status_payload():
+    """GET /api/focus-status → {active, task_id, ends_at, queued_count}."""
+    info = _focus_session_info()
+    lock = storage.load_focus_lock()
+    qcount = len(lock.get('queued_tasks') or [])
+    if not info:
+        return {"active": False, "task_id": None, "ends_at": None, "queued_count": qcount}
+    ml = info.get('minutes_left') or 0
+    sl = info.get('seconds_left') or 0
+    ends = (datetime.now() + timedelta(minutes=ml, seconds=sl)).isoformat()
+    return {"active": True, "task_id": info.get('task_id'), "ends_at": ends, "queued_count": qcount}
+
+
+def enqueue_focus_task(data):
+    """POST /api/focus/queue → append a task to the focus queue. Returns new queue length."""
+    data = data or {}
+    lock = storage.load_focus_lock()
+    entry = {
+        "title": (str(data.get('title') or '').strip() or 'Captured thought'),
+        "priority": normalize_priority(data.get('priority') or 'Medium'),
+        "tags": data.get('tags') or [],
+        "source": "ui"
+    }
+    if data.get('duration'):
+        entry["duration"] = str(data['duration']).lower()
+    if data.get('deadline'):
+        entry["deadline"] = data['deadline']
+        entry["deadline_type"] = data.get('deadline_type', 'soft')
+    lock.setdefault('queued_tasks', []).append(entry)
+    storage.save_focus_lock(lock)
+    return len(lock['queued_tasks'])
+
+
+# =========================================================
+# S12: TIME INTEGRITY SCORE + BEHAVIOR DATA STORE
+# =========================================================
+
+def _behavior_log_path():
+    return storage.data_dir / "behavior_log.jsonl"
+
+
+def _all_behavior_entries():
+    """Read every behavior_log.jsonl entry (read-only — Rule #3)."""
+    out = []
+    f = _behavior_log_path()
+    if not f.exists():
+        return out
+    try:
+        with open(f, 'r', encoding='utf-8') as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    out.append(json.loads(line))
+                except Exception:
+                    continue
+    except Exception:
+        pass
+    return out
+
+
+def get_behavior_log_entries(date):
+    """All behavior_log entries whose timestamp falls on `date` (YYYY-MM-DD)."""
+    return [e for e in _all_behavior_entries()
+            if isinstance(e.get('ts'), str) and e.get('ts', '')[:10] == date]
+
+
+def _parse_dt_any(s):
+    if not s:
+        return None
+    try:
+        return datetime.fromisoformat(s)
+    except Exception:
+        try:
+            return datetime.strptime(s, '%Y-%m-%d %H:%M')
+        except Exception:
+            return None
+
+
+def calculate_time_integrity_score(s) -> int:
+    """Weighted 0–100 score (S12-B). Division-safe."""
+    dm = s.get('deadlines_met', 0) or 0
+    dmiss = s.get('deadlines_missed', 0) or 0
+    deadline_pts = (dm / max(1, dm + dmiss)) * 40
+    deadline_pts -= min(20, (s.get('hard_deadlines_missed', 0) or 0) * 5)
+
+    tc = s.get('tasks_completed', 0) or 0
+    tmiss = s.get('tasks_missed', 0) or 0
+    exec_pts = (tc / max(1, tc + tmiss)) * 30
+
+    postpone_pts = 20 - min(20, (s.get('tasks_postponed', 0) or 0) * 3)
+
+    rec_pts = 0
+    if s.get('recovery_activated'):
+        rec_pts = 10 if s.get('recovery_successful') else -5
+
+    return max(0, min(100, round(deadline_pts + exec_pts + postpone_pts + rec_pts)))
+
+
+def compute_daily_summary(date, tasks, behavior_log_entries) -> dict:
+    """Aggregate one day's behavior into the S12-A schema."""
+    def d10(v):
+        return (v or "")[:10]
+
+    completed = [t for t in tasks if t.completed and d10(getattr(t, 'completed_at', None)) == date]
+    dropped = [t for t in tasks if d10(getattr(t, 'dropped_at', None)) == date]
+    offloaded = [t for t in tasks if d10(getattr(t, 'offloaded_at', None)) == date]
+
+    deadlines_met = deadlines_missed = hard_missed = 0
+    for t in tasks:
+        dl = _parse_dt_any(getattr(t, 'deadline', None))
+        if not dl:
+            continue
+        if dl.tzinfo is not None:
+            dl = dl.replace(tzinfo=None)
+        if dl.strftime('%Y-%m-%d') != date:
+            continue
+        met = False
+        if t.completed and getattr(t, 'completed_at', None):
+            cdt = _parse_dt_any(t.completed_at)
+            met = (cdt is not None and cdt <= dl) or cdt is None
+        if met:
+            deadlines_met += 1
+        else:
+            deadlines_missed += 1
+            if getattr(t, 'deadline_type', None) == 'hard':
+                hard_missed += 1
+
+    tasks_postponed = sum(1 for e in behavior_log_entries if 'postpone' in str(e.get('event', '')).lower())
+
+    focus_entries = [e for e in behavior_log_entries if str(e.get('event', '')) in ('focus_session', 'focus_complete')]
+    focus_sessions = len(focus_entries)
+    focus_minutes_total = int(sum(float(e.get('minutes', 0) or 0) for e in focus_entries))
+
+    drifts = [t.slot_drift for t in completed if getattr(t, 'slot_drift', None) is not None]
+    avg_drift = round(sum(drifts) / len(drifts), 1) if drifts else None
+
+    hours = []
+    for e in behavior_log_entries:
+        if e.get('event') == 'task_completed':
+            dt = _parse_dt_any(e.get('ts'))
+            if dt:
+                hours.append(dt.hour)
+    if not hours:
+        for t in completed:
+            cdt = _parse_dt_any(t.completed_at)
+            if cdt:
+                hours.append(cdt.hour)
+    best_hour = None
+    if hours:
+        from collections import Counter
+        best_hour = Counter(hours).most_common(1)[0][0]
+
+    rec_activated = rec_success = False
+    try:
+        if storage.recovery_log_file.exists():
+            with open(storage.recovery_log_file, 'r') as rf:
+                for s in json.load(rf):
+                    if isinstance(s, dict) and s.get('date') == date:
+                        rec_activated = True
+                        if s.get('was_successful'):
+                            rec_success = True
+    except Exception:
+        pass
+
+    summary = {
+        "date": date,
+        "tasks_completed": len(completed),
+        "tasks_missed": deadlines_missed,
+        "tasks_postponed": tasks_postponed,
+        "tasks_dropped": len(dropped),
+        "tasks_offloaded": len(offloaded),
+        "focus_sessions": focus_sessions,
+        "focus_minutes_total": focus_minutes_total,
+        "deadlines_met": deadlines_met,
+        "deadlines_missed": deadlines_missed,
+        "hard_deadlines_missed": hard_missed,
+        "avg_start_drift_minutes": avg_drift,
+        "recovery_activated": rec_activated,
+        "recovery_successful": rec_success,
+        "path_adherence": None,
+        "time_integrity_score": None,
+        "best_hour": best_hour,
+        "worst_hour": None,
+    }
+    summary["time_integrity_score"] = calculate_time_integrity_score(summary)
+    return summary
+
+
+def _most_productive_hour(n_days=7):
+    cutoff = (datetime.now() - timedelta(days=n_days)).date()
+    from collections import Counter
+    c = Counter()
+    for e in _all_behavior_entries():
+        if e.get('event') == 'task_completed':
+            dt = _parse_dt_any(e.get('ts'))
+            if dt and dt.date() >= cutoff:
+                c[dt.hour] += 1
+    return c.most_common(1)[0][0] if c else None
+
+
+def _most_avoided_tag(n_days=7):
+    cutoff = (datetime.now() - timedelta(days=n_days)).strftime('%Y-%m-%d')
+    from collections import Counter
+    c = Counter()
+    for t in storage.load_tasks():
+        avoided = False
+        if getattr(t, 'dropped_at', None) and t.dropped_at[:10] >= cutoff:
+            avoided = True
+        if (getattr(t, 'postpone_count', 0) or 0) >= 1:
+            avoided = True
+        if avoided:
+            for tag in (t.tags or []):
+                if tag.lower() != 'inbox':
+                    c[tag] += 1
+    return c.most_common(1)[0][0] if c else None
+
+
+def compute_weekly_stats(daily_summaries) -> dict:
+    """Aggregate the last 7 daily summaries (S12-C)."""
+    days = sorted([d for d in daily_summaries if isinstance(d, dict)], key=lambda s: s.get('date', ''))[-7:]
+    if not days:
+        return None
+    scores = [(d.get('time_integrity_score') or 0) for d in days]
+    avg = round(sum(scores) / len(scores), 1)
+    best = max(days, key=lambda d: d.get('time_integrity_score') or 0)
+    worst = min(days, key=lambda d: d.get('time_integrity_score') or 0)
+
+    last3, prev = scores[-3:], scores[:-3]
+    trend = 'stable'
+    if last3 and prev:
+        a, b = sum(last3) / len(last3), sum(prev) / len(prev)
+        if a > b + 5:
+            trend = 'improving'
+        elif a < b - 5:
+            trend = 'declining'
+
+    drifts = [d.get('avg_start_drift_minutes') for d in days if d.get('avg_start_drift_minutes') is not None]
+    return {
+        "avg_score": avg,
+        "best_day": {"date": best.get('date'), "score": best.get('time_integrity_score') or 0},
+        "worst_day": {"date": worst.get('date'), "score": worst.get('time_integrity_score') or 0},
+        "trend": trend,
+        "total_completed": sum(d.get('tasks_completed', 0) or 0 for d in days),
+        "total_focus_minutes": sum(d.get('focus_minutes_total', 0) or 0 for d in days),
+        "avg_start_drift": (round(sum(drifts) / len(drifts), 1) if drifts else None),
+        "most_productive_hour": _most_productive_hour(7),
+        "most_avoided_tag": _most_avoided_tag(7),
+        "recovery_sessions": sum(1 for d in days if d.get('recovery_activated')),
+        "hard_deadlines_missed_week": sum(d.get('hard_deadlines_missed', 0) or 0 for d in days),
+        "days": days,
+    }
+
+
+def ensure_daily_summaries(force=False):
+    """Backfill/append daily summaries for completed days. Runs once per new day."""
+    config = storage.load_config()
+    today = datetime.now().strftime('%Y-%m-%d')
+    if not force and config.get('last_summary_date') == today:
+        return storage.load_daily_summaries()
+
+    summaries = storage.load_daily_summaries()
+    existing = {s.get('date') for s in summaries if isinstance(s, dict)}
+    tasks = storage.load_tasks()
+
+    dates = set()
+    for t in tasks:
+        for attr in ('completed_at', 'dropped_at', 'offloaded_at'):
+            v = getattr(t, attr, None)
+            if v:
+                dates.add(v[:10])
+    for e in _all_behavior_entries():
+        ts = e.get('ts', '')
+        if isinstance(ts, str) and len(ts) >= 10:
+            dates.add(ts[:10])
+
+    for d in sorted(dates):
+        if d >= today or d in existing:
+            continue
+        summaries.append(compute_daily_summary(d, tasks, get_behavior_log_entries(d)))
+        existing.add(d)
+
+    summaries.sort(key=lambda s: s.get('date', ''))
+    storage.save_daily_summaries(summaries)
+    config['last_summary_date'] = today
+    storage.save_config(config)
+    recalc_streak()
+    return summaries
+
+
+def recalc_streak():
+    """Consecutive days with >=1 completion (Seinfeld chain). Stored in config (Rule #6)."""
+    config = storage.load_config()
+    today = datetime.now().strftime('%Y-%m-%d')
+    done_dates = {s['date'] for s in storage.load_daily_summaries()
+                  if isinstance(s, dict) and (s.get('tasks_completed', 0) or 0) >= 1}
+    tasks = storage.load_tasks()
+    if any(t.completed and (getattr(t, 'completed_at', '') or '')[:10] == today for t in tasks):
+        done_dates.add(today)
+
+    streak = 0
+    cur = datetime.now().date()
+    if today not in done_dates:
+        cur = cur - timedelta(days=1)
+    while cur.strftime('%Y-%m-%d') in done_dates:
+        streak += 1
+        cur = cur - timedelta(days=1)
+
+    config['execution_streak'] = streak
+    config['streak_last_date'] = today
+    storage.save_config(config)
+    return streak
+
+
+def check_momentum_warning():
+    """Brainstorm #3 — gentle re-entry nudge after 2+ days with no completions."""
+    tasks = storage.load_tasks()
+    last = None
+    for t in tasks:
+        if t.completed and getattr(t, 'completed_at', None):
+            d = t.completed_at[:10]
+            if last is None or d > last:
+                last = d
+    if last is None:
+        return
+    last_dt = _parse_dt_any(last)
+    if not last_dt:
+        return
+    gap = (datetime.now().date() - last_dt.date()).days
+    if gap < 2:
+        return
+    pend = [t for t in tasks if not t.completed and not getattr(t, 'dropped_at', None)
+            and not getattr(t, 'offloaded_at', None)]
+    order = {'15m': 1, '30m': 2, '1h': 3, '2h': 4, '3h': 5, '4h+': 6}
+    pend.sort(key=lambda t: order.get((t.duration or '').lower(), 3))
+    print(f"{Fore.YELLOW}No completions in {gap} days. Small win today?{Style.RESET_ALL}")
+    if pend:
+        dur = f" [{pend[0].duration}]" if pend[0].duration else ""
+        print(f"{Fore.CYAN}  → {pend[0].title}{dur}  ·  taskflow complete {pend[0].id}{Style.RESET_ALL}")
+
+
+# ---- S12-D rendering helpers ----
+
+def _tis_bar(score):
+    filled = max(0, min(10, round((score or 0) / 10)))
+    return "█" * filled + "░" * (10 - filled)
+
+
+def _trend_arrow(trend):
+    if trend == 'improving':
+        return f"{Fore.GREEN}↑ improving{Style.RESET_ALL}"
+    if trend == 'declining':
+        return f"{Fore.RED}↓ declining{Style.RESET_ALL}"
+    return f"{Fore.YELLOW}→ stable{Style.RESET_ALL}"
+
+
+def _dow(date):
+    dt = _parse_dt_any(date)
+    return dt.strftime('%A') if dt else (date or "")
+
+
+def _hour_range(h):
+    if h is None:
+        return "—"
+    def lab(x):
+        x %= 24
+        ap = 'am' if x < 12 else 'pm'
+        hh = x % 12
+        return f"{12 if hh == 0 else hh}{ap}"
+    return f"{lab(h)}–{lab(h + 1)}"
+
+
+def _print_streak_line(config):
+    streak = config.get('execution_streak', 0) or 0
+    fire = " 🔥" if streak > 0 else ""
+    print(f"  Streak: {Fore.YELLOW}{streak} day{'s' if streak != 1 else ''}{fire}{Style.RESET_ALL}")
+
+
+def _today_summary_live():
+    today = datetime.now().strftime('%Y-%m-%d')
+    s = compute_daily_summary(today, storage.load_tasks(), get_behavior_log_entries(today))
+    cfg = storage.load_config()
+    s['path_adherence'] = cfg.get('path_adherence_today')
+    return s
+
+
+def render_stats_main():
+    summaries = storage.load_daily_summaries()
+    config = storage.load_config()
+    bar = Fore.CYAN + ("━" * 44) + Style.RESET_ALL
+    print()
+    print(bar)
+    print(f"{Fore.CYAN + Style.BRIGHT}⚡  PERFORMANCE TELEMETRY{Style.RESET_ALL}")
+    print(bar)
+    print()
+
+    if len(summaries) < 3:
+        print(f"{Fore.YELLOW}Building your execution profile…{Style.RESET_ALL}")
+        print(f"{len(summaries)}/3 days of history. Keep using TaskFlow — stats populate automatically.")
+        print()
+        _print_streak_line(config)
+        print(bar)
+        return
+
+    w = compute_weekly_stats(summaries)
+    print("TIME INTEGRITY SCORE (7-day avg)")
+    print(f"  {_tis_bar(w['avg_score'])}  {round(w['avg_score'])} / 100  {_trend_arrow(w['trend'])}")
+    bd, wd = w['best_day'], w['worst_day']
+    print(f"  Best day: {_dow(bd['date'])} ({bd['score']})  ·  Watch: {_dow(wd['date'])} ({wd['score']})")
+    print()
+
+    miss = sum(d.get('tasks_missed', 0) or 0 for d in w['days'])
+    drop = sum(d.get('tasks_dropped', 0) or 0 for d in w['days'])
+    dmet = sum(d.get('deadlines_met', 0) or 0 for d in w['days'])
+    dmiss = sum(d.get('deadlines_missed', 0) or 0 for d in w['days'])
+    hardw = w['hard_deadlines_missed_week']
+    print("EXECUTION SUMMARY (this week)")
+    print(f"  Completed: {w['total_completed']}  ·  Missed: {miss}  ·  Dropped: {drop}")
+    hard_str = f"  ({Fore.RED}{hardw} HARD{Style.RESET_ALL})" if hardw else ""
+    print(f"  Deadlines: {dmet} met  ·  {dmiss} missed{hard_str}")
+    sessions = sum(d.get('focus_sessions', 0) or 0 for d in w['days'])
+    print(f"  Focus time: {_fmt_minutes(w['total_focus_minutes'])} across {sessions} sessions")
+    print()
+
+    print("PATTERNS")
+    ph = w['most_productive_hour']
+    print(f"  Peak hour: {_hour_range(ph)}  (highest completion rate)" if ph is not None else "  Peak hour: —")
+    if w['most_avoided_tag']:
+        print(f"  {Fore.YELLOW}Watch out: #{w['most_avoided_tag']} tasks  (most avoided category){Style.RESET_ALL}")
+    ad = w['avg_start_drift']
+    if ad is not None:
+        note = "you start late" if ad > 0 else "ahead of plan"
+        print(f"  Avg start drift: {'+' if ad > 0 else ''}{round(ad)} min  ({note})")
+    if config.get('path_adherence_today') is not None:
+        print(f"  Path adherence: {round(config['path_adherence_today'] * 100)}%")
+    print()
+
+    print("MOMENTUM")
+    _print_streak_line(config)
+    # Brainstorm #6 — velocity (this-week vs prior-week tasks/day)
+    all_sorted = sorted(summaries, key=lambda s: s.get('date', ''))
+    this_wk = all_sorted[-7:]
+    prev_wk = all_sorted[-14:-7]
+    if this_wk:
+        v_now = sum(d.get('tasks_completed', 0) or 0 for d in this_wk) / len(this_wk)
+        line = f"  Velocity: {v_now:.1f} tasks/day"
+        if prev_wk:
+            v_prev = sum(d.get('tasks_completed', 0) or 0 for d in prev_wk) / len(prev_wk)
+            arrow = "↑" if v_now > v_prev else ("↓" if v_now < v_prev else "→")
+            line += f"  ({arrow} from {v_prev:.1f})"
+        print(line)
+    # Brainstorm #8 — focus effectiveness (tasks/day with vs without a focus session)
+    wf = [d for d in summaries if (d.get('focus_sessions', 0) or 0) > 0]
+    nf = [d for d in summaries if (d.get('focus_sessions', 0) or 0) == 0]
+    if wf and nf:
+        def _avg_done(lst):
+            return sum(d.get('tasks_completed', 0) or 0 for d in lst) / len(lst)
+        print(f"  Focus effect: {_avg_done(wf):.1f} done/day with focus  vs  {_avg_done(nf):.1f} without")
+    if w['recovery_sessions']:
+        succ = sum(1 for d in w['days'] if d.get('recovery_successful'))
+        print(f"  Recovery: {w['recovery_sessions']} session(s) this week  ·  {succ} successful")
+    print()
+    print(bar)
+
+
+def render_stats_today():
+    s = _today_summary_live()
+    bar = Fore.CYAN + ("━" * 44) + Style.RESET_ALL
+    print(f"\n{bar}\n{Fore.CYAN + Style.BRIGHT}⚡  TODAY · {_dow(s['date'])}{Style.RESET_ALL}\n{bar}\n")
+    print(f"  Time Integrity (partial): {_tis_bar(s['time_integrity_score'])}  {s['time_integrity_score']} / 100")
+    print(f"  Completed: {s['tasks_completed']}  ·  Missed: {s['tasks_missed']}  ·  Postponed: {s['tasks_postponed']}")
+    print(f"  Deadlines: {s['deadlines_met']} met  ·  {s['deadlines_missed']} missed")
+    print(f"  Focus: {_fmt_minutes(s['focus_minutes_total'])} across {s['focus_sessions']} sessions")
+    if s['best_hour'] is not None:
+        print(f"  Most active hour: {_hour_range(s['best_hour'])}")
+    print(f"\n{bar}")
+
+
+def render_stats_week():
+    summaries = sorted(storage.load_daily_summaries(), key=lambda s: s.get('date', ''))[-7:]
+    bar = Fore.CYAN + ("━" * 56) + Style.RESET_ALL
+    print(f"\n{bar}\n{Fore.CYAN + Style.BRIGHT}⚡  7-DAY BREAKDOWN{Style.RESET_ALL}\n{bar}")
+    if not summaries:
+        print("  Not enough data yet.")
+        print(bar)
+        return
+    print(f"  {'DAY':<10} {'SCORE':>5}  {'DONE':>4} {'MISS':>4} {'FOCUS':>6}")
+    for d in summaries:
+        sc = d.get('time_integrity_score') or 0
+        col = Fore.GREEN if sc >= 80 else (Fore.YELLOW if sc >= 60 else Fore.RED)
+        print(f"  {_dow(d.get('date'))[:10]:<10} {col}{sc:>5}{Style.RESET_ALL}  "
+              f"{d.get('tasks_completed', 0):>4} {d.get('tasks_missed', 0):>4} "
+              f"{_fmt_minutes(d.get('focus_minutes_total', 0)):>6}")
+    print(bar)
+
+
+def export_stats_csv():
+    import csv
+    summaries = storage.load_daily_summaries()
+    if not summaries:
+        print("No daily summaries to export yet.")
+        return
+    fname = f"taskflow_stats_{datetime.now().strftime('%Y%m%d')}.csv"
+    cols = ["date", "tasks_completed", "tasks_missed", "tasks_postponed", "tasks_dropped",
+            "tasks_offloaded", "focus_sessions", "focus_minutes_total", "deadlines_met",
+            "deadlines_missed", "hard_deadlines_missed", "avg_start_drift_minutes",
+            "recovery_activated", "recovery_successful", "path_adherence",
+            "time_integrity_score", "best_hour", "worst_hour"]
+    try:
+        with open(fname, 'w', newline='', encoding='utf-8') as f:
+            w = csv.DictWriter(f, fieldnames=cols)
+            w.writeheader()
+            for s in summaries:
+                w.writerow({c: s.get(c) for c in cols})
+        print(f"Exported {len(summaries)} day(s) → {fname}")
+    except Exception as e:
+        print(f"Export failed: {e}")
+
+
+def render_stats_accuracy():
+    """Brainstorm #5 — duration estimate accuracy from duration_accuracy_ratio."""
+    tasks = [t for t in storage.load_tasks()
+             if getattr(t, 'duration_accuracy_ratio', None) is not None]
+    bar = Fore.CYAN + ("━" * 44) + Style.RESET_ALL
+    print(f"\n{bar}\n{Fore.CYAN + Style.BRIGHT}⚡  DURATION ACCURACY{Style.RESET_ALL}\n{bar}\n")
+    if len(tasks) < 3:
+        print(f"{Fore.YELLOW}Building profile… complete a few timed tasks (focus + estimate) first.{Style.RESET_ALL}")
+        print(bar)
+        return
+    ratios = [t.duration_accuracy_ratio for t in tasks]
+    avg = sum(ratios) / len(ratios)
+    pct = round((avg - 1) * 100)
+    if pct > 0:
+        print(f"  You underestimate by {pct}% on average (tasks run long).")
+    elif pct < 0:
+        print(f"  You overestimate by {abs(pct)}% on average (tasks finish early).")
+    else:
+        print("  Your estimates are spot-on on average.")
+    # worst tag
+    from collections import defaultdict
+    tagsum = defaultdict(list)
+    for t in tasks:
+        for tag in (t.tags or []):
+            if tag.lower() != 'inbox':
+                tagsum[tag].append(t.duration_accuracy_ratio)
+    worst = None
+    for tag, rs in tagsum.items():
+        m = sum(rs) / len(rs)
+        if worst is None or m > worst[1]:
+            worst = (tag, m)
+    if worst and worst[1] > 1.05:
+        print(f"  Worst category: #{worst[0]} (+{round((worst[1] - 1) * 100)}% over estimate)")
+    print(f"\n{bar}")
+
+
+def render_stats_tags():
+    """Brainstorm #4 — completion rate by tag."""
+    tasks = storage.load_tasks()
+    from collections import defaultdict
+    tot = defaultdict(int)
+    done = defaultdict(int)
+    for t in tasks:
+        for tag in (t.tags or []):
+            if tag.lower() == 'inbox':
+                continue
+            tot[tag] += 1
+            if t.completed:
+                done[tag] += 1
+    bar = Fore.CYAN + ("━" * 44) + Style.RESET_ALL
+    print(f"\n{bar}\n{Fore.CYAN + Style.BRIGHT}⚡  PERFORMANCE BY CATEGORY{Style.RESET_ALL}\n{bar}\n")
+    if not tot:
+        print(f"{Fore.YELLOW}No tagged tasks yet. Tag tasks to see category performance.{Style.RESET_ALL}")
+        print(bar)
+        return
+    for tag in sorted(tot, key=lambda k: done[k] / max(1, tot[k]), reverse=True):
+        rate = round(done[tag] / max(1, tot[tag]) * 100)
+        col = Fore.GREEN if rate >= 70 else (Fore.YELLOW if rate >= 40 else Fore.RED)
+        print(f"  #{tag:<16} {col}{rate:>3}%{Style.RESET_ALL}  ({done[tag]}/{tot[tag]})")
+    print(f"\n{bar}")
+
+
+def render_heatmap():
+    """Brainstorm #2 — ASCII completion heatmap by hour, last 30 days."""
+    from collections import Counter
+    cutoff = (datetime.now() - timedelta(days=30)).date()
+    by_hour = Counter()
+    for e in _all_behavior_entries():
+        if e.get('event') == 'task_completed':
+            dt = _parse_dt_any(e.get('ts'))
+            if dt and dt.date() >= cutoff:
+                by_hour[dt.hour] += 1
+    bar = Fore.CYAN + ("━" * 52) + Style.RESET_ALL
+    print(f"\n{bar}\n{Fore.CYAN + Style.BRIGHT}⚡  PRODUCTIVITY HEATMAP · last 30 days{Style.RESET_ALL}\n{bar}\n")
+    if not by_hour:
+        print(f"{Fore.YELLOW}No completion history yet. Complete tasks to build the map.{Style.RESET_ALL}")
+        print(bar)
+        return
+    peak = max(by_hour.values())
+    blocks = " ▁▂▃▄▅▆▇█"
+    # show 6:00 → 23:00 (waking hours), then any off-hours with activity
+    for h in range(6, 24):
+        n = by_hour.get(h, 0)
+        lvl = 0 if n == 0 else max(1, round(n / peak * (len(blocks) - 1)))
+        col = Fore.GREEN if n >= peak * 0.66 else (Fore.YELLOW if n > 0 else Fore.WHITE + Style.DIM)
+        print(f"  {_hour_range(h):<10} {col}{blocks[lvl] * 12}{Style.RESET_ALL} {n}")
+    print(f"\n{bar}")
+
+
+def command_rescue():
+    """Brainstorm #9 — best high-impact task completable in ~30 minutes."""
+    tasks = [t for t in storage.load_tasks()
+             if not t.completed and not getattr(t, 'dropped_at', None) and not getattr(t, 'offloaded_at', None)]
+    short = [t for t in tasks if (t.duration or '').lower() in ('15m', '30m')]
+    pool = short or [t for t in tasks if not t.duration] or tasks
+    if not pool:
+        print(f"\n{Fore.WHITE}Nothing to rescue — your board is clear.{Style.RESET_ALL}\n")
+        return
+
+    def rank(t):
+        score = score_for_path(t)
+        if getattr(t, 'deadline', None):
+            score += 25
+        if (t.duration or '').lower() in ('15m', '30m'):
+            score += 15
+        return score
+
+    best = max(pool, key=rank)
+    bar = Fore.CYAN + ("━" * 44) + Style.RESET_ALL
+    print(f"\n{bar}\n{Fore.CYAN + Style.BRIGHT}⚡  RESCUE MISSION{Style.RESET_ALL}\n{bar}\n")
+    dur = f" [{best.duration}]" if best.duration else ""
+    print(f"  Your best 30-minute win right now:\n")
+    print(f"  {_path_prio_color(best)}→ {best.title}{Style.RESET_ALL}{dur}  ·  {best.priority}")
+    due = _due_phrase(best)
+    if due:
+        print(f"    {Fore.WHITE + Style.DIM}Due: {due}{Style.RESET_ALL}")
+    print(f"\n  Start: {Fore.CYAN}taskflow complete {best.id}{Style.RESET_ALL}  when done.")
+    print(f"\n{bar}")
+
+
+def maybe_weekly_review():
+    """S12-E — Monday-morning weekly review prompt, once per week."""
+    now = datetime.now()
+    if now.weekday() != 0 or now.hour >= 12:
+        return
+    config = storage.load_config()
+    week_str = now.strftime('%G-W%V')
+    if config.get('last_weekly_review') == week_str:
+        return
+    summaries = storage.load_daily_summaries()
+    if len(summaries) < 3:
+        config['last_weekly_review'] = week_str
+        storage.save_config(config)
+        return
+    w = compute_weekly_stats(summaries)
+    bar = Fore.CYAN + ("━" * 44) + Style.RESET_ALL
+    print()
+    print(bar)
+    print(f"{Fore.CYAN + Style.BRIGHT}📊  WEEKLY REVIEW · Week of {now.strftime('%d %b')}{Style.RESET_ALL}")
+    print(bar)
+    print(f"Last week: Time Integrity Score  {round(w['avg_score'])} / 100  {_trend_arrow(w['trend'])}\n")
+    bd = w['best_day']
+    print(f"Your biggest win:  {_dow(bd['date'])} — top score {bd['score']}")
+    if w['avg_start_drift'] is not None and w['avg_start_drift'] > 0:
+        print(f"Your pattern:      you start ~{round(w['avg_start_drift'])} min late")
+    if w['most_avoided_tag']:
+        print(f"Your avoidance:    #{w['most_avoided_tag']} tasks deferred most\n")
+    else:
+        print()
+    print("This week, watch for:")
+    if w['most_avoided_tag']:
+        print(f"→ Schedule #{w['most_avoided_tag']} tasks earlier in the day")
+    print(f"→ Lighter loading on {_dow(w['worst_day']['date'])}")
+    print(bar)
+    try:
+        choice = get_valid_input("\nReady to start the week? [Enter to continue / Q to skip]: ", "")
+    except Exception:
+        choice = ""
+    config['last_weekly_review'] = week_str
+    storage.save_config(config)
+    if (choice or "").strip().lower() == 'q':
+        return
+
+
 def run_today_view():
     """Show today's tasks chronologically with Now Window."""
     tasks = storage.load_tasks()
@@ -4457,6 +5799,12 @@ def run_today_view():
             # Only no-deadline tasks remain — surface the highest-priority one
             nt = untimed_tasks[0][0]
             print(Fore.CYAN + Style.BRIGHT + f"Next mission: {nt.title}" + Style.RESET_ALL)
+    # S10-D: pointer to the full Daily Execution Path (one line, not the path itself)
+    print()
+    print(Fore.WHITE + Style.DIM + "─" * 50 + Style.RESET_ALL)
+    print(f"  Execution path: {Fore.CYAN}taskflow path{Style.RESET_ALL}")
+    print(Fore.WHITE + Style.DIM + "─" * 50 + Style.RESET_ALL)
+
     print()
     print_today_missed_notice(tasks)  # PASSIVE bottom notice — never prompts (see: taskflow missed)
 

@@ -2117,6 +2117,21 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     </div>
 
                 </div>
+
+                <!-- S10: DAILY EXECUTION PATH -->
+                <div class="mission-panel" id="cc-path-panel" style="padding: 24px; margin-top: 24px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <div class="section-label" style="margin:0; font-size:10px; letter-spacing:2px;">EXECUTION PATH</div>
+                        <div id="cc-path-meta" style="font-size:10px; color:var(--text-disabled); font-family:var(--font-mono);"></div>
+                    </div>
+                    <div id="cc-path-body" style="margin-top:16px; display:flex; flex-direction:column; gap:12px;">
+                        <!-- Filled by JS via /api/path -->
+                    </div>
+                    <button id="cc-path-regen" onclick="regeneratePath()"
+                        style="margin-top:16px; width:100%; background:transparent; border:1px dashed #30363D; color:#6E7681; font-size:11px; padding:10px; border-radius:8px; cursor:pointer; font-family:'DM Mono',monospace; letter-spacing:1px;">
+                        ↻ REGENERATE PATH
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -2233,7 +2248,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     <div class="mission-panel" style="padding:32px;">
                         <div class="section-label" style="color:var(--ai-purple);">SYSTEM LOG</div>
                         <div id="intel-logs" style="margin-top:20px; display:flex; flex-direction:column; gap:16px;">
-                            <div style="padding:12px; border-left:2px solid var(--green); background:rgba(255,255,255,0.02); font-size:12px;">Intelligence module booting...</div>
+                            <div style="padding:12px; border-left:2px solid var(--green); background:rgba(255,255,255,0.02); font-size:12px;">Your real behavioral telemetry is live in the <strong>Analytics</strong> tab — Time Integrity Score, patterns, streaks and recovery history, computed from how you actually work.</div>
+                            <div style="padding:12px; border-left:2px solid var(--blue); background:rgba(255,255,255,0.02); font-size:12px;">CLI: <code>taskflow stats</code>, <code>taskflow heatmap</code>, <code>taskflow rescue</code>, <code>taskflow path</code>.</div>
+                            <div style="padding:12px; border-left:2px solid var(--ai-purple); background:rgba(255,255,255,0.02); font-size:12px;">The adaptive AI layer (predictive scheduling, natural-language coaching) arrives in <strong>Phase 3</strong>.</div>
                         </div>
                     </div>
                     
@@ -2241,6 +2258,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     <div class="mission-panel" style="padding:32px; background:rgba(163, 113, 247, 0.05); border-color:rgba(163, 113, 247, 0.2);">
                         <div class="section-label" style="color:var(--ai-purple);">AI ADVISORY</div>
                         <div id="intel-advisory" style="margin-top:20px; font-size:13px; line-height:1.6; color:var(--text-body);">
+                            <div style="margin-bottom:16px;"><span style="color:var(--ai-purple);">✦</span> TaskFlow keeps its intelligence <strong>honest</strong>: every number you see is computed from your own logged behavior — never invented.</div>
+                            <div><span style="color:var(--ai-purple);">✦</span> Once you have a few days of history, the Analytics tab will surface your peak hour, most-avoided category, and start-time drift automatically.</div>
                         </div>
                     </div>
                 </div>
@@ -2250,32 +2269,48 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         <!-- VIEW: ANALYTICS -->
         <div id="view-stats" class="view-content hidden">
             <div style="max-width: 900px; margin: 0 auto; width: 100%;">
-                <div class="section-label" style="text-align:center; margin-bottom: 24px;">SYSTEM ANALYTICS</div>
-                
-                <!-- Metrics Grid -->
-                <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:16px; margin-bottom:24px;">
-                    <div class="mission-panel" style="padding:24px; text-align:center;">
-                        <div style="font-size:10px; color:var(--text-disabled); margin-bottom:8px;">COMPLETION RATE</div>
-                        <div id="stat-completion" style="font-size:28px; font-weight:700; color:var(--green); font-family:var(--font-mono);">0%</div>
-                    </div>
-                    <div class="mission-panel" style="padding:24px; text-align:center;">
-                        <div style="font-size:10px; color:var(--text-disabled); margin-bottom:8px;">FOCUS TIME</div>
-                        <div id="stat-focus" style="font-size:28px; font-weight:700; color:var(--blue); font-family:var(--font-mono);">0h</div>
-                    </div>
-                    <div class="mission-panel" style="padding:24px; text-align:center;">
-                        <div style="font-size:10px; color:var(--text-disabled); margin-bottom:8px;">HIGH PRIORITIES</div>
-                        <div id="stat-high-pct" style="font-size:28px; font-weight:700; color:var(--red); font-family:var(--font-mono);">0%</div>
-                    </div>
-                    <div class="mission-panel" style="padding:24px; text-align:center;">
-                        <div style="font-size:10px; color:var(--text-disabled); margin-bottom:8px;">CONSISTENCY</div>
-                        <div id="stat-streak" style="font-size:28px; font-weight:700; color:var(--amber); font-family:var(--font-mono);">0 Days</div>
-                    </div>
-                </div>
+                <div class="section-label" style="text-align:center; margin-bottom: 24px;">PERFORMANCE TELEMETRY</div>
 
-                <!-- Graph -->
-                <div class="mission-panel" style="padding:32px;">
-                    <div class="section-label">7-DAY TRAJECTORY</div>
-                    <div id="stat-chart" style="height:200px; margin-top:24px; display:flex; align-items:flex-end; gap:12px; padding-bottom:12px; border-bottom:1px solid var(--border-neutral);">
+                <div id="stats-building" style="display:none; text-align:center; color:var(--text-muted); font-size:13px; margin-bottom:24px;"></div>
+
+                <div id="stats-content">
+                    <!-- Section 1: TIME INTEGRITY gauge + Section 2: WEEK OVERVIEW -->
+                    <div style="display:grid; grid-template-columns: 280px 1fr; gap:24px; margin-bottom:24px;">
+                        <div class="mission-panel" style="padding:24px; text-align:center;">
+                            <div class="section-label" style="margin:0 0 12px;">TIME INTEGRITY SCORE</div>
+                            <svg width="180" height="180" viewBox="0 0 180 180" style="margin:0 auto; display:block;">
+                                <circle cx="90" cy="90" r="78" fill="none" stroke="var(--border-neutral)" stroke-width="10"></circle>
+                                <circle id="tis-ring" cx="90" cy="90" r="78" fill="none" stroke="#3FB950" stroke-width="10"
+                                        stroke-linecap="round" stroke-dasharray="490" stroke-dashoffset="490"
+                                        transform="rotate(-90 90 90)" style="transition:stroke-dashoffset 0.8s ease, stroke 0.4s;"></circle>
+                                <text id="tis-num" x="90" y="86" text-anchor="middle" font-family="var(--font-mono)" font-size="48" font-weight="300" fill="var(--text-hero)">—</text>
+                                <text id="tis-sub" x="90" y="112" text-anchor="middle" font-size="11" fill="var(--text-disabled)">7-day avg</text>
+                            </svg>
+                            <div id="tis-trend" style="margin-top:10px; font-size:12px;">—</div>
+                            <div id="tis-bestworst" style="margin-top:6px; font-size:11px; color:var(--text-disabled);"></div>
+                        </div>
+                        <div class="mission-panel" style="padding:24px;">
+                            <div class="section-label" style="margin:0 0 8px;">WEEK OVERVIEW</div>
+                            <div id="tis-bars" style="height:180px; display:flex; align-items:flex-end; gap:10px; padding-top:20px;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Section 3: EXECUTION BREAKDOWN -->
+                    <div class="mission-panel" style="padding:24px; margin-bottom:24px;">
+                        <div class="section-label" style="margin:0 0 16px;">EXECUTION BREAKDOWN</div>
+                        <div id="stats-chips" style="display:grid; grid-template-columns: repeat(4, 1fr); gap:12px;"></div>
+                    </div>
+
+                    <!-- Section 4: PATTERNS + Section 5: RECOVERY HISTORY -->
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:24px;">
+                        <div class="mission-panel" style="padding:24px;">
+                            <div class="section-label" style="margin:0 0 16px;">PATTERNS</div>
+                            <div id="stats-patterns" style="font-size:13px; color:var(--text-body); display:flex; flex-direction:column; gap:12px;"></div>
+                        </div>
+                        <div class="mission-panel" style="padding:24px;">
+                            <div class="section-label" style="margin:0 0 16px;">RECOVERY HISTORY</div>
+                            <div id="stats-recovery" style="font-size:12px; color:var(--text-muted); display:flex; flex-direction:column; gap:8px;"></div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -2510,6 +2545,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
             </div><!-- /dm-body -->
             <div class="dm-footer">
+                <span id="dm-focus-badge" style="display:none; font-size:10px; color:#58A6FF; background:rgba(88,166,255,0.1); border:1px solid #58A6FF; border-radius:12px; padding:3px 8px; font-family:'DM Mono',monospace; align-self:center; margin-right:8px;"></span>
                 <button class="btn-deploy" id="btn-deploy" disabled>DEPLOY MISSION</button>
                 <button class="dm-cancel" onclick="toggleCreateMission()">CANCEL</button>
             </div>
@@ -2771,6 +2807,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             if (window.tfUpdateProgressDots) tfUpdateProgressDots();
             const body = document.getElementById('dm-body');
             if (body) { body.scrollTop = 0; body.style.boxShadow = 'none'; }
+            try { tfSyncFocusLock(); } catch (e) {}
             setTimeout(() => { const ti = document.getElementById('mission-title'); if (ti) ti.focus(); }, 280);
         }
     }
@@ -2991,12 +3028,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 payload.reminder_offset = parseInt(document.getElementById('event-reminder').value);
             }
             try {
-                const res = await fetch('/api/tasks/create-full', {
+                const _focusQueue = !!window.tfFocusActive;
+                const res = await fetch(_focusQueue ? '/api/focus/queue' : '/api/tasks/create-full', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify(payload)
                 });
                 if (res.ok) {
+                    if (_focusQueue) { try { showToast('Queued — adds when focus ends', 'var(--blue)'); } catch(e){} try { tfSyncFocusLock(); } catch(e){} }
                     missionTitle.value = '';
                     if(document.getElementById('mission-tags')) document.getElementById('mission-tags').value = '';
                     tfResetEnrichmentPanel();
@@ -3061,6 +3100,101 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             console.error("Critical: Task Cascade Engine Failed", e);
             showToast('Cascade Error: ' + e.message, 'var(--red)');
         }
+    }
+
+    // ── S10: DAILY EXECUTION PATH ──
+    function _pathFmtMins(m) {
+        m = Math.round(m || 0);
+        if (m <= 0) return '0m';
+        const h = Math.floor(m / 60), mm = m % 60;
+        return h && mm ? `${h}h ${mm}m` : (h ? `${h}h` : `${mm}m`);
+    }
+    function renderPath(data) {
+        const body = document.getElementById('cc-path-body');
+        const meta = document.getElementById('cc-path-meta');
+        if (!body) return;
+        const sections = (data && data.sections) || {};
+        const sm = (data && data.section_minutes) || {};
+        const prime = sections.prime || [], sec = sections.secondary || [], low = sections.low_effort || [];
+
+        function durBadge(t) {
+            return t.duration
+                ? `<span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--blue);background:rgba(88,166,255,0.08);padding:1px 6px;border-radius:4px;margin-left:8px;">${t.duration}</span>`
+                : '';
+        }
+        function dlStr(t) {
+            const d = (typeof formatDeadline === 'function') ? formatDeadline(t.deadline) : null;
+            return d ? `<span style="font-size:10px;color:${d.color};margin-left:8px;font-family:'DM Mono',monospace;">${d.text}</span>` : '';
+        }
+        function row(t) {
+            const done = t.completed ? 'opacity:0.5;text-decoration:line-through;' : '';
+            return `<div style="display:flex;align-items:center;flex-wrap:wrap;font-size:13px;color:var(--text-body);${done}">${t.title}${durBadge(t)}${dlStr(t)}</div>`;
+        }
+        function group(label, color, bg, items) {
+            if (!items.length) return '';
+            const rows = items.map(row).join('<div style="height:6px;"></div>');
+            return `<div style="background:${bg};border-left:3px solid ${color};border-radius:8px;padding:12px 14px;">
+                <div style="font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:${color};margin-bottom:8px;font-weight:700;">${label}</div>
+                ${rows}
+            </div>`;
+        }
+
+        let html = '';
+        html += group('★ PRIME TARGET', '#D29922', 'rgba(210,153,34,0.04)', prime);
+        html += group('SECONDARY', '#58A6FF', 'rgba(88,166,255,0.03)', sec);
+        html += group('LOW EFFORT', '#6E7681', 'rgba(139,148,158,0.03)', low);
+        if (!html) html = '<div style="opacity:0.5;font-size:12px;">No missions for today. Add one to generate a path.</div>';
+        body.innerHTML = html;
+
+        if (meta) {
+            const total = (sm.prime || 0) + (sm.secondary || 0) + (sm.low_effort || 0);
+            let m = `Est. ${_pathFmtMins(total)}`;
+            if (data && data.adherence != null) m += ` · adherence ${Math.round(data.adherence * 100)}%`;
+            meta.textContent = m;
+        }
+    }
+    function loadPath() {
+        fetch('/api/path').then(r => r.json()).then(renderPath).catch(() => {});
+    }
+    function regeneratePath() {
+        const btn = document.getElementById('cc-path-regen');
+        if (btn) { btn.textContent = '↻ REGENERATING…'; btn.disabled = true; }
+        fetch('/api/path/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+            .then(r => r.json()).then(renderPath).catch(() => {})
+            .finally(() => { if (btn) { btn.textContent = '↻ REGENERATE PATH'; btn.disabled = false; } });
+    }
+
+    // ── S11: FOCUS WINDOW LOCK (deploy button + queue badge) ──
+    function tfSyncFocusLock() {
+        fetch('/api/focus-status').then(r => r.json()).then(s => {
+            window.tfFocusActive = !!(s && s.active);
+            window.tfQueueCount = (s && s.queued_count) || 0;
+            const btn = document.getElementById('btn-deploy');
+            const badge = document.getElementById('dm-focus-badge');
+            if (btn) {
+                if (window.tfFocusActive) {
+                    btn.dataset.focusLabel = '1';
+                    btn.textContent = 'FOCUS ACTIVE — WILL QUEUE';
+                    btn.style.background = 'linear-gradient(135deg,#D29922,#E3B341)';
+                    btn.style.borderColor = 'transparent';
+                    btn.style.color = '#0D1117';
+                } else if (btn.dataset.focusLabel) {
+                    btn.dataset.focusLabel = '';
+                    btn.textContent = 'DEPLOY MISSION';
+                    btn.style.background = '';
+                    btn.style.borderColor = '';
+                    btn.style.color = '';
+                }
+            }
+            if (badge) {
+                if (window.tfFocusActive && window.tfQueueCount > 0) {
+                    badge.style.display = 'inline-block';
+                    badge.textContent = window.tfQueueCount + ' queued';
+                } else {
+                    badge.style.display = 'none';
+                }
+            }
+        }).catch(() => {});
     }
 
     function updateControlCenter() {
@@ -3145,6 +3279,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 alertsContainer.innerHTML += `<div class="rec-alerts-zone"><button class="rec-alerts-btn" onclick="tfRecEntryConfirm()">⚡  ACTIVATE RECOVERY MODE</button></div>`;
             }
         }
+
+        // S10: refresh the Daily Execution Path panel alongside the control center
+        try { loadPath(); } catch (e) {}
+        // S11: keep the focus-lock UI (deploy button + queue badge) in sync
+        try { tfSyncFocusLock(); } catch (e) {}
 
         // ── UPCOMING MISSIONS ──
         const upcomingContainer = document.getElementById('cc-upcoming');
@@ -4165,53 +4304,106 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         if (inp) { inp.value = value; inp.dispatchEvent(new Event('input')); }
     };
 
-    // ── ANALYTICS & INTELLIGENCE SYSTEM ────────────────────────────────────
+    // ── S12: PERFORMANCE TELEMETRY (real behavioral analytics) ─────────────
+    function _statsDow(d) {
+        try { return new Date(d + 'T00:00:00').toLocaleDateString([], { weekday: 'long' }); }
+        catch (e) { return d || ''; }
+    }
+    function _statsHourRange(h) {
+        if (h == null) return '—';
+        const lab = x => { x = ((x % 24) + 24) % 24; const ap = x < 12 ? 'am' : 'pm'; const hh = x % 12; return `${hh === 0 ? 12 : hh}${ap}`; };
+        return `${lab(h)}–${lab(h + 1)}`;
+    }
     async function loadStats() {
         try {
-            const [statsRes, tasksRes] = await Promise.all([
-                fetch('/api/stats'),
-                fetch('/api/tasks')
-            ]);
-            const stats = await statsRes.json();
-            const tasksData = await tasksRes.json();
-            const tasks = tasksData.tasks || [];
-            
-            // Analytics
-            document.getElementById('stat-completion').textContent = `${Math.round(stats.completion_rate||0)}%`;
-            const highTotal = tasks.filter(t => t.priority === 'high').length;
-            const highDone = tasks.filter(t => t.priority === 'high' && t.completed).length;
-            document.getElementById('stat-high-pct').textContent = highTotal ? `${Math.round((highDone/highTotal)*100)}%` : '100%';
-            
-            const chart = document.getElementById('stat-chart');
-            if (chart) {
-                chart.innerHTML = Array(7).fill(0).map((_, i) => {
-                    const height = Math.floor(Math.random() * 80) + 20; // Simulated historical trajectory
-                    return `<div style="flex:1; background:var(--blue); opacity:0.7; border-radius:4px 4px 0 0; height:${height}%; transition:height 0.5s ease; position:relative;">
-                        <div style="position:absolute; bottom:-24px; left:0; right:0; text-align:center; font-size:9px; color:var(--text-disabled);">D-${6-i}</div>
+            const [wRes, dRes] = await Promise.all([fetch('/api/stats/weekly'), fetch('/api/stats/daily-summaries')]);
+            const w = await wRes.json();
+            const d = await dRes.json();
+            const days = (w && w.days) || (d && d.summaries) || [];
+
+            const building = document.getElementById('stats-building');
+            const content = document.getElementById('stats-content');
+            if (!days || days.length < 3) {
+                if (building) { building.style.display = 'block'; building.textContent = `Building your execution profile… ${days.length}/3 days. Keep using TaskFlow — analytics populate automatically.`; }
+                if (content) content.style.opacity = '0.35';
+                return;
+            }
+            if (building) building.style.display = 'none';
+            if (content) content.style.opacity = '1';
+
+            const color = s => s >= 80 ? '#3FB950' : (s >= 60 ? '#D29922' : '#F85149');
+            const avg = Math.round(w.avg_score || 0);
+
+            // Section 1 — gauge
+            const ring = document.getElementById('tis-ring');
+            const CIRC = 2 * Math.PI * 78;
+            if (ring) { ring.setAttribute('stroke-dasharray', CIRC.toFixed(1)); ring.setAttribute('stroke-dashoffset', (CIRC * (1 - avg / 100)).toFixed(1)); ring.setAttribute('stroke', color(avg)); }
+            const num = document.getElementById('tis-num'); if (num) { num.textContent = avg; num.setAttribute('fill', color(avg)); }
+            const trend = document.getElementById('tis-trend');
+            if (trend) { const t = w.trend || 'stable'; const tc = t === 'improving' ? '#3FB950' : (t === 'declining' ? '#F85149' : '#D29922'); const ar = t === 'improving' ? '↑' : (t === 'declining' ? '↓' : '→'); trend.innerHTML = `<span style="color:${tc};">${ar} ${t}</span> · 7-day average`; }
+            const bw = document.getElementById('tis-bestworst');
+            if (bw && w.best_day && w.worst_day) bw.textContent = `Best ${_statsDow(w.best_day.date)} (${w.best_day.score}) · Watch ${_statsDow(w.worst_day.date)} (${w.worst_day.score})`;
+
+            // Section 2 — week bars
+            const bars = document.getElementById('tis-bars');
+            const today = new Date().toISOString().slice(0, 10);
+            if (bars) {
+                bars.innerHTML = days.map(dd => {
+                    const sc = dd.time_integrity_score || 0;
+                    const h = Math.max(4, Math.round(sc / 100 * 150));
+                    const isToday = dd.date === today;
+                    return `<div title="${_statsDow(dd.date)}: ${sc} · ${dd.tasks_completed || 0} done" style="flex:1; display:flex; flex-direction:column; align-items:center; gap:6px;">
+                        <div style="width:100%; height:${h}px; background:${color(sc)}; border-radius:4px 4px 0 0; ${isToday ? 'outline:2px solid var(--text-hero); outline-offset:1px;' : ''}"></div>
+                        <div style="font-size:9px; color:var(--text-disabled);">${_statsDow(dd.date).slice(0, 3)}</div>
                     </div>`;
                 }).join('');
             }
-            
-            document.getElementById('stat-streak').textContent = `${Math.floor(Math.random() * 12) + 3} Days`;
-            document.getElementById('stat-focus').textContent = `${Math.floor(Math.random() * 40) + 12}h`;
 
-            // Intelligence
-            const logs = document.getElementById('intel-logs');
-            if (logs) {
-                logs.innerHTML = `
-                    <div style="padding:12px; border-left:2px solid var(--green); background:rgba(255,255,255,0.02); margin-bottom:8px; font-size:12px;">Execution efficiency improving. +12% delta over last cycle.</div>
-                    <div style="padding:12px; border-left:2px solid var(--ai-purple); background:rgba(255,255,255,0.02); margin-bottom:8px; font-size:12px;">Behavior pattern identified: Peak momentum established between 0900-1100 hrs.</div>
-                    <div style="padding:12px; border-left:2px solid var(--amber); background:rgba(255,255,255,0.02); margin-bottom:8px; font-size:12px;">Task cascade initiated. 4 missions completed consecutively.</div>
-                `;
+            // Section 3 — breakdown chips
+            const sum = k => days.reduce((a, x) => a + (x[k] || 0), 0);
+            const chips = [
+                ['Completed', sum('tasks_completed'), '#3FB950'],
+                ['Missed', sum('tasks_missed'), '#F85149'],
+                ['Postponed', sum('tasks_postponed'), '#D29922'],
+                ['Dropped', sum('tasks_dropped'), '#8B949E'],
+                ['Focus sessions', sum('focus_sessions'), '#58A6FF'],
+                ['Focus minutes', sum('focus_minutes_total'), '#58A6FF'],
+                ['Streak', (w.execution_streak || 0) + 'd', '#D29922'],
+                ['Hard misses', w.hard_deadlines_missed_week || 0, '#F85149'],
+            ];
+            const chipsEl = document.getElementById('stats-chips');
+            if (chipsEl) chipsEl.innerHTML = chips.map(([label, val, c]) =>
+                `<div style="background:#161B22; border:1px solid #21262D; border-radius:8px; padding:10px 14px;">
+                    <div style="font-family:'DM Mono',monospace; font-size:24px; color:${c};">${val}</div>
+                    <div style="color:#6E7681; font-size:10px; text-transform:uppercase; letter-spacing:1px; margin-top:4px;">${label}</div>
+                </div>`).join('');
+
+            // Section 4 — patterns
+            const pat = document.getElementById('stats-patterns');
+            if (pat) {
+                const drift = w.avg_start_drift;
+                const driftStr = drift == null ? '—' : `${drift > 0 ? '+' : ''}${Math.round(drift)} min`;
+                const driftColor = drift == null ? 'var(--text-muted)' : (drift > 0 ? '#D29922' : '#3FB950');
+                pat.innerHTML = `
+                    <div>PEAK HOUR <span style="float:right; color:var(--blue); font-family:'DM Mono',monospace;">${_statsHourRange(w.most_productive_hour)}</span></div>
+                    <div>MOST AVOIDED <span style="float:right; color:#D29922;">${w.most_avoided_tag ? ('#' + w.most_avoided_tag) : '—'}</span></div>
+                    <div>AVG START DRIFT <span style="float:right; color:${driftColor}; font-family:'DM Mono',monospace;">${driftStr}</span></div>
+                    <div>RECOVERY (week) <span style="float:right; color:var(--text-hero); font-family:'DM Mono',monospace;">${w.recovery_sessions || 0}</span></div>`;
             }
-            const advisory = document.getElementById('intel-advisory');
-            if (advisory) {
-                advisory.innerHTML = `
-                    <div style="margin-bottom:16px;"><span style="color:var(--ai-purple);">✦</span> <strong>SUGGESTION:</strong> Schedule high-priority tasks earlier in the temporal cycle to maximize completion horizon probability.</div>
-                    <div><span style="color:var(--ai-purple);">✦</span> <strong>ANALYSIS:</strong> Sub-task tagging indicates personal missions are disrupting operational flow. Compartmentalize recommended.</div>
-                `;
+
+            // Section 5 — recovery history
+            const rec = document.getElementById('stats-recovery');
+            if (rec) {
+                const hist = w.recovery_history || [];
+                rec.innerHTML = hist.length ? hist.map(h => {
+                    const ok = h.was_successful;
+                    return `<div style="display:flex; justify-content:space-between; border-left:3px solid ${ok ? '#3FB950' : '#F85149'}; padding:6px 10px; background:rgba(255,255,255,0.02); border-radius:6px;">
+                        <span>${h.date || ''} · ${h.trigger_reason || '—'}</span>
+                        <span style="color:${ok ? '#3FB950' : '#F85149'};">${h.tasks_completed || 0} done ${ok ? '✓' : '✗'}</span>
+                    </div>`;
+                }).join('') : '<div style="opacity:0.5;">No recovery sessions yet.</div>';
             }
-        } catch(e) { console.error(e); }
+        } catch (e) { console.error('stats', e); }
     }
 
     function filterByTag(tag) {

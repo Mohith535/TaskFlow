@@ -26,7 +26,11 @@ class TaskStorage:
         self.recovery_state_file = self.data_dir / "recovery_state.json"
         self.recovery_log_file = self.data_dir / "recovery_log.json"
         self.config_file = self.data_dir / "config.json"
-        
+        # S11 — Focus Window Lock queue/state (separate from TimeTracker's focus_state.json)
+        self.focus_lock_file = self.data_dir / "focus_lock.json"
+        # S12 — computed daily aggregates (the behavior data store's derived layer)
+        self.daily_summaries_file = self.data_dir / "daily_summaries.json"
+
         self._ensure_directories()
 
         # Migrate old local .taskflow directory if it exists
@@ -274,7 +278,17 @@ class TaskStorage:
         default_config = {
             "first_run_complete": False,
             "today_views_opened": 0,
-            "last_today_view": None
+            "last_today_view": None,
+            # S10 — Daily Execution Path
+            "path_generated_date": None,
+            "path_tasks": [],
+            "path_sections": {},
+            "path_adherence_today": None,
+            # S12 — Time Integrity / streak / weekly review
+            "execution_streak": 0,
+            "streak_last_date": None,
+            "last_weekly_review": None,
+            "last_summary_date": None
         }
         if not self.config_file.exists():
             return default_config
@@ -298,6 +312,55 @@ class TaskStorage:
             return True
         except Exception as e:
             print(f"Error saving config: {e}")
+            return False
+
+    def load_focus_lock(self) -> dict:
+        """Load the S11 focus lock/queue state (focus_lock.json)."""
+        default = {"task_id": None, "started_at": None, "queued_tasks": [], "queued_actions": []}
+        if not self.focus_lock_file.exists():
+            return default
+        try:
+            with open(self.focus_lock_file, 'r') as file:
+                data = json.load(file)
+            for k, v in default.items():
+                data.setdefault(k, v)
+            return data
+        except Exception:
+            return default
+
+    def save_focus_lock(self, state: dict) -> bool:
+        """Save the S11 focus lock/queue state."""
+        try:
+            temp_file = self.focus_lock_file.with_suffix('.tmp')
+            with open(temp_file, 'w') as file:
+                json.dump(state, file, indent=2)
+            temp_file.replace(self.focus_lock_file)
+            return True
+        except Exception as e:
+            print(f"Error saving focus lock: {e}")
+            return False
+
+    def load_daily_summaries(self) -> list:
+        """Load the S12 computed daily summaries (list of daily aggregate dicts)."""
+        if not self.daily_summaries_file.exists():
+            return []
+        try:
+            with open(self.daily_summaries_file, 'r') as file:
+                data = json.load(file)
+            return data if isinstance(data, list) else []
+        except Exception:
+            return []
+
+    def save_daily_summaries(self, summaries: list) -> bool:
+        """Save the S12 daily summaries list."""
+        try:
+            temp_file = self.daily_summaries_file.with_suffix('.tmp')
+            with open(temp_file, 'w') as file:
+                json.dump(summaries, file, indent=2)
+            temp_file.replace(self.daily_summaries_file)
+            return True
+        except Exception as e:
+            print(f"Error saving daily summaries: {e}")
             return False
 
 

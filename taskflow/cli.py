@@ -89,7 +89,19 @@ from task_manager.commands import (
     command_recover,
     command_missed,
     check_reminders,
-    check_recovery_mode
+    check_recovery_mode,
+    command_path,
+    command_queue,
+    focus_lock_active,
+    focus_capture_add,
+    focus_capture_dump,
+    print_focus_header,
+    focus_complete_nudge,
+    ensure_daily_summaries,
+    maybe_weekly_review,
+    check_momentum_warning,
+    command_rescue,
+    render_heatmap
 )
 from task_manager.storage import storage
 import colorama
@@ -123,7 +135,9 @@ def show_help() -> None:
     schedule <id> <date>    Assign mission to timeline (YYYY-MM-DD/today)
     today                   Review missions assigned for today
     missed                  Triage missed missions interactively (--hard/--soft/--skip)
-    
+    path                    Generate your Daily Execution Path (--refresh / --focus)
+    queue                   View tasks captured during a focus session (--clear)
+
   ENHANCED TELEMETRY:
     note <id>               Add/edit mission notes (description)
     link <id>               Manage links & references (--add URL --title)
@@ -132,7 +146,9 @@ def show_help() -> None:
     priority <id> <level>   Adjust mission priority (low/medium/high)
     search <keyword>        Query mission database
     summary                 Human-readable mission overview
-    stats                   Deep analytical performance metrics
+    stats                   Performance telemetry (--today/--week/--accuracy/--tags/--export)
+    heatmap                 Productivity heatmap (last 30 days)
+    rescue                  Find your best 30-minute win right now
 
   MAINTENANCE & SAFETY:
     clear                   Prune completed missions
@@ -266,6 +282,21 @@ def command_doctor():
             print("✓ No orphaned focus sessions")
     except Exception:
         print("✓ No orphaned focus sessions")
+
+    # S11-E: Focus capture queue (orphaned items flush on the next command)
+    try:
+        from task_manager.commands import _focus_session_info
+        lock = storage.load_focus_lock()
+        qn = len(lock.get("queued_tasks") or [])
+        if _focus_session_info() is None and (qn > 0 or lock.get("task_id") is not None):
+            print(f"✗ Orphaned focus queue: {qn} item(s) pending — run any command to flush")
+            issues += 1
+        elif qn > 0:
+            print(f"✓ Focus queue: {qn} item(s) waiting for session end")
+        else:
+            print("✓ Focus queue empty")
+    except Exception:
+        pass
         
     # Recovery Mode
     rec_state = storage.load_recovery_state()
@@ -417,6 +448,24 @@ Examples:
     missed_parser.add_argument('--soft', action='store_true', help='Only soft missed deadlines')
     missed_parser.add_argument('--skip', action='store_true', help='List missed missions without prompts')
     
+    # S10: Daily Execution Path
+    path_parser = subparsers.add_parser('path', help='Generate your Daily Execution Path')
+    path_parser.add_argument('--refresh', action='store_true', help='Regenerate even if already generated today')
+    path_parser.add_argument('--focus', action='store_true', help='Show only the PRIME TARGET')
+
+    # S11: Focus capture queue
+    queue_parser = subparsers.add_parser('queue', help='View tasks captured during a focus session')
+    queue_parser.add_argument('--clear', action='store_true', help='Clear all queued items')
+
+    # S12: Performance telemetry
+    stats_parser = subparsers.add_parser('stats', help='Performance telemetry (Time Integrity Score)')
+    stats_parser.add_argument('--today', action='store_true', help="Show today's partial stats")
+    stats_parser.add_argument('--week', action='store_true', help='7-day breakdown')
+    stats_parser.add_argument('--export', action='store_true', help='Export daily summaries to CSV')
+    stats_parser.add_argument('--compute', action='store_true', help='Recompute daily summaries now')
+    stats_parser.add_argument('--accuracy', action='store_true', help='Duration estimate accuracy report')
+    stats_parser.add_argument('--tags', action='store_true', help='Completion performance by category')
+
     # Timeline
     subparsers.add_parser('timeline', help='Render a 7-day tactical terminal view')
     
@@ -491,8 +540,9 @@ Examples:
     simple_commands = [
         ('today', "Show today's scheduled tasks"),
         ('status', 'Show task list (alias for list)'),
-        ('stats', 'Show task statistics'),
         ('summary', 'Human-readable summary'),
+        ('heatmap', 'Productivity heatmap (last 30 days)'),
+        ('rescue', 'Find your best 30-minute win now'),
         ('backup', 'Create manual backup'),
         ('clear', 'Clear completed tasks'),
         ('reset', 'Reset all tasks (with confirmation)'),
@@ -596,7 +646,46 @@ def main():
             if check_recovery_mode():
                 # Intercept normal views if recovery mode is active
                 args.command = 'recover'
-                
+
+        # S11-B: Focus Window Lock — derive active state, lazily flush an ended session's queue
+        focus_lock = None
+        try:
+            focus_lock = focus_lock_active()
+        except Exception:
+            focus_lock = None
+
+        if focus_lock and args.command == 'add':
+            focus_capture_add(focus_lock)
+            return
+        if focus_lock and args.command == 'dump':
+            _txt = " ".join(getattr(args, 'text', []) or [])
+            focus_capture_dump(
+                focus_lock, _txt,
+                duration=getattr(args, 'duration', None),
+                deadline=getattr(args, 'deadline', None),
+                is_hard=getattr(args, 'hard', False)
+            )
+            return
+        if focus_lock and args.command in ['list', 'status', 'today']:
+            print_focus_header(focus_lock)
+
+        # S12: keep daily summaries + streak fresh (guarded to once per new day)
+        try:
+            ensure_daily_summaries()
+        except Exception:
+            pass
+        # S12-E: Monday-morning weekly review (once per week, before normal output)
+        try:
+            maybe_weekly_review()
+        except Exception:
+            pass
+        # Brainstorm #3: momentum re-entry nudge on the review commands
+        if args.command in ['list', 'status', 'today']:
+            try:
+                check_momentum_warning()
+            except Exception:
+                pass
+
         if args.command == 'add':
             add_task(
                 is_hard=getattr(args, 'hard', False),
@@ -633,6 +722,8 @@ def main():
         
         elif args.command == 'complete':
             complete_task(args.id)
+            if focus_lock:
+                focus_complete_nudge()
         
         elif args.command == 'undo':
             undo_task(args.id)
@@ -680,6 +771,15 @@ def main():
         
         elif args.command == 'today':
             run_today_view()
+
+        elif args.command == 'path':
+            command_path(
+                refresh=getattr(args, 'refresh', False),
+                focus=getattr(args, 'focus', False)
+            )
+
+        elif args.command == 'queue':
+            command_queue(clear=getattr(args, 'clear', False))
         
         elif args.command == 'tag':
             tag_task(args.id, args.tags)
@@ -700,7 +800,20 @@ def main():
             summary()
         
         elif args.command == 'stats':
-            stats_tasks()
+            stats_tasks(
+                today=getattr(args, 'today', False),
+                week=getattr(args, 'week', False),
+                export=getattr(args, 'export', False),
+                compute=getattr(args, 'compute', False),
+                accuracy=getattr(args, 'accuracy', False),
+                tags=getattr(args, 'tags', False)
+            )
+
+        elif args.command == 'heatmap':
+            render_heatmap()
+
+        elif args.command == 'rescue':
+            command_rescue()
         
         elif args.command == 'help':
             show_help()

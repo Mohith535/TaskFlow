@@ -49,6 +49,60 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
         task.checklist_total = len(task.checklist)
         task.checklist_done = sum(1 for x in task.checklist if x.get('done'))
 
+    def _path_payload(self, regenerate=False):
+        """Build the S10 Daily Execution Path payload for the UI (GET/POST /api/path)."""
+        from task_manager import commands as _cmds
+        from datetime import datetime as _dt
+        cfg = storage.storage.load_config()
+        today = _dt.now().strftime('%Y-%m-%d')
+        total = None
+        if regenerate or cfg.get('path_generated_date') != today or not cfg.get('path_sections'):
+            sections, total = _cmds.generate_and_persist_path()
+            cfg = storage.storage.load_config()
+        else:
+            sections = cfg.get('path_sections') or {}
+
+        tasks = storage.load_tasks()
+        by_id = {t.id: t for t in tasks}
+
+        def pack(idlist):
+            out = []
+            for i in idlist:
+                t = by_id.get(i)
+                if not t:
+                    continue
+                out.append({
+                    "id": t.id,
+                    "title": t.title,
+                    "priority": t.priority,
+                    "duration": t.duration,
+                    "deadline": t.deadline,
+                    "deadline_type": getattr(t, 'deadline_type', None),
+                    "completed": t.completed,
+                    "tags": getattr(t, 'tags', None) or [],
+                    "planned_slot": getattr(t, 'planned_slot', None)
+                })
+            return out
+
+        keys = ("prime", "secondary", "low_effort", "unscheduled")
+        packed = {k: pack(sections.get(k, []) if isinstance(sections, dict) else []) for k in keys}
+        dmin = _cmds.DURATION_MINUTES
+
+        def sec_min(k):
+            return sum(dmin.get((it.get("duration") or "").lower(), 30) for it in packed[k])
+
+        section_minutes = {k: sec_min(k) for k in keys}
+        if total is None:
+            total = section_minutes["prime"] + section_minutes["secondary"] + section_minutes["low_effort"]
+
+        return {
+            "generated_date": cfg.get('path_generated_date'),
+            "sections": packed,
+            "section_minutes": section_minutes,
+            "total_minutes": total,
+            "adherence": cfg.get('path_adherence_today')
+        }
+
     def do_GET(self):
         parsed = urlparse(self.path)
         path = parsed.path
@@ -191,7 +245,38 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
                 "overdue": overdue,
                 "deferred": deferred
             }).encode('utf-8'))
-            
+
+        elif path == "/api/stats/weekly":
+            # S12-F: weekly Time Integrity aggregates (+ streak + recent recovery)
+            try:
+                from task_manager import commands as _cmds
+                _cmds.ensure_daily_summaries()
+                summaries = storage.storage.load_daily_summaries()
+                w = _cmds.compute_weekly_stats(summaries) or {}
+                cfg = storage.storage.load_config()
+                w['execution_streak'] = cfg.get('execution_streak', 0)
+                rlog = []
+                try:
+                    if storage.storage.recovery_log_file.exists():
+                        with open(storage.storage.recovery_log_file) as rf:
+                            rlog = json.load(rf)
+                except Exception:
+                    rlog = []
+                w['recovery_history'] = (rlog or [])[-5:][::-1]
+                self._send_json(200, w)
+            except Exception as e:
+                self._send_json(200, {"error": str(e)})
+
+        elif path == "/api/stats/daily-summaries":
+            # S12-F: last 7 computed daily summaries
+            try:
+                from task_manager import commands as _cmds
+                _cmds.ensure_daily_summaries()
+                summaries = storage.storage.load_daily_summaries()
+                self._send_json(200, {"summaries": summaries[-7:]})
+            except Exception:
+                self._send_json(200, {"summaries": []})
+
         elif path == "/api/focus_state":
             try:
                 from task_manager.commands import focus_manager
@@ -205,6 +290,14 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
                 self.end_headers_json()
                 self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
             
+        elif path == "/api/focus-status":
+            # S11-F: focus lock status for the UI (active / task_id / ends_at / queued_count)
+            try:
+                from task_manager import commands as _cmds
+                self._send_json(200, _cmds.focus_status_payload())
+            except Exception:
+                self._send_json(200, {"active": False, "task_id": None, "ends_at": None, "queued_count": 0})
+
         elif path == "/api/blocklist":
             try:
                 from task_manager.blockers.blocklist import blocklist_manager
@@ -217,6 +310,18 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
                 self.end_headers_json()
                 self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
             
+        elif path == "/api/path":
+            # S10-F: current day's Daily Execution Path (auto-generates if stale)
+            try:
+                self._send_json(200, self._path_payload(regenerate=False))
+            except Exception as e:
+                self._send_json(200, {
+                    "generated_date": None,
+                    "sections": {"prime": [], "secondary": [], "low_effort": [], "unscheduled": []},
+                    "section_minutes": {"prime": 0, "secondary": 0, "low_effort": 0, "unscheduled": 0},
+                    "total_minutes": 0, "adherence": None, "error": str(e)
+                })
+
         elif path.startswith("/static/"):
             try:
                 import os
@@ -618,6 +723,22 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.end_headers_json()
             self.wfile.write(json.dumps({"success": True}).encode('utf-8'))
+
+        elif path == "/api/path/generate" and self.command == 'POST':
+            # S10-F: regenerate today's path on demand
+            try:
+                self._send_json(200, self._path_payload(regenerate=True))
+            except Exception as e:
+                self._send_json(500, {"error": str(e)})
+
+        elif path == "/api/focus/queue" and self.command == 'POST':
+            # S11-F: queue a task captured during an active focus session
+            try:
+                from task_manager import commands as _cmds
+                n = _cmds.enqueue_focus_task(data)
+                self._send_json(200, {"queued": True, "queue_length": n})
+            except Exception as e:
+                self._send_json(500, {"error": str(e)})
 
         elif path == "/api/recovery-activate" and self.command == 'POST':
             try:

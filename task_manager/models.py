@@ -75,7 +75,17 @@ class Task:
     links_count: int = 0
     checklist_total: int = 0
     checklist_done: int = 0
-    
+
+    # S10 NEW FIELDS — Daily Execution Path
+    planned_slot: Optional[str] = None   # "prime" | "secondary" | "low_effort" | None
+    actual_slot: Optional[str] = None    # "morning" | "midday" | "evening" | None
+    slot_drift: Optional[int] = None     # minutes between planned-slot target and actual completion
+
+    # S11 NEW FIELDS — Focus Window Lock
+    focus_session_count: int = 0         # how many focus sessions started on this task
+    focus_total_minutes: int = 0         # total actual focus minutes accumulated
+    last_focus_at: Optional[str] = None  # ISO datetime of the last focus session
+
     def __post_init__(self):
         """Validate task after initialization."""
         self._validate()
@@ -180,7 +190,17 @@ class Task:
             "description_updated_at": self.description_updated_at,
             "links_count": self.links_count,
             "checklist_total": self.checklist_total,
-            "checklist_done": self.checklist_done
+            "checklist_done": self.checklist_done,
+
+            # S10 fields
+            "planned_slot": self.planned_slot,
+            "actual_slot": self.actual_slot,
+            "slot_drift": self.slot_drift,
+
+            # S11 fields
+            "focus_session_count": self.focus_session_count,
+            "focus_total_minutes": self.focus_total_minutes,
+            "last_focus_at": self.last_focus_at
         }
     
     @classmethod
@@ -246,7 +266,17 @@ class Task:
         data["links_count"] = data.get("links_count", 0)
         data["checklist_total"] = data.get("checklist_total", 0)
         data["checklist_done"] = data.get("checklist_done", 0)
-        
+
+        # S10 fields
+        data["planned_slot"] = data.get("planned_slot")
+        data["actual_slot"] = data.get("actual_slot")
+        data["slot_drift"] = data.get("slot_drift")
+
+        # S11 fields
+        data["focus_session_count"] = data.get("focus_session_count", 0)
+        data["focus_total_minutes"] = data.get("focus_total_minutes", 0)
+        data["last_focus_at"] = data.get("last_focus_at")
+
         return cls(**data)
     
     def __str__(self):
