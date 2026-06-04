@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields as dataclass_fields
 from datetime import datetime
 from typing import Optional, List
 import re
@@ -277,8 +277,11 @@ class Task:
         data["focus_total_minutes"] = data.get("focus_total_minutes", 0)
         data["last_focus_at"] = data.get("last_focus_at")
 
-        return cls(**data)
-    
+        # D1-02: drop any unknown/stale keys so one renamed field can't TypeError the whole
+        # task into the "skipped" bin during load_tasks().
+        known = {f.name for f in dataclass_fields(cls)}
+        return cls(**{k: v for k, v in data.items() if k in known})
+
     def __str__(self):
         """Human-readable string representation."""
         status = "✓" if self.completed else "○"

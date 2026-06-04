@@ -72,9 +72,9 @@ class TaskStorage:
             return []
         
         try:
-            with open(self.tasks_file, 'r') as file:
+            with open(self.tasks_file, 'r', encoding='utf-8') as file:
                 data = json.load(file)
-            
+
             tasks = []
             for item in data:
                 try:
@@ -93,8 +93,31 @@ class TaskStorage:
             return tasks
             
         except json.JSONDecodeError:
-            print("Error: Corrupted tasks file. Attempting recovery...")
-            self._create_backup()
+            # D3-01: a corrupt tasks.json must NEVER silently become an empty board — a later
+            # save would then overwrite the only copy. Quarantine the bad file, then restore the
+            # newest backup that actually parses, so one bad write can't erase the user's work.
+            print("Error: tasks.json is corrupted. Attempting automatic recovery from backup…")
+            try:
+                quarantine = self.data_dir / f"tasks_corrupt_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+                shutil.copy2(self.tasks_file, quarantine)
+            except Exception:
+                pass
+            for backup in sorted(self.backup_dir.glob("tasks_backup_*.json"), reverse=True):
+                try:
+                    with open(backup, 'r', encoding='utf-8') as bf:
+                        data = json.load(bf)
+                    recovered = []
+                    for item in data:
+                        try:
+                            recovered.append(Task.from_dict(item))
+                        except Exception:
+                            continue
+                    shutil.copy2(backup, self.tasks_file)
+                    print(f"Recovered {len(recovered)} task(s) from {backup.name}.")
+                    return recovered
+                except Exception:
+                    continue
+            print("No valid backup found. Keeping the corrupt file for inspection; starting empty.")
             return []
         except Exception as e:
             print(f"Error loading tasks: {e}")
@@ -119,7 +142,7 @@ class TaskStorage:
             
             # Save to temporary file first
             temp_file = self.tasks_file.with_suffix('.tmp')
-            with open(temp_file, 'w') as file:
+            with open(temp_file, 'w', encoding='utf-8') as file:
                 json.dump(data, file, indent=4)
             
             # Replace original file

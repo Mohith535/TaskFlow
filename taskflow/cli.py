@@ -220,8 +220,8 @@ def show_first_run_wizard():
     config["first_run_complete"] = True
     storage.save_config(config)
 
-def command_doctor():
-    """Run full health check report (S0-C)."""
+def command_doctor(repair=False):
+    """Run full health check report (S0-C). With repair=True, fix safe data issues in place."""
     import platform
     print("\nChecking TaskFlow installation...")
     
@@ -305,7 +305,52 @@ def command_doctor():
         issues += 1
     else:
         print("✓ Recovery Mode: inactive")
-        
+
+    # Data integrity — non-standard durations (D1-01) + orphan focus artifact (D2-05)
+    try:
+        from task_manager.commands import normalize_duration, VALID_DURATIONS
+        all_tasks = storage.load_tasks()
+        bad = [t for t in all_tasks if getattr(t, 'duration', None) and t.duration not in VALID_DURATIONS]
+        if bad:
+            if repair:
+                changed = []
+                for t in bad:
+                    new = normalize_duration(t.duration)
+                    if new != t.duration:
+                        changed.append((t.id, t.duration, new))
+                        t.duration = new
+                if changed:
+                    storage.save_tasks(all_tasks)   # atomic write + automatic backup
+                    print(f"✓ Repaired {len(changed)} non-standard duration(s) (backup created):")
+                    for tid, old, new in changed:
+                        print(f"    #{tid}: {old!r} → {new}")
+                else:
+                    print("✓ Task durations all valid")
+            else:
+                print(f"✗ {len(bad)} task(s) have non-standard durations — run: taskflow doctor --repair")
+                issues += 1
+        else:
+            print("✓ Task durations all valid")
+    except Exception as e:
+        print(f"  (duration check skipped: {e})")
+
+    # Orphan focus-state artifact left by older builds (D2-05) — offer to remove on --repair
+    try:
+        orphan = storage.data_dir / "focusstate.json"
+        if orphan.exists():
+            if repair:
+                from task_manager.commands import confirm_action
+                if confirm_action("Delete orphan file focusstate.json?"):
+                    orphan.unlink()
+                    print("✓ Removed focusstate.json")
+                else:
+                    print("  Left focusstate.json in place")
+            else:
+                print("✗ Orphan file focusstate.json present — run: taskflow doctor --repair")
+                issues += 1
+    except Exception:
+        pass
+
     print(f"\nStatus: {'All systems ready' if issues == 0 else f'{issues} issue(s) found. See fix above.'}\n")
 
 def show_version():
@@ -380,9 +425,13 @@ Examples:
                            help='Filter by priority')
     list_parser.add_argument('--tag', help='Filter by tag')
     list_parser.add_argument('--all', action='store_true',
-                           help='Show all tasks (no 10-task limit)')
+                           help='Show everything: active + completed + dropped + offloaded')
     list_parser.add_argument('--detail', action='store_true',
                            help='Show enrichment details (notes preview, links, checklist) under each task')
+    list_parser.add_argument('--overdue', action='store_true',
+                           help='Show ALL overdue missions (no 10-task cap)')
+    list_parser.add_argument('--today', action='store_true',
+                           help="Show only today's missions (morning planning view)")
     
     # Task operations with single ID argument
     id_commands = [
@@ -533,7 +582,9 @@ Examples:
                               help='Item number to toggle directly (skips the interactive menu)')
     
     # Doctor
-    subparsers.add_parser('doctor', help='Check system health')
+    doctor_parser = subparsers.add_parser('doctor', help='Check system health')
+    doctor_parser.add_argument('--repair', action='store_true',
+                               help='Fix non-standard durations + offer to remove orphan files (backs up tasks first)')
     
     
     # Simple commands without arguments
@@ -708,7 +759,9 @@ def main():
                 filter_tag=args.tag,
                 show_all=args.all,
                 sort_by=args.sort,
-                show_detail=getattr(args, 'detail', False)
+                show_detail=getattr(args, 'detail', False),
+                show_overdue=getattr(args, 'overdue', False),
+                show_today=getattr(args, 'today', False)
             )
         
         elif args.command == 'view':
@@ -864,7 +917,7 @@ def main():
                             "url": url,
                             "title": titles[i] if i < len(titles) else None
                         })
-                dump_task(
+                _dumped = dump_task(
                     text,
                     duration=args.duration,
                     deadline=args.deadline,
@@ -872,6 +925,9 @@ def main():
                     note=getattr(args, 'note', None),
                     links=dump_links
                 )
+                if _dumped is None:
+                    print("Nothing to capture — a tag or priority alone isn't a task. Add a few words.")
+                    print('Example: taskflow dump "Email the team #work !h"')
             else:
                 Messenger.careful("No text provided for dump.")
 
@@ -882,7 +938,7 @@ def main():
             manage_checklist(args.id, toggle_index=getattr(args, 'item', None))
                 
         elif args.command == 'doctor':
-            command_doctor()
+            command_doctor(repair=getattr(args, 'repair', False))
                 
         elif args.command == 'postpone':
             command_postpone(args.id)

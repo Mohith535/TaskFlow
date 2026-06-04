@@ -59,26 +59,6 @@ def parse_deadline(raw_string: str):
         dt = dt.replace(tzinfo=None)
     return dt
 
-def format_time_remaining(td: timedelta) -> str:
-    secs = int(td.total_seconds())
-    if secs >= 0:
-        if secs > 3600:
-            h = secs // 3600
-            m = (secs % 3600) // 60
-            return f"{h}h {m}m remaining" if m > 0 else f"{h}h remaining"
-        elif secs >= 60:
-            return f"{secs // 60}m remaining"
-        else:
-            return f"{secs}s remaining"
-    else:
-        secs = abs(secs)
-        if secs > 3600:
-            h = secs // 3600
-            m = (secs % 3600) // 60
-            return f"OVERDUE {h}h {m}m" if m > 0 else f"OVERDUE {h}h"
-        else:
-            return f"OVERDUE {secs // 60}m"
-
 def format_deadline_display(task: Task) -> str:
     if not getattr(task, 'deadline', None):
         return ""
@@ -768,8 +748,11 @@ def check_reminders(tasks: List[Task]) -> List[Task]:
                 task_date = dt.replace(hour=0, minute=0, second=0, microsecond=0)
                 
                 if dt < now:
-                    diff = int((now - dt).total_seconds() / 60)
-                    due_str = f"OVERDUE by {diff} min"
+                    # D4-03: never quantify lateness in crushing minutes — calm word or date
+                    if (now - dt).total_seconds() > 86400:
+                        due_str = "overdue · was due " + dt.strftime('%b %d').replace(' 0', ' ')
+                    else:
+                        due_str = "overdue"
                     due_line = f"{Fore.RED}{due_str}{Style.RESET_ALL}"
                 else:
                     diff = int((dt - now).total_seconds() / 60)
@@ -796,11 +779,14 @@ def check_reminders(tasks: List[Task]) -> List[Task]:
   ║  🔔  REMINDER                               ║
   ║  Task:     {task.title[:30]:<30}║
   ║  Due:      {due_line:<30}║
-  ║  Priority: {task.priority:<6}  ·  Duration: {str(task.duration or 'None'):<12}║{hard_line}
+  ║  Priority: {task.priority:<6}  ·  Duration: {str(task.duration or '—'):<12}║{hard_line}
   ╚══════════════════════════════════════════════╝""" + Style.RESET_ALL)
             
-            print("\n  [Enter] Noted  ·  [D] Dismiss forever  ·  [S] Start focus now\n")
-            choice = get_valid_input("Choice: ", "").strip().upper()
+            # D4-01: reminders NEVER block startup (taskflow list/today must not trap the user).
+            # Shown once (reminder_fired persists above), then out of the way. Dismiss via
+            # `taskflow remind` / the web UI; start via `taskflow focus --id`.
+            print(f"  {Style.DIM}Start: taskflow focus --id {task.id}  ·  dismiss: taskflow remind {task.id} --clear{Style.RESET_ALL}\n")
+            choice = ""
             _delay = round((datetime.now() - show_t).total_seconds())
 
             if choice == "D":
@@ -1882,7 +1868,7 @@ def add_task(is_hard: bool = False, preset_deadline: str = None, preset_duration
     if preset_priority:
         priority_input = preset_priority
     else:
-        priority_input = get_valid_input("Priority (Low/Medium/High) [Medium]: ", "Medium")
+        priority_input = get_valid_input("Priority — Critical/Strategic/Noise/Purge (High/Medium/Low also accepted) [Strategic]: ", "Medium")
         
     try:
         priority = normalize_priority(priority_input)
@@ -1896,7 +1882,7 @@ def add_task(is_hard: bool = False, preset_deadline: str = None, preset_duration
     # Ask for duration
     duration = None
     if preset_duration:
-        duration = preset_duration.lower()
+        duration = normalize_duration(preset_duration)  # D1-01: validate --duration presets too
     else:
         while True:
             dur_input = get_valid_input("Duration (15m/30m/1h/2h/3h/4h+) [skip]: ")
@@ -2161,9 +2147,8 @@ def dump_task(title: str, duration: str = None, deadline: str = None, is_hard: b
         tags=tags
     )
     
-    if duration:
-        task.duration = duration.lower()
-        
+    task.duration = normalize_duration(duration)  # D1-01: bucket free text → valid enum (or None)
+
     if deadline:
         parsed_dl = parse_deadline(deadline)
         if parsed_dl:
@@ -2531,7 +2516,7 @@ def _print_list_active_task(t, now, show_detail=False):
 
     id_str = f"{Fore.GREEN}#{t.id}{Style.RESET_ALL}"
     p_color = _list_priority_color(t)
-    print(f"{id_str} · {title_color}{t.title}{Style.RESET_ALL}{dur} · {p_color}{t.priority}{Style.RESET_ALL}{tags}{postpone}")
+    print(f"{Fore.WHITE}○{Style.RESET_ALL} {id_str} · {title_color}{t.title}{Style.RESET_ALL}{dur} · {p_color}{t.priority}{Style.RESET_ALL}{tags}{postpone}")
 
     dt = _list_deadline_dt(t)
     if dt is not None:
@@ -2545,26 +2530,38 @@ def _print_list_active_task(t, now, show_detail=False):
 
     ind = _enrichment_indicators(t)
     if ind:
-        print(f"     {Style.DIM}{ind}{Style.RESET_ALL}")
+        print(f"       {Style.DIM}{ind}{Style.RESET_ALL}")
 
     if show_detail:
         if getattr(t, 'description', None):
             preview = t.description.replace('\n', ' ')
             if len(preview) > 80:
                 preview = preview[:77] + "..."
-            print(f"     {Style.DIM}Notes: {preview}{Style.RESET_ALL}")
+            print(f"       {Style.DIM}Notes: {preview}{Style.RESET_ALL}")
         for l in (getattr(t, 'links', None) or []):
             tp = f" (\"{l.get('title')}\")" if l.get('title') else ""
-            print(f"     {Style.DIM}Link: [{l.get('id')}] {l.get('type')} → {l.get('url')}{tp}{Style.RESET_ALL}")
+            print(f"       {Style.DIM}Link: [{l.get('id')}] {l.get('type')} → {l.get('url')}{tp}{Style.RESET_ALL}")
         for idx, item in enumerate(getattr(t, 'checklist', None) or []):
             chk = "✓" if item.get('done') else "·"
-            print(f"     {Style.DIM}Subtask {idx+1}: [{chk}] {item.get('text')}{Style.RESET_ALL}")
+            print(f"       {Style.DIM}Subtask {idx+1}: [{chk}] {item.get('text')}{Style.RESET_ALL}")
 
 
 def _print_list_done_task(t):
     dur = f"  {Style.DIM}[{t.duration}]{Style.RESET_ALL}" if t.duration else ""
     tags = f" · #{', #'.join(t.tags)}" if t.tags else ""
     print(f"{Fore.GREEN}✓{Style.RESET_ALL} {Style.DIM}#{t.id} · {t.title}{dur} · {t.priority}{tags}{Style.RESET_ALL}")
+
+
+def _print_list_dropped_task(t):
+    dur = f"  [{t.duration}]" if t.duration else ""
+    tags = f" · #{', #'.join(t.tags)}" if t.tags else ""
+    print(f"{Fore.RED + Style.DIM}x #{t.id} · {t.title}{dur} · {t.priority}{tags}{Style.RESET_ALL}")
+
+
+def _print_list_offloaded_task(t):
+    dur = f"  [{t.duration}]" if t.duration else ""
+    tags = f" · #{', #'.join(t.tags)}" if t.tags else ""
+    print(f"{Fore.WHITE + Style.DIM}→ #{t.id} · {t.title}{dur} · {t.priority}{tags}{Style.RESET_ALL}")
 
 
 def _render_done_view(done, now, today_str):
@@ -2596,8 +2593,15 @@ def list_tasks(filter_status: Optional[str] = None,
                filter_tag: Optional[str] = None,
                show_all: bool = False,
                sort_by: Optional[str] = None,
-               show_detail: bool = False) -> None:
-    """Grouped, today-first list (Fix 2). Completed hidden by default; --done / --all to see them."""
+               show_detail: bool = False,
+               show_overdue: bool = False,
+               show_today: bool = False) -> None:
+    """Grouped, today-first list (S13-B). Completed hidden by default; --done / --all to see them.
+
+    Sections: TODAY / OVERDUE / UPCOMING / NO DEADLINE. Glyphs: ○ active, ✓ done (--done),
+    x dropped / → offloaded (--all). OVERDUE is capped at 10 in the default view (full via
+    --overdue) and shows DATES, never crushing hour counts. Filters apply within groups.
+    """
     tasks = storage.load_tasks()
     print_list_missed_banner(tasks)  # PASSIVE notice only — never prompts (see: taskflow missed)
     if not tasks:
@@ -2628,50 +2632,94 @@ def list_tasks(filter_status: Optional[str] = None,
 
     active = [t for t in tasks if is_active(t) and passes(t)]
     completed_count = sum(1 for t in tasks if t.completed and passes(t))
-    path_ids = set(storage.load_config().get('path_tasks') or [])
 
+    # ── classify: TODAY = deadline today OR scheduled today; past → OVERDUE; future → UPCOMING ──
     today_g, overdue_g, upcoming_g, nodl_g = [], [], [], []
     for t in active:
         dt = _list_deadline_dt(t)
         scheduled_today = (getattr(t, 'scheduled_date', None) == today_str)
-        in_path = t.id in path_ids
         if dt is not None:
             d = dt.strftime('%Y-%m-%d')
-            if d == today_str:
+            if d == today_str or scheduled_today:
                 today_g.append((t, dt))
             elif d < today_str:
                 overdue_g.append((t, dt))
-            elif scheduled_today or in_path:
-                today_g.append((t, dt))
             else:
                 upcoming_g.append((t, dt))
         else:
-            # List TODAY = deadline/scheduled today or in today's path; bare no-deadline → NO DEADLINE
-            if scheduled_today or in_path:
+            if scheduled_today:
                 today_g.append((t, None))
             else:
                 nodl_g.append((t, None))
 
-    today_g.sort(key=lambda x: (x[1] is None, x[1] or now))
-    overdue_g.sort(key=lambda x: x[1])      # oldest-overdue first (matches spec example)
-    upcoming_g.sort(key=lambda x: x[1])     # soonest first
     prio_rank = {'critical': 0, 'high': 0, 'strategic': 1, 'medium': 1, 'noise': 2, 'low': 2, 'purge': 3}
-    nodl_g.sort(key=lambda x: (prio_rank.get((x[0].priority or '').lower(), 1), x[0].created_at or ''))
 
+    def sort_group(items, default):
+        if sort_by == 'priority':
+            items.sort(key=lambda x: (prio_rank.get((x[0].priority or '').lower(), 1), x[1] or now))
+        elif sort_by == 'due':
+            items.sort(key=lambda x: (x[1] is None, x[1] or now))
+        elif sort_by == 'created':
+            items.sort(key=lambda x: (x[0].created_at or ''), reverse=True)
+        else:
+            default()
+
+    def _default_nodl():
+        nodl_g.sort(key=lambda x: (x[0].created_at or ''), reverse=True)   # newest first…
+        nodl_g.sort(key=lambda x: prio_rank.get((x[0].priority or '').lower(), 1))  # …then CRITICAL→NOISE (stable)
+
+    sort_group(today_g, lambda: today_g.sort(key=lambda x: (x[1] is None, x[1] or now)))   # deadline asc
+    sort_group(overdue_g, lambda: overdue_g.sort(key=lambda x: x[1], reverse=True))         # most recent missed first
+    sort_group(upcoming_g, lambda: upcoming_g.sort(key=lambda x: x[1]))                     # soonest first
+    sort_group(nodl_g, _default_nodl)
+
+    # ── quick views (--today / --overdue) ──
+    if show_today:
+        print()
+        _list_group_header("TODAY", len(today_g), Fore.CYAN + Style.BRIGHT)
+        if today_g:
+            for t, _dt in today_g:
+                _print_list_active_task(t, now, show_detail)
+        else:
+            print(f"{Style.DIM}No missions scheduled for today.{Style.RESET_ALL}")
+        print()
+        print_list_missed_footer(tasks)
+        return
+
+    if show_overdue:
+        print()
+        _list_group_header("OVERDUE", len(overdue_g), Fore.RED)
+        if overdue_g:
+            for t, _dt in overdue_g:
+                _print_list_active_task(t, now, show_detail)
+        else:
+            print(f"{Style.DIM}Nothing overdue. Clean slate.{Style.RESET_ALL}")
+        print()
+        print_list_missed_footer(tasks)
+        return
+
+    # ── default grouped view ──
+    OVERDUE_CAP = 10
     print()
     printed = False
     for title, items, color in (
         ("TODAY", today_g, Fore.CYAN + Style.BRIGHT),
         ("OVERDUE", overdue_g, Fore.RED),
         ("UPCOMING", upcoming_g, Fore.CYAN + Style.DIM),
-        ("NO DEADLINE", nodl_g, Fore.CYAN + Style.DIM),
+        ("NO DEADLINE", nodl_g, Fore.WHITE + Style.DIM),
     ):
         if not items:
             continue
         printed = True
         _list_group_header(title, len(items), color)
-        for t, _dt in items:
+        shown, hidden_overdue = items, 0
+        if title == "OVERDUE" and not show_all and len(items) > OVERDUE_CAP:
+            shown = items[:OVERDUE_CAP]
+            hidden_overdue = len(items) - OVERDUE_CAP
+        for t, _dt in shown:
             _print_list_active_task(t, now, show_detail)
+        if hidden_overdue:
+            print(f"{Fore.RED + Style.DIM}   {hidden_overdue} more overdue — use --overdue to see all{Style.RESET_ALL}")
         print()
 
     if not printed:
@@ -2681,22 +2729,40 @@ def list_tasks(filter_status: Optional[str] = None,
             Messenger.no_pending_tasks()
 
     total_active = len(today_g) + len(overdue_g) + len(upcoming_g) + len(nodl_g)
+    plural = "s" if total_active != 1 else ""
 
-    if show_all and completed_count:
+    # ── --all : completed + dropped + offloaded at the very bottom ──
+    if show_all:
         done = [t for t in tasks if t.completed and passes(t)]
         done.sort(key=lambda t: (getattr(t, 'completed_at', None) or ''), reverse=True)
-        _list_group_header("COMPLETED", len(done), Fore.GREEN + Style.DIM)
-        for t in done:
-            _print_list_done_task(t)
-        print()
-        print(f"{Style.DIM}Total: {total_active} active · {completed_count} completed{Style.RESET_ALL}")
+        if done:
+            _list_group_header("COMPLETED", len(done), Fore.GREEN + Style.DIM)
+            for t in done:
+                _print_list_done_task(t)
+            print()
+        dropped = [t for t in tasks if getattr(t, 'dropped_at', None) and not t.completed and passes(t)]
+        if dropped:
+            _list_group_header("DROPPED", len(dropped), Fore.RED + Style.DIM)
+            for t in dropped:
+                _print_list_dropped_task(t)
+            print()
+        offloaded = [t for t in tasks if getattr(t, 'offloaded_at', None) and not t.completed and passes(t)]
+        if offloaded:
+            _list_group_header("OFFLOADED", len(offloaded), Fore.WHITE + Style.DIM)
+            for t in offloaded:
+                _print_list_offloaded_task(t)
+            print()
+        tail = f"Active: {total_active} task{plural}  ·  Completed: {completed_count}"
+        if dropped or offloaded:
+            tail += f"  ·  Dropped: {len(dropped)}  ·  Offloaded: {len(offloaded)}"
+        print(f"{Style.DIM}{tail}{Style.RESET_ALL}")
     else:
-        line = f"Total: {total_active} active · {completed_count} completed"
-        if not show_all and completed_count:
-            line += " (hidden)"
-        print(f"{Style.DIM}{line}{Style.RESET_ALL}")
-        if not show_all and completed_count:
-            print(f"{Style.DIM}Use --done to see completed tasks · --all to see everything{Style.RESET_ALL}")
+        tail = f"Active: {total_active} task{plural}  ·  Completed: {completed_count}"
+        if completed_count:
+            tail += " (hidden)"
+        print(f"{Style.DIM}{tail}{Style.RESET_ALL}")
+        if completed_count:
+            print(f"{Style.DIM}Use --done to see completed  ·  --all to see everything{Style.RESET_ALL}")
 
     print_list_missed_footer(tasks)  # PASSIVE soft-deadline notice at bottom — never prompts
 
@@ -3196,7 +3262,7 @@ def view_task(task_id: int) -> None:
             type_tag = f" {type_color}[{dl_type.upper()}]{R}"
             
             td = dt - datetime.now()
-            rem_str = format_time_remaining(td)
+            rem_str = format_time_remaining(td, dt)
             p_level = get_pressure_level(task)
             if p_level >= 3:
                 rem_color = Fore.RED + Style.BRIGHT
@@ -3407,7 +3473,7 @@ def focus_task(task_id: int, minutes: int = 25,
             )
             
             if success:
-                begin_focus_lock(task_id)  # S11: open the focus lock/queue window
+                begin_focus_lock(task_id, minutes)  # S11: open the focus lock/queue window (planned len for D2-01 cap)
                 print(f"\n🎯 Now focusing on: {task.title}")
                 if block_sites or block_apps:
                     print("   Distraction blocking activated!")
@@ -4051,7 +4117,7 @@ def manage_blocklist(action: str, sites: list = None, indices: list = None):
             subprocess.run(["nano", str(path)])
 
 def normalize_priority(priority: str) -> str:
-    """Normalize priority input to Low / Medium / High."""
+    """Normalize any priority input to the behavioral taxonomy: Critical / Strategic / Noise / Purge."""
     if not priority:
         return "Medium"
     
@@ -4071,6 +4137,50 @@ def normalize_priority(priority: str) -> str:
 # =========================================================
 
 DURATION_MINUTES = {"15m": 15, "30m": 30, "1h": 60, "2h": 120, "3h": 180, "4h+": 240}
+VALID_DURATIONS = ("15m", "30m", "1h", "2h", "3h", "4h+")
+
+
+def normalize_duration(value):
+    """Map any duration input to the canonical enum (15m/30m/1h/2h/3h/4h+), or None (D1-01).
+
+    Accepts canonical values, loose forms ("2 h", "45", "45m", "1h30", "5h 25m"), and buckets
+    by total minutes so DURATION_MINUTES / path estimates stay correct. Unparseable → None.
+    This is the SINGLE place free-text durations are sanitised; every writer must route here.
+    """
+    if value is None:
+        return None
+    s = str(value).strip().lower()
+    if not s:
+        return None
+    if s in DURATION_MINUTES:
+        return s
+    if s in ("4h+", "4hr+", "4 h+", "4h +"):
+        return "4h+"
+    import re as _re
+    total = 0
+    matched = False
+    for num, unit in _re.findall(r'(\d+)\s*(hours?|hrs?|h|minutes?|mins?|min|m)?', s):
+        if not num:
+            continue
+        n = int(num)
+        if unit and unit.startswith('h'):
+            total += n * 60
+        else:  # explicit minutes, or a bare number → minutes
+            total += n
+        matched = True
+    if not matched or total <= 0:
+        return None
+    if total <= 22:
+        return "15m"
+    if total <= 45:
+        return "30m"
+    if total <= 90:
+        return "1h"
+    if total <= 150:
+        return "2h"
+    if total <= 210:
+        return "3h"
+    return "4h+"
 PATH_DEEP_WORK_TAGS = {"deep-work", "deep_work", "deepwork", "code", "coding", "write",
                        "writing", "design", "build", "architect", "research"}
 PATH_COMM_TAGS = {"meeting", "call", "standup", "email", "reply", "review", "sync"}
@@ -4216,8 +4326,13 @@ def _today_prime_task(elig, timeline, today_str):
     return None
 
 
-def generate_execution_path(tasks, config) -> dict:
-    """Build today's execution path (S10-B). Pure: returns id-lists, no persistence."""
+def generate_execution_path(tasks, config, day_multiplier=1.0, day_mode=None) -> dict:
+    """Build today's execution path (S10-B). Pure: returns id-lists, no persistence.
+
+    S14-C: an optional day-of-week modifier nudges PRIME selection (a longer task is allowed
+    on a high-performance day, a shorter one preferred on a light day) and caps SECONDARY at 3
+    on a light day. The multiplier adjusts scores — it never hard-overrides slot membership.
+    """
     timeline = storage.load_timeline()
     today_str = datetime.now().strftime('%Y-%m-%d')
     sections = {"prime": [], "secondary": [], "low_effort": [], "unscheduled": []}
@@ -4226,17 +4341,26 @@ def generate_execution_path(tasks, config) -> dict:
     if not elig:
         return sections
 
-    # PRIME — honor explicit prime, else highest cognitive-load score
+    def _eff_score(t):
+        s = score_for_path(t) * day_multiplier
+        if day_mode == 'best':
+            s += _duration_minutes(t) * 0.10   # high-performance day → allow a longer PRIME
+        elif day_mode == 'worst':
+            s -= _duration_minutes(t) * 0.10   # light day → prefer a shorter PRIME
+        return s
+
+    # PRIME — honor explicit prime, else best day-adjusted cognitive-load score
     prime_task = _today_prime_task(elig, timeline, today_str)
     if prime_task is None:
-        prime_task = max(elig, key=score_for_path)
+        prime_task = max(elig, key=_eff_score)
     sections["prime"] = [prime_task.id]
     remaining = [t for t in elig if t.id != prime_task.id]
 
-    # SECONDARY (max 4) — deadline asc, then heavier load first
+    # SECONDARY — deadline asc, then heavier load first; capped (3 on a light day, else 4)
+    sec_cap = 3 if day_mode == 'worst' else 4
     secondary = []
     for t in sorted(remaining, key=lambda x: (_path_deadline_key(x), -score_for_path(x))):
-        if len(secondary) >= 4:
+        if len(secondary) >= sec_cap:
             break
         if _qualifies_secondary(t):
             secondary.append(t)
@@ -4315,7 +4439,23 @@ def generate_and_persist_path(compute_prev_adherence: bool = True):
             if adh is not None:
                 config['path_adherence_today'] = adh
 
-    sections = generate_execution_path(tasks, config)
+    # S14-C: day-of-week modifier (subtle; only applies when that weekday has >=2 samples)
+    day_multiplier, day_mode, day_note = 1.0, None, None
+    try:
+        dow_stats = compute_day_of_week_stats(storage.load_daily_summaries())
+        today_wd = datetime.now().weekday()
+        bd, wd_ = dow_stats.get('best_day'), dow_stats.get('worst_day')
+        worst_avg = dow_stats.get('worst_day_avg_tis')
+        if bd is not None and today_wd == bd:
+            day_multiplier, day_mode = 1.2, 'best'
+            day_note = "High-performance day based on your patterns."
+        elif wd_ is not None and today_wd == wd_ and worst_avg is not None and worst_avg < 65:
+            day_multiplier, day_mode = 0.8, 'worst'
+            day_note = "Light day — protect energy."
+    except Exception:
+        pass
+
+    sections = generate_execution_path(tasks, config, day_multiplier, day_mode)
 
     # Stamp planned_slot (None clears stale slots from previous days)
     slot_of = {}
@@ -4330,6 +4470,8 @@ def generate_and_persist_path(compute_prev_adherence: bool = True):
     config['path_tasks'] = (sections['prime'] + sections['secondary']
                             + sections['low_effort'] + sections['unscheduled'])
     config['path_sections'] = sections
+    config['path_day_mode'] = day_mode
+    config['path_day_note'] = day_note
     storage.save_config(config)
 
     by_id = {t.id: t for t in tasks}
@@ -4417,6 +4559,11 @@ def _render_path_full(by_id, sections):
     print()
     print(bar)
     print(f"{Fore.CYAN + Style.BRIGHT}⚡  EXECUTION PATH · {_path_daystr()}{Style.RESET_ALL}")
+    _cfg = storage.load_config()
+    _note, _mode = _cfg.get('path_day_note'), _cfg.get('path_day_mode')
+    if _note:
+        _ncol = Fore.GREEN if _mode == 'best' else (Fore.YELLOW if _mode == 'worst' else Fore.CYAN)
+        print(f"{_ncol}⚡  {_note}{Style.RESET_ALL}")
     print(bar)
     print("Generated for today. Run --refresh to regenerate.")
     print(bar)
@@ -4568,8 +4715,7 @@ def _flush_focus_queue(lock=None):
                          title=q.get('title') or 'Captured thought',
                          priority=normalize_priority(q.get('priority') or 'Medium'),
                          tags=q.get('tags') or [])
-                if q.get('duration'):
-                    t.duration = str(q['duration']).lower()
+                t.duration = normalize_duration(q.get('duration'))
                 if q.get('deadline'):
                     t.deadline = q['deadline']
                     t.deadline_type = q.get('deadline_type', 'soft')
@@ -4587,8 +4733,12 @@ def _flush_focus_queue(lock=None):
                 if t.id == task_id:
                     t.focus_session_count = (getattr(t, 'focus_session_count', 0) or 0) + 1
                     try:
-                        mins = (datetime.now() - datetime.fromisoformat(started)).total_seconds() / 60.0
-                        t.focus_total_minutes = (getattr(t, 'focus_total_minutes', 0) or 0) + max(0, int(mins))
+                        elapsed = (datetime.now() - datetime.fromisoformat(started)).total_seconds() / 60.0
+                        planned = lock.get('planned_minutes')
+                        # D2-01: a lazy flush can fire long after the timer expired — never credit
+                        # more than the planned session (+2 min grace) so the stat stays honest.
+                        capped = elapsed if not planned else min(elapsed, planned + 2)
+                        t.focus_total_minutes = (getattr(t, 'focus_total_minutes', 0) or 0) + max(0, int(capped))
                     except Exception:
                         pass
                     t.last_focus_at = datetime.now().isoformat()
@@ -4626,11 +4776,16 @@ def focus_lock_active():
     return None
 
 
-def begin_focus_lock(task_id):
-    """Record the start of a focus session for the lock/queue layer (called from focus_task)."""
+def begin_focus_lock(task_id, minutes=None):
+    """Record the start of a focus session for the lock/queue layer (called from focus_task).
+
+    `minutes` = the planned session length, stored so _flush_focus_queue can cap
+    focus_total_minutes when a timer is flushed lazily, long after it expired (D2-01).
+    """
     storage.save_focus_lock({
         "task_id": task_id,
         "started_at": datetime.now().isoformat(),
+        "planned_minutes": minutes,
         "queued_tasks": [],
         "queued_actions": []
     })
@@ -4993,6 +5148,73 @@ def compute_weekly_stats(daily_summaries) -> dict:
     }
 
 
+_DOW_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+
+def compute_day_of_week_stats(daily_summaries) -> dict:
+    """S14-B — aggregate execution performance by day of week (0=Mon … 6=Sun).
+
+    Only days with sample_size >= 2 are 'meaningful' for best/worst and recommendations
+    (Rule #5). Sparser days are still returned (sample_size < 2, None metrics) so the UI can
+    show "Building pattern…" rather than a misleading number.
+    """
+    from collections import defaultdict
+    buckets = defaultdict(lambda: {"tis": [], "completed": [], "missed": []})
+    for s in (daily_summaries or []):
+        if not isinstance(s, dict):
+            continue
+        dt = _parse_dt_any(s.get('date'))
+        if not dt:
+            continue
+        wd = dt.weekday()
+        buckets[wd]["tis"].append(s.get('time_integrity_score') or 0)
+        buckets[wd]["completed"].append(s.get('tasks_completed', 0) or 0)
+        buckets[wd]["missed"].append(s.get('tasks_missed', 0) or 0)
+
+    def _avg(xs):
+        return round(sum(xs) / len(xs), 1) if xs else 0
+
+    by_day = {}
+    for wd in range(7):
+        b = buckets.get(wd)
+        if b and b["tis"]:
+            by_day[wd] = {
+                "avg_tis": int(round(_avg(b["tis"]))),
+                "avg_completed": _avg(b["completed"]),
+                "avg_missed": _avg(b["missed"]),
+                "sample_size": len(b["tis"]),
+            }
+        else:
+            by_day[wd] = {"avg_tis": None, "avg_completed": None,
+                          "avg_missed": None, "sample_size": 0}
+
+    eligible = {wd: d for wd, d in by_day.items() if d["sample_size"] >= 2}
+    best_day = worst_day = best_name = worst_name = best_tis = worst_tis = None
+    if eligible:
+        best_day = max(eligible, key=lambda wd: eligible[wd]["avg_tis"])
+        worst_day = min(eligible, key=lambda wd: eligible[wd]["avg_tis"])
+        best_name, worst_name = _DOW_NAMES[best_day], _DOW_NAMES[worst_day]
+        best_tis, worst_tis = eligible[best_day]["avg_tis"], eligible[worst_day]["avg_tis"]
+
+    if best_name is None:
+        rec = "Keep building history for pattern insights."
+    else:
+        rec = f"You execute best on {best_name}s."
+        if worst_name and worst_name != best_name and worst_tis is not None and worst_tis < 65:
+            rec += f" Keep {worst_name}s light."
+
+    return {
+        "by_day": by_day,
+        "best_day": best_day,
+        "best_day_name": best_name,
+        "worst_day": worst_day,
+        "worst_day_name": worst_name,
+        "best_day_avg_tis": best_tis,
+        "worst_day_avg_tis": worst_tis,
+        "recommendation": rec,
+    }
+
+
 def ensure_daily_summaries(force=False):
     """Backfill/append daily summaries for completed days. Runs once per new day."""
     config = storage.load_config()
@@ -5218,20 +5440,48 @@ def render_stats_today():
 
 
 def render_stats_week():
-    summaries = sorted(storage.load_daily_summaries(), key=lambda s: s.get('date', ''))[-7:]
-    bar = Fore.CYAN + ("━" * 56) + Style.RESET_ALL
-    print(f"\n{bar}\n{Fore.CYAN + Style.BRIGHT}⚡  7-DAY BREAKDOWN{Style.RESET_ALL}\n{bar}")
-    if not summaries:
-        print("  Not enough data yet.")
-        print(bar)
-        return
-    print(f"  {'DAY':<10} {'SCORE':>5}  {'DONE':>4} {'MISS':>4} {'FOCUS':>6}")
-    for d in summaries:
-        sc = d.get('time_integrity_score') or 0
+    """S14-D — calendar-week (Mon→Sun) breakdown. `—` for days with no summary yet (Rule #8)."""
+    summaries = storage.load_daily_summaries()
+    by_date = {s.get('date'): s for s in summaries if isinstance(s, dict)}
+    now = datetime.now()
+    monday = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+    streak_dates = {s['date'] for s in summaries
+                    if isinstance(s, dict) and (s.get('tasks_completed', 0) or 0) >= 1}
+
+    bar = Fore.CYAN + ("━" * 44) + Style.RESET_ALL
+    R = Style.RESET_ALL
+    dim = Fore.WHITE + Style.DIM
+    print(f"\n{bar}\n{Fore.CYAN + Style.BRIGHT}⚡  WEEKLY BREAKDOWN{R}\n{bar}\n")
+    print(f"       {'Score':>5}  {'Done':>4}  {'Missed':>6}  {'Focus':>5}   Streak")
+
+    names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    have_data = []
+    for i in range(7):
+        d = (monday + timedelta(days=i)).strftime('%Y-%m-%d')
+        s = by_date.get(d)
+        if not s:
+            print(f"{names[i]:<6} {dim}{'—':>5}  {'—':>4}  {'—':>6}  {'—':>5}{R}")
+            continue
+        sc = s.get('time_integrity_score') or 0
         col = Fore.GREEN if sc >= 80 else (Fore.YELLOW if sc >= 60 else Fore.RED)
-        print(f"  {_dow(d.get('date'))[:10]:<10} {col}{sc:>5}{Style.RESET_ALL}  "
-              f"{d.get('tasks_completed', 0):>4} {d.get('tasks_missed', 0):>4} "
-              f"{_fmt_minutes(d.get('focus_minutes_total', 0)):>6}")
+        done = s.get('tasks_completed', 0) or 0
+        missed = s.get('tasks_missed', 0) or 0
+        focus = s.get('focus_sessions', 0) or 0
+        fire = "🔥" if d in streak_dates else ""
+        print(f"{names[i]:<6} {col}{sc:>5}{R}  {done:>4}  {missed:>6}  {focus:>5}   {fire}")
+        have_data.append(s)
+
+    print()
+    if have_data:
+        w = compute_weekly_stats(summaries) or {}
+        avg = round(sum((s.get('time_integrity_score') or 0) for s in have_data) / len(have_data))
+        print(f"7-day avg: {avg}  {_trend_arrow(w.get('trend', 'stable'))}")
+        best = max(have_data, key=lambda s: s.get('time_integrity_score') or 0)
+        worst = min(have_data, key=lambda s: s.get('time_integrity_score') or 0)
+        print(f"Best: {_dow(best['date'])} ({best.get('time_integrity_score') or 0})"
+              f"  ·  Watch: {_dow(worst['date'])} ({worst.get('time_integrity_score') or 0})")
+    else:
+        print(f"{dim}No data yet this week. Complete tasks to populate.{R}")
     print(bar)
 
 
@@ -5379,12 +5629,17 @@ def command_rescue():
 
 
 def maybe_weekly_review():
-    """S12-E — Monday-morning weekly review prompt, once per week."""
+    """S14-A/E — Monday-morning weekly review prompt, once per week.
+
+    Fires Monday before 14:00, at most once per week. The week key is strftime('%Y-W%W')
+    used CONSISTENTLY for both the write and the compare (Rule #7) — a mismatched format here
+    previously caused it to fire every day, so write and read must stay identical.
+    """
     now = datetime.now()
-    if now.weekday() != 0 or now.hour >= 12:
+    if now.weekday() != 0 or now.hour >= 14:
         return
     config = storage.load_config()
-    week_str = now.strftime('%G-W%V')
+    week_str = now.strftime('%Y-W%W')
     if config.get('last_weekly_review') == week_str:
         return
     summaries = storage.load_daily_summaries()
@@ -5392,28 +5647,73 @@ def maybe_weekly_review():
         config['last_weekly_review'] = week_str
         storage.save_config(config)
         return
+
     w = compute_weekly_stats(summaries)
+    dow = compute_day_of_week_stats(summaries)
+    week_days = w.get('days', []) if w else []
+    R = Style.RESET_ALL
+
+    # biggest win = the day with the most completions this week
+    win_day, win_n = None, -1
+    for d in week_days:
+        c = d.get('tasks_completed', 0) or 0
+        if c >= win_n:
+            win_n, win_day = c, d
+    # most-avoided tag + how many times it was deferred this week
+    avoided = w.get('most_avoided_tag') if w else None
+    avoided_n = 0
+    if avoided:
+        cutoff = (now - timedelta(days=7)).strftime('%Y-%m-%d')
+        for t in storage.load_tasks():
+            if avoided in (t.tags or []):
+                pc = getattr(t, 'postpone_count', 0) or 0
+                dropped_recent = getattr(t, 'dropped_at', None) and t.dropped_at[:10] >= cutoff
+                if pc >= 1 or dropped_recent:
+                    avoided_n += pc or 1
+
+    avg_score = round(w['avg_score']) if w else 0
+    sc_col = Fore.GREEN if avg_score >= 70 else (Fore.YELLOW if avg_score >= 50 else Fore.RED)
+
     bar = Fore.CYAN + ("━" * 44) + Style.RESET_ALL
     print()
     print(bar)
-    print(f"{Fore.CYAN + Style.BRIGHT}📊  WEEKLY REVIEW · Week of {now.strftime('%d %b')}{Style.RESET_ALL}")
+    print(f"{Fore.CYAN + Style.BRIGHT}📊  WEEKLY REVIEW · Week of {now.strftime('%d %b').replace(' 0', ' ')}{R}")
     print(bar)
-    print(f"Last week: Time Integrity Score  {round(w['avg_score'])} / 100  {_trend_arrow(w['trend'])}\n")
-    bd = w['best_day']
-    print(f"Your biggest win:  {_dow(bd['date'])} — top score {bd['score']}")
-    if w['avg_start_drift'] is not None and w['avg_start_drift'] > 0:
-        print(f"Your pattern:      you start ~{round(w['avg_start_drift'])} min late")
-    if w['most_avoided_tag']:
-        print(f"Your avoidance:    #{w['most_avoided_tag']} tasks deferred most\n")
-    else:
+    print(f"Last week: Time Integrity Score  {sc_col}{avg_score}{R} / 100  {_trend_arrow(w['trend'])}\n")
+
+    if win_day is not None:
+        print(f"Your biggest win:   {_dow(win_day.get('date'))} — {win_n} task{'s' if win_n != 1 else ''}")
+    wd = w['worst_day']
+    print(f"Your toughest day:  {_dow(wd['date'])} (score: {wd['score']})")
+    if avoided:
+        print(f"Your avoidance:     #{avoided} deferred {avoided_n}×")
+    print()
+
+    # S14-E: day-of-week pattern insight (only with >=3 samples for that weekday)
+    bd_wd = dow.get('best_day')
+    if bd_wd is not None and dow['by_day'][bd_wd]['sample_size'] >= 3:
+        print(f"{Fore.CYAN}Pattern:  You execute best on {dow['best_day_name']}s (avg: {dow['best_day_avg_tis']}){R}")
+        ws_wd = dow.get('worst_day')
+        if (ws_wd is not None and ws_wd != bd_wd and dow['by_day'][ws_wd]['sample_size'] >= 3
+                and dow['worst_day_avg_tis'] is not None and dow['worst_day_avg_tis'] < 65):
+            print(f"{Fore.YELLOW}Watch out: {dow['worst_day_name']}s have been tough (avg: {dow['worst_day_avg_tis']}){R}")
         print()
-    print("This week, watch for:")
-    if w['most_avoided_tag']:
-        print(f"→ Schedule #{w['most_avoided_tag']} tasks earlier in the day")
-    print(f"→ Lighter loading on {_dow(w['worst_day']['date'])}")
+
+    print(f"{Fore.WHITE + Style.BRIGHT}This week, consider:{R}")
+    today_wd, tomorrow_wd = now.weekday(), (now.weekday() + 1) % 7
+    if bd_wd is not None and bd_wd == today_wd:
+        sugg = "Today is your strongest day. Load it heavy."
+    elif bd_wd is not None and bd_wd == tomorrow_wd:
+        sugg = "Tomorrow is your best day. Save hard work for it."
+    elif avoided:
+        sugg = f"Schedule #{avoided} tasks earlier in the day."
+    else:
+        sugg = "Complete at least one task to maintain your streak."
+    print(f"{Fore.CYAN}→ {sugg}{R}")
     print(bar)
+    print(f"{Fore.WHITE + Style.DIM}Ready? [Enter to continue · Q to skip]{R}")
     try:
-        choice = get_valid_input("\nReady to start the week? [Enter to continue / Q to skip]: ", "")
+        choice = get_valid_input("", "")
     except Exception:
         choice = ""
     config['last_weekly_review'] = week_str
@@ -5601,7 +5901,7 @@ def run_today_view():
         p_level = get_pressure_level(task)
         if p_level > 0:
             td = dt - now
-            rem_str = format_time_remaining(td)
+            rem_str = format_time_remaining(td, dt)
             if p_level == 3:
                 if getattr(task, 'deadline_type', None) == "hard":
                     row_color = Fore.RED + Style.BRIGHT
@@ -5635,10 +5935,10 @@ def run_today_view():
         dur_display = f"  [{task.duration}] " if task.duration else ""
         
         if dt > now:
-            rem_str = format_time_remaining(dt - now)
+            rem_str = format_time_remaining(dt - now, dt)
             suffix += f"  ← {rem_str}"
         else:
-            rem_str = format_time_remaining(dt - now)
+            rem_str = format_time_remaining(dt - now, dt)
             suffix += f"  ← {rem_str}"
 
         if getattr(task, 'deadline_type', None) == "hard":
@@ -5649,9 +5949,8 @@ def run_today_view():
         
         if is_now or is_next or is_window:
             if is_next:
-                duration_part = f"Est. duration: {task.duration}" if task.duration else "No estimated duration"
-                ends_part = ""
                 if task.duration:
+                    ends_part = ""
                     try:
                         dur_str = task.duration.lower()
                         import re
@@ -5664,7 +5963,7 @@ def run_today_view():
                             ends_part = f" · Ends ~{end_time.strftime('%I:%M %p').lstrip('0')}"
                     except:
                         pass
-                print(row_color + f"           {duration_part}{ends_part}" + Style.RESET_ALL)
+                    print(row_color + f"           Est. duration: {task.duration}{ends_part}" + Style.RESET_ALL)
             else:
                 tags_part = f" · #{', #'.join(task.tags)}" if task.tags else ""
                 print(row_color + f"           Priority: {task.priority}{tags_part}" + Style.RESET_ALL)
@@ -5701,10 +6000,11 @@ def run_today_view():
             
             if p_level > 0 and task.deadline:
                 try:
-                    td = datetime.fromisoformat(task.deadline) - now
-                    if td.tzinfo is not None:
-                        td = td.replace(tzinfo=None)
-                    rem_str = format_time_remaining(td)
+                    _dl = datetime.fromisoformat(task.deadline)
+                    if _dl.tzinfo is not None:
+                        _dl = _dl.replace(tzinfo=None)
+                    td = _dl - now
+                    rem_str = format_time_remaining(td, _dl)
                     if p_level == 3:
                         if td.total_seconds() < 0:
                             suffix += f" · {Fore.RED + Style.BRIGHT}{rem_str}{Style.RESET_ALL}"
@@ -5931,13 +6231,25 @@ def select_recovery_tasks(tasks=None) -> List[Task]:
 
 
 def _append_recovery_log(state):
-    """Append a recovery session record (S9-A schema) to recovery_log.json."""
-    comp = state.get('completed_in_recovery', []) or []
+    """Append a recovery session record (S9-A schema) to recovery_log.json.
+
+    D2-02: reconcile against live tasks so a session task completed via plain
+    `taskflow complete` (not the in-view [C]) still counts toward was_successful.
+    """
+    session = state.get('session_tasks', []) or []
+    done = set(state.get('completed_in_recovery', []) or [])
+    try:
+        for t in storage.load_tasks():
+            if t.id in session and t.completed:
+                done.add(t.id)
+    except Exception:
+        pass
+    comp = sorted(done)
     storage.append_recovery_log({
         "date": datetime.now().strftime('%Y-%m-%d'),
         "triggered_at": state.get('triggered_at'),
         "trigger_reason": state.get('trigger_reason'),
-        "session_tasks": state.get('session_tasks', []),
+        "session_tasks": session,
         "tasks_completed": len(comp),
         "was_successful": len(comp) >= 1,
         "exited_at": datetime.now().isoformat()
@@ -5974,7 +6286,7 @@ def _recovery_render(recovery_tasks, focus_idx):
         print(f"  {marker} {idx}.  " + Fore.WHITE + Style.BRIGHT + f"{t.title}" + R + f"   {Fore.CYAN}[{t.priority} · {dtype} · {dur}]{R}")
         dt = _task_deadline_dt(t)
         if dt:
-            rem = format_time_remaining(dt - datetime.now())
+            rem = format_time_remaining(dt - datetime.now(), dt)
             print(f"      {_recovery_pressure_color(t)}Due: {dt.strftime('%a %d %b at %I:%M %p')} · {rem}{R}")
     print()
     print(bar)

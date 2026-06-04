@@ -2059,8 +2059,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     </div>
                 </div>
 
+                <!-- TWO-COLUMN CONTROL CENTER: left = path · now · today's missions | right = alerts · insight · snapshot -->
+                <div style="display: grid; grid-template-columns: 1.3fr 1fr; gap: 24px; margin-top: 24px; align-items: start;">
+
+                <!-- LEFT COLUMN -->
+                <div style="display:flex; flex-direction:column; gap:16px; min-width:0;">
+
                 <!-- 1. TODAY'S EXECUTION PATH (top priority) -->
-                <div class="mission-panel" id="cc-path-panel" style="padding: 24px; margin-top: 24px;">
+                <div class="mission-panel" id="cc-path-panel" style="padding: 24px;">
                     <div style="display:flex; justify-content:space-between; align-items:center;">
                         <div class="section-label" style="margin:0; font-size:10px; letter-spacing:2px;">TODAY'S EXECUTION PATH</div>
                         <div id="cc-path-meta" style="font-size:10px; color:var(--text-disabled); font-family:var(--font-mono);"></div>
@@ -2075,11 +2081,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 </div>
 
                 <!-- 2. NOW WINDOW (what to do right now) -->
-                <div id="cc-now" style="margin-top:16px;"></div>
+                <div id="cc-now"></div>
 
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 32px;">
+                <!-- left-column stack continues: path · now · today's missions -->
                     
-                    <!-- 2. UPCOMING MISSIONS -->
+                    <!-- TODAY'S MISSIONS -->
                     <div class="mission-panel" style="padding: 24px;">
                         <div id="cc-approaching-banner" style="margin-bottom: 12px; padding: 10px; border-radius: 8px; font-weight: 700; font-size: 12px; display: none; align-items: center; gap: 8px;"></div>
                         <div class="section-label">TODAY'S MISSIONS</div>
@@ -2087,6 +2093,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                             <!-- Filled by JS -->
                         </div>
                     </div>
+
+                </div><!-- /LEFT COLUMN -->
+
+                <!-- RIGHT COLUMN -->
+                <div style="display:flex; flex-direction:column; gap:16px; min-width:0;">
 
                     <!-- 3. PRIORITY ALERTS -->
                     <div class="mission-panel" style="padding: 24px; border-color: rgba(248, 81, 73, 0.2); box-shadow: inset 0 0 20px rgba(248, 81, 73, 0.05);">
@@ -2133,8 +2144,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                             <span style="color:var(--ai-purple);">✦</span> <span id="cc-insight">System stable. High-priority execution recommended to maintain optimal momentum.</span>
                         </div>
                     </div>
+                </div><!-- /RIGHT COLUMN -->
 
-                </div>
+                </div><!-- /grid -->
             </div>
         </div>
 
@@ -2296,6 +2308,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                             <div class="section-label" style="margin:0 0 8px;">WEEK OVERVIEW</div>
                             <div id="tis-bars" style="height:180px; display:flex; align-items:flex-end; gap:10px; padding-top:20px;"></div>
                         </div>
+                    </div>
+
+                    <!-- Section 2.5: DAY OF WEEK PATTERNS (S14-F) -->
+                    <div class="mission-panel" style="padding:20px; margin-bottom:24px;">
+                        <div class="section-label" style="margin:0 0 16px; letter-spacing:2px;">DAY OF WEEK PATTERNS</div>
+                        <div id="dow-bars" style="display:flex; flex-direction:column; gap:8px;"></div>
+                        <div id="dow-chips" style="display:flex; gap:12px; margin-top:16px;"></div>
                     </div>
 
                     <!-- Section 3: EXECUTION BREAKDOWN -->
@@ -3149,10 +3168,18 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         }
 
         let html = '';
+        if (data && data.day_note) {
+            const nc = data.day_mode === 'best' ? '#3FB950' : (data.day_mode === 'worst' ? '#D29922' : '#58A6FF');
+            html += `<div style="font-size:11px;color:${nc};letter-spacing:0.5px;margin-bottom:4px;">⚡ ${data.day_note}</div>`;
+        }
         html += group('★ PRIME TARGET', '#D29922', 'rgba(210,153,34,0.04)', prime);
         html += group('SECONDARY', '#58A6FF', 'rgba(88,166,255,0.03)', sec);
         html += group('LOW EFFORT', '#6E7681', 'rgba(139,148,158,0.03)', low);
-        if (!html) html = '<div style="opacity:0.5;font-size:12px;">No missions for today. Add one to generate a path.</div>';
+        if (!prime.length && !sec.length && !low.length) {
+            // S13-A BLOCK 1: nothing scheduled → a single generate action, not an empty void
+            html = `<div style="opacity:0.6;font-size:12px;margin-bottom:10px;">No path generated for today.</div>
+                <button onclick="regeneratePath()" style="width:100%;background:transparent;border:1px dashed #30363D;color:#6E7681;font-size:11px;padding:10px;border-radius:8px;cursor:pointer;font-family:'DM Mono',monospace;letter-spacing:1px;">+ Generate Today's Path</button>`;
+        }
         body.innerHTML = html;
 
         if (meta) {
@@ -3318,29 +3345,40 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             return m >= -45 && m <= 45;
         }
 
-        // ── NOW WINDOW (Fix 1: the single task to work on right now) ──
+        // ── NOW WINDOW (S13-A BLOCK 2: the single task to work on right now) ──
         const nowEl = document.getElementById('cc-now');
         if (nowEl) {
             const inWindow = activeTasks.filter(isInNowWindow).sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
             const futureNow = activeTasks.filter(t => t.deadline && new Date(t.deadline) > now).sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
+            const nowTimeStr = now.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
             if (inWindow.length > 0) {
                 const t = inWindow[0];
-                const dl = formatDeadline(t.deadline);
                 const durStr = t.duration ? (' · ' + t.duration) : '';
-                nowEl.innerHTML = `<div style="background:rgba(88,166,255,0.06);border:1px solid rgba(88,166,255,0.2);border-left:3px solid #58A6FF;border-radius:10px;padding:16px 20px;display:flex;align-items:center;gap:16px;">
-                    <div style="flex:1;min-width:0;">
-                        <div style="font-size:10px;color:#58A6FF;letter-spacing:2px;font-weight:700;">NOW ← YOU ARE HERE</div>
-                        <div style="font-size:16px;color:#E6EDF3;font-weight:500;margin-top:4px;">${t.title}</div>
-                        <div style="font-size:11px;color:var(--text-disabled);margin-top:4px;font-family:'DM Mono',monospace;">${t.priority}${durStr}${dl ? ' · ' + dl.text : ''}</div>
+                const endsStr = t.deadline ? (' · ends ~' + new Date(t.deadline).toLocaleTimeString([], {hour:'numeric', minute:'2-digit'})) : '';
+                nowEl.innerHTML = `<div style="background:rgba(88,166,255,0.05);border:1px solid rgba(88,166,255,0.2);border-left:3px solid #58A6FF;border-radius:10px;padding:14px 16px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                        <div style="font-size:10px;color:#58A6FF;letter-spacing:2px;font-weight:500;">▶ NOW — YOU ARE HERE</div>
+                        <div style="font-family:'DM Mono',monospace;color:#6E7681;font-size:11px;">${nowTimeStr}</div>
                     </div>
-                    <button onclick="tfStartFocus(${t.id})" style="background:linear-gradient(135deg,#1F6FEB,#388BFD);border:none;border-radius:8px;height:36px;width:120px;color:#fff;font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0;">Start Focus</button>
+                    <div style="font-size:15px;color:#E6EDF3;font-weight:500;margin-top:6px;">${t.title}</div>
+                    <div style="font-size:11px;color:#8B949E;margin-top:2px;">${t.priority}${durStr}${endsStr}</div>
+                    <button onclick="tfStartFocus(${t.id})" style="background:linear-gradient(135deg,#1F6FEB,#388BFD);border:none;border-radius:8px;height:34px;padding:0 14px;color:#fff;font-size:12px;font-weight:600;cursor:pointer;margin-top:10px;">Start Focus →</button>
                 </div>`;
-            } else if (futureNow.length > 0) {
-                const t = futureNow[0];
-                const mins = Math.round((new Date(t.deadline) - now) / 60000);
-                nowEl.innerHTML = `<div style="font-size:12px;color:var(--text-muted);padding:4px 2px;">Next mission: <span style="color:#58A6FF;">${t.title}</span> · in ${mins} min</div>`;
             } else {
-                nowEl.innerHTML = '';
+                let sub;
+                if (futureNow.length > 0) {
+                    const t = futureNow[0];
+                    const mins = Math.round((new Date(t.deadline) - now) / 60000);
+                    sub = `<div style="color:#8B949E;font-size:12px;margin-top:4px;">Next: ${t.title} · in ${mins} min</div>`;
+                } else if (activeTasks.some(t => t.deadline && new Date(t.deadline) < now)) {
+                    sub = `<div style="color:#F85149;font-size:12px;margin-top:4px;">All scheduled missions overdue.<br>Run: <span style="font-family:'DM Mono',monospace;">taskflow missed</span></div>`;
+                } else {
+                    sub = `<div style="color:#8B949E;font-size:12px;margin-top:4px;">Nothing due soon.</div>`;
+                }
+                nowEl.innerHTML = `<div style="background:rgba(255,255,255,0.02);border:1px solid #21262D;border-radius:10px;padding:12px 16px;">
+                    <div style="font-size:13px;color:#E6EDF3;">No mission in current window.</div>
+                    ${sub}
+                </div>`;
             }
         }
 
@@ -4353,7 +4391,54 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         const lab = x => { x = ((x % 24) + 24) % 24; const ap = x < 12 ? 'am' : 'pm'; const hh = x % 12; return `${hh === 0 ? 12 : hh}${ap}`; };
         return `${lab(h)}–${lab(h + 1)}`;
     }
+    // S14-F: DAY OF WEEK PATTERNS card — horizontal bars + best/watch chips
+    async function loadDayOfWeek() {
+        try {
+            const res = await fetch('/api/stats/day-of-week');
+            const d = await res.json();
+            const byDay = (d && d.by_day) || {};
+            const names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+            const color = s => s >= 80 ? '#3FB950' : (s >= 60 ? '#D29922' : '#F85149');
+            const barsEl = document.getElementById('dow-bars');
+            if (barsEl) {
+                barsEl.innerHTML = names.map((nm, i) => {
+                    const row = byDay[i] || byDay[String(i)] || { avg_tis: null, sample_size: 0 };
+                    const tis = row.avg_tis;
+                    const has = row.sample_size >= 2 && tis != null;
+                    const w = has ? Math.max(2, Math.round(tis)) : 0;
+                    const bar = has ? `<div style="height:8px;width:${w}%;background:${color(tis)};border-radius:4px;"></div>` : '';
+                    return `<div style="display:flex;align-items:center;gap:10px;">
+                        <div style="width:32px;color:#8B949E;font-size:11px;">${nm}</div>
+                        <div style="flex:1;height:8px;background:#21262D;border-radius:4px;overflow:hidden;">${bar}</div>
+                        <div style="width:28px;text-align:right;font-family:'DM Mono',monospace;font-size:11px;color:${has ? color(tis) : '#6E7681'};">${has ? tis : '—'}</div>
+                    </div>`;
+                }).join('');
+            }
+            const chipsEl = document.getElementById('dow-chips');
+            if (chipsEl) {
+                let chips = '';
+                if (d && d.best_day_name) {
+                    chips += `<div style="flex:1;background:rgba(63,185,80,0.08);border:1px solid rgba(63,185,80,0.15);border-radius:8px;padding:8px 12px;">
+                        <div style="color:#6E7681;font-size:9px;text-transform:uppercase;letter-spacing:1px;">BEST DAY</div>
+                        <div style="color:#3FB950;font-size:14px;font-weight:500;">${d.best_day_name}</div>
+                        <div style="color:#8B949E;font-size:11px;">avg ${d.best_day_avg_tis} TIS</div>
+                    </div>`;
+                }
+                if (d && d.worst_day_name && d.worst_day_avg_tis != null && d.worst_day_avg_tis < 65 && d.worst_day_name !== d.best_day_name) {
+                    chips += `<div style="flex:1;background:rgba(210,153,34,0.08);border:1px solid rgba(210,153,34,0.15);border-radius:8px;padding:8px 12px;">
+                        <div style="color:#6E7681;font-size:9px;text-transform:uppercase;letter-spacing:1px;">WATCH OUT</div>
+                        <div style="color:#D29922;font-size:14px;font-weight:500;">${d.worst_day_name}</div>
+                        <div style="color:#8B949E;font-size:11px;">avg ${d.worst_day_avg_tis} TIS</div>
+                    </div>`;
+                }
+                if (!chips) chips = `<div style="color:#6E7681;font-size:11px;">Building pattern… complete tasks across more days for day-of-week insights.</div>`;
+                chipsEl.innerHTML = chips;
+            }
+        } catch (e) { console.error('dow', e); }
+    }
+
     async function loadStats() {
+        loadDayOfWeek();
         try {
             const [wRes, dRes] = await Promise.all([fetch('/api/stats/weekly'), fetch('/api/stats/daily-summaries')]);
             const w = await wRes.json();

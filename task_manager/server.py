@@ -8,17 +8,25 @@ from task_manager.commands import normalize_priority
 from task_manager.web_ui import HTML_TEMPLATE
 from task_manager import models
 
+# D7-03: ThreadingHTTPServer runs each request in its own thread, and task mutations are
+# read-modify-write against tasks.json. Serialise all writes so concurrent requests can't
+# lose updates (atomic file replace prevents corruption, not lost writes).
+_WRITE_LOCK = threading.Lock()
+
+
 class TaskFlowHandler(BaseHTTPRequestHandler):
     def end_headers_json(self):
+        # D7-01: the UI is served same-origin by this very server, so NO CORS grant is needed.
+        # A wildcard Access-Control-Allow-Origin would let ANY website you visit read or delete
+        # your local tasks from your browser. Omitting it keeps the local API private.
         self.send_header('Content-Type', 'application/json')
-        self.send_header('Access-Control-Allow-Origin', '*')
         self.end_headers()
 
     def do_OPTIONS(self):
+        # D7-01: respond 200 WITHOUT Allow-Origin so third-party pages can't preflight their
+        # way into the local API. Same-origin requests never need a preflight.
         self.send_response(200)
-        self.send_header('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
-        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Allow', 'GET, POST, PATCH, DELETE, OPTIONS')
         self.end_headers()
 
     # --- Enrichment helpers (E13) ---
@@ -100,7 +108,9 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
             "sections": packed,
             "section_minutes": section_minutes,
             "total_minutes": total,
-            "adherence": cfg.get('path_adherence_today')
+            "adherence": cfg.get('path_adherence_today'),
+            "day_note": cfg.get('path_day_note'),
+            "day_mode": cfg.get('path_day_mode')
         }
 
     def do_GET(self):
@@ -277,6 +287,19 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
             except Exception:
                 self._send_json(200, {"summaries": []})
 
+        elif path == "/api/stats/day-of-week":
+            # S14-F: per-weekday performance aggregates for the Analytics "DAY OF WEEK" card
+            try:
+                from task_manager import commands as _cmds
+                _cmds.ensure_daily_summaries()
+                summaries = storage.storage.load_daily_summaries()
+                self._send_json(200, _cmds.compute_day_of_week_stats(summaries))
+            except Exception as e:
+                self._send_json(200, {"by_day": {}, "best_day": None, "worst_day": None,
+                                      "best_day_name": None, "worst_day_name": None,
+                                      "best_day_avg_tis": None, "worst_day_avg_tis": None,
+                                      "recommendation": "", "error": str(e)})
+
         elif path == "/api/focus_state":
             try:
                 from task_manager.commands import focus_manager
@@ -351,10 +374,17 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
     def do_POST(self):
+        with _WRITE_LOCK:   # D7-03: serialise writes
+            self._handle_POST()
+
+    def _handle_POST(self):
         parsed = urlparse(self.path)
         path = parsed.path
-        
-        content_length = int(self.headers.get('Content-Length', 0))
+
+        try:
+            content_length = int(self.headers.get('Content-Length', 0))
+        except (TypeError, ValueError):
+            content_length = 0
         post_data = self.rfile.read(content_length).decode('utf-8') if content_length > 0 else "{}"
         
         try:
@@ -839,7 +869,8 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
                     title = re.sub(r'#\w+', '', title).strip()
                     
                 priority = normalize_priority(priority_raw)
-                duration = data.get("duration")
+                from task_manager.commands import normalize_duration as _norm_dur
+                duration = _norm_dur(data.get("duration"))   # D1-01: sanitise web-supplied duration
                 deadline = data.get("deadline")
                 deadline_type = data.get("deadline_type")
                 mission_type = data.get("mission_type", "Task")
@@ -1022,6 +1053,10 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
     def do_PATCH(self):
+        with _WRITE_LOCK:   # D7-03: serialise writes
+            self._handle_PATCH()
+
+    def _handle_PATCH(self):
         parsed = urlparse(self.path)
         parts = [p for p in parsed.path.split('/') if p]
         if len(parts) >= 4 and parts[0] == 'api' and parts[1] == 'tasks':
@@ -1072,6 +1107,10 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
         self._send_json(404, {"error": "Not found"})
 
     def do_DELETE(self):
+        with _WRITE_LOCK:   # D7-03: serialise writes
+            self._handle_DELETE()
+
+    def _handle_DELETE(self):
         parsed = urlparse(self.path)
         parts = [p for p in parsed.path.split('/') if p]
         if len(parts) == 5 and parts[0] == 'api' and parts[1] == 'tasks':
