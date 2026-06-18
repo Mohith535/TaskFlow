@@ -49,3 +49,15 @@ patch_all.py
 
 # Personal / long-form draft content — keep local, not for the public repo
 ARTICLE.md
+
+# Claude Code project context — auto-loaded locally every session; not for public eyes
+CLAUDE.md
+
+# Local prompt library / personal workflow snippets
+prompts/
+
+# Internal engineering audits — keep local, NOT for the public repo.
+# SECURITY_AUDIT especially lists still-open weaknesses; publishing it hands attackers a roadmap.
+docs/SECURITY_AUDIT.md
+docs/DESIGN_AUDIT.md
+docs/CODE_HEALTH_AUDIT.md

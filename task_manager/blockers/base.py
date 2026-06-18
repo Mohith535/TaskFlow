@@ -5,10 +5,17 @@ import threading
 import logging
 import os
 
-# Set up logging for background blocker activity
-os.makedirs(".taskflow", exist_ok=True)
+# Set up logging for background blocker activity.
+# CODE-HEALTH: write into the real per-user data dir (~/.taskflow), not a relative
+# "./.taskflow" that would land in whatever the current working directory happens to be.
+from pathlib import Path as _Path
+_TF_LOG_DIR = _Path.home() / ".taskflow"
+try:
+    _TF_LOG_DIR.mkdir(parents=True, exist_ok=True)
+except Exception:
+    pass
 logging.basicConfig(
-    filename='.taskflow/taskflow.log', 
+    filename=str(_TF_LOG_DIR / "taskflow.log"),
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )

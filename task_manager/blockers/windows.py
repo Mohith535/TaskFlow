@@ -3,6 +3,26 @@ from .base import BaseBlocker
 import subprocess
 import os
 import sys
+import re as _re
+
+# SEC-03: a bare, valid hostname only — no whitespace, newlines, or hosts-file metacharacters.
+_DOMAIN_RE = _re.compile(r'^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$')
+# SEC-04: safe Windows image name for taskkill (no shell metacharacters).
+_APP_RE = _re.compile(r'^[A-Za-z0-9 ._-]{1,64}$')
+
+
+def _sanitize_domain(raw):
+    """Reduce a user-supplied site to a bare valid domain, or None (SEC-03).
+
+    Blocks hosts-file injection: anything with a newline/space/slash or that isn't a real
+    domain is rejected BEFORE it can be written to C:\\Windows\\System32\\drivers\\etc\\hosts.
+    """
+    if not raw:
+        return None
+    s = str(raw).strip().lower()
+    s = s.replace('http://', '').replace('https://', '').replace('www.', '')
+    s = s.split('/')[0].split(':')[0].strip()
+    return s if _DOMAIN_RE.match(s) else None
 
 
 class WindowsBlocker(BaseBlocker):
@@ -62,9 +82,12 @@ class WindowsBlocker(BaseBlocker):
             new_entries = ["\n# TaskFlow Focus Mode - Blocked Sites"]
             
             for site in sites:
-                # Clean the site name
-                clean_site = site.replace('http://', '').replace('https://', '').replace('www.', '')
-                
+                # SEC-03: validate to a bare domain — reject anything with newlines/spaces/junk
+                clean_site = _sanitize_domain(site)
+                if not clean_site:
+                    print(f"   ⚠️  Skipped invalid site entry: {site!r}")
+                    continue
+
                 # Check if already in hosts file
                 if clean_site in self.hosts_backup:
                     print(f"   ℹ️  {clean_site} already blocked")
@@ -96,8 +119,7 @@ class WindowsBlocker(BaseBlocker):
             subprocess.run(
                 ["ipconfig", "/flushdns"],
                 capture_output=True,
-                text=True,
-                shell=True
+                text=True
             )
             
             # AGGRESSIVE BROWSER KILL FEATURE
@@ -111,8 +133,7 @@ class WindowsBlocker(BaseBlocker):
                     result = subprocess.run(
                         ["taskkill", "/F", "/IM", browser],
                         capture_output=True,
-                        text=True,
-                        shell=True
+                        text=True
                     )
                     if result.returncode == 0:
                         killed += 1
@@ -204,7 +225,7 @@ class WindowsBlocker(BaseBlocker):
                 f.writelines(new_lines)
             
             # Flush DNS
-            subprocess.run(["ipconfig", "/flushdns"], capture_output=True, text=True, shell=True)
+            subprocess.run(["ipconfig", "/flushdns"], capture_output=True, text=True)
             
             print(f"✅ Removed {block_lines} blocking lines")
             self.blocked_sites = []
@@ -245,12 +266,14 @@ class WindowsBlocker(BaseBlocker):
         
         blocked_count = 0
         for app in apps:
+            if not _APP_RE.match(str(app)):   # SEC-04: reject shell metacharacters in app names
+                print(f"   ⚠️  Skipped invalid app name: {app!r}")
+                continue
             try:
                 result = subprocess.run(
                     ["taskkill", "/F", "/IM", f"{app}.exe"],
                     capture_output=True,
-                    text=True,
-                    shell=True
+                    text=True
                 )
                 
                 if result.returncode == 0:

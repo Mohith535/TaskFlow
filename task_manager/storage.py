@@ -42,9 +42,17 @@ class TaskStorage:
                 pass
     
     def _ensure_directories(self):
-        """Ensure required directories exist."""
+        """Ensure required directories exist, with private (0700) perms where supported."""
         self.data_dir.mkdir(exist_ok=True)
         self.backup_dir.mkdir(exist_ok=True)
+        # SEC-08: on POSIX, restrict the data dir so other users on a shared machine cannot read
+        # tasks.json. No-op on Windows, where NTFS user-profile ACLs already restrict access.
+        try:
+            if os.name == 'posix':
+                os.chmod(self.data_dir, 0o700)
+                os.chmod(self.backup_dir, 0o700)
+        except Exception:
+            pass
     
     def _create_backup(self):
         """Create timestamped backup of tasks file."""

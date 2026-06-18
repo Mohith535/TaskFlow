@@ -14,6 +14,35 @@ from task_manager import models
 _WRITE_LOCK = threading.Lock()
 
 
+def _computed_task_fields(t):
+    """CODE-HEALTH single source of truth: derive the values the dashboard used to
+    re-implement in JS (pressure level, duration→minutes, priority tier, overdue) here in
+    Python and ship them in the task payload. Time-relative fields (pressure_level, is_overdue)
+    are recomputed on every fetch — the dashboard re-polls, so the JS consumes, never derives."""
+    from task_manager import commands as _c
+    from datetime import datetime as _dt
+    try:
+        pl = _c.get_pressure_level(t)
+    except Exception:
+        pl = 0
+    dur = (getattr(t, 'duration', None) or '').lower()
+    is_overdue = False
+    try:
+        if getattr(t, 'deadline', None) and not getattr(t, 'completed', False):
+            dl = _dt.fromisoformat(t.deadline)
+            if dl.tzinfo is not None:
+                dl = dl.replace(tzinfo=None)
+            is_overdue = dl < _dt.now()
+    except Exception:
+        is_overdue = False
+    return {
+        "pressure_level": pl,
+        "duration_minutes": _c.DURATION_MINUTES.get(dur) if dur else None,
+        "priority_tier": _c._priority_tier(t),
+        "is_overdue": is_overdue,
+    }
+
+
 class TaskFlowHandler(BaseHTTPRequestHandler):
     def end_headers_json(self):
         # D7-01: the UI is served same-origin by this very server, so NO CORS grant is needed.
@@ -28,6 +57,44 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header('Allow', 'GET, POST, PATCH, DELETE, OPTIONS')
         self.end_headers()
+
+    # --- Security guards (SEC-02 CSRF / SEC-07 DNS-rebinding) ---
+    _LOCAL_HOSTNAMES = ("127.0.0.1", "localhost", "::1", "")
+
+    def _host_is_local(self):
+        """SEC-07: the Host header must name this loopback server (blocks DNS rebinding)."""
+        host = (self.headers.get('Host') or '').strip().lower()
+        if host.startswith('['):           # [::1]:port
+            host = host[1:].split(']')[0]
+        else:
+            host = host.split(':')[0]
+        return host in self._LOCAL_HOSTNAMES
+
+    def _origin_is_local(self):
+        """SEC-02: on mutations, any Origin/Referer present must be our own host (CSRF defense)."""
+        for h in ('Origin', 'Referer'):
+            v = self.headers.get(h)
+            if not v:
+                continue
+            try:
+                hn = (urlparse(v).hostname or '').lower()
+            except Exception:
+                hn = 'foreign'
+            if hn not in ('127.0.0.1', 'localhost', '::1'):
+                return False
+        return True
+
+    def _guard(self, mutating=False):
+        """Return True (and send 403) if the request must be rejected. SEC-02 / SEC-07."""
+        if not self._host_is_local():
+            self.send_response(403)
+            self.end_headers()
+            return True
+        if mutating and not self._origin_is_local():
+            self.send_response(403)
+            self.end_headers()
+            return True
+        return False
 
     # --- Enrichment helpers (E13) ---
     def _send_json(self, code, payload):
@@ -88,7 +155,8 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
                     "deadline_type": getattr(t, 'deadline_type', None),
                     "completed": t.completed,
                     "tags": getattr(t, 'tags', None) or [],
-                    "planned_slot": getattr(t, 'planned_slot', None)
+                    "planned_slot": getattr(t, 'planned_slot', None),
+                    **_computed_task_fields(t),
                 })
             return out
 
@@ -116,6 +184,8 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         parsed = urlparse(self.path)
         path = parsed.path
+        if self._guard():   # SEC-07: reject foreign Host (DNS-rebinding)
+            return
 
         if path == "/":
             self.send_response(200)
@@ -123,6 +193,14 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
             self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
             self.send_header('Pragma', 'no-cache')
             self.send_header('Expires', '0')
+            # SEC-01: CSP blocks the XSS *exfiltration* channel even if a payload slips escaping —
+            # connect-src/img-src 'self' means a script can't phone home to evil.com.
+            self.send_header('Content-Security-Policy',
+                             "default-src 'self'; script-src 'self' 'unsafe-inline'; "
+                             "style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+                             "font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'")
+            self.send_header('X-Content-Type-Options', 'nosniff')
+            self.send_header('Referrer-Policy', 'no-referrer')
             self.end_headers()
             self.wfile.write(HTML_TEMPLATE.encode('utf-8', errors='replace'))
 
@@ -168,6 +246,8 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
                     "links_count": getattr(t, 'links_count', 0),
                     "checklist_total": getattr(t, 'checklist_total', 0),
                     "checklist_done": getattr(t, 'checklist_done', 0),
+                    # CODE-HEALTH single-source: server-computed values (JS consumes, never re-derives)
+                    **_computed_task_fields(t),
                 }
                 for t in tasks if getattr(t, 'dropped_at', None) is None and getattr(t, 'offloaded_at', None) is None
             ]
@@ -348,17 +428,22 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
         elif path.startswith("/static/"):
             try:
                 import os
-                file_path = path[8:]
-                if '..' in file_path:
-                    raise Exception("Invalid path")
-                
-                static_dir = os.path.join(os.path.dirname(__file__), 'static')
-                full_path = os.path.join(static_dir, file_path)
-                
+                file_path = path[8:].lstrip('/\\')
+                static_dir = os.path.realpath(os.path.join(os.path.dirname(__file__), 'static'))
+                full_path = os.path.realpath(os.path.join(static_dir, file_path))
+                # SEC-05: containment — the resolved path must stay inside static_dir.
+                # realpath + commonpath defeats ../ traversal AND absolute/drive paths.
+                if os.path.commonpath([static_dir, full_path]) != static_dir:
+                    self.send_response(404)
+                    self.end_headers()
+                    return
+
                 if os.path.exists(full_path) and os.path.isfile(full_path):
                     self.send_response(200)
                     if full_path.endswith('.js'):
                         self.send_header('Content-Type', 'application/javascript')
+                    elif full_path.endswith('.css'):
+                        self.send_header('Content-Type', 'text/css')
                     self.end_headers()
                     with open(full_path, 'rb') as f:
                         self.wfile.write(f.read())
@@ -380,6 +465,8 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
     def _handle_POST(self):
         parsed = urlparse(self.path)
         path = parsed.path
+        if self._guard(mutating=True):   # SEC-02/07: block cross-site + foreign-Host writes
+            return
 
         try:
             content_length = int(self.headers.get('Content-Length', 0))
@@ -1058,6 +1145,8 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
 
     def _handle_PATCH(self):
         parsed = urlparse(self.path)
+        if self._guard(mutating=True):   # SEC-02/07
+            return
         parts = [p for p in parsed.path.split('/') if p]
         if len(parts) >= 4 and parts[0] == 'api' and parts[1] == 'tasks':
             from datetime import datetime as _dt
@@ -1112,6 +1201,8 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
 
     def _handle_DELETE(self):
         parsed = urlparse(self.path)
+        if self._guard(mutating=True):   # SEC-02/07
+            return
         parts = [p for p in parsed.path.split('/') if p]
         if len(parts) == 5 and parts[0] == 'api' and parts[1] == 'tasks':
             try:
