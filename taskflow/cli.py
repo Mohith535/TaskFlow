@@ -107,14 +107,14 @@ from task_manager.storage import storage
 import colorama
 
 APP_NAME = "TaskFlow"
-APP_VERSION = "v8.5.0"
+APP_VERSION = "v9.0.0"
 APP_TAGLINE = "The Execution Engine"
 
 
 def show_help() -> None:
     """Show comprehensive help with premium formatting."""
     print(f"""
-  TaskFlow v8.5.0 — The Execution Engine
+  TaskFlow v9.0.0 — The Execution Engine
   {"─" * 60}
 
   CORE COMMANDS:
@@ -375,11 +375,11 @@ def show_version():
         print(f"  • Missions:       (unable to read)")
     
     print(f"\n  \033[1mWHAT'S NEW IN {APP_VERSION}:\033[0m")
-    print("  • \033[33mPhase 1 Complete\033[0m: The full behavioral execution engine")
-    print("  • \033[31mRecovery Mode\033[0m: Auto + manual triage with 4 Web HUD entry points")
-    print("  • \033[32mSmart Reminders\033[0m: Context-matched timing (priority × deadline type)")
-    print("  • \033[36mTask Enrichment\033[0m: Notes, links & checklists on every mission")
-    print("  • \033[35mExecution Pressure\033[0m: Live deadline color-shifts (Now Window + today view)")
+    print("  • \033[35mThemes\033[0m: 4 built-in themes + a custom builder (OPERATOR M → Theme)")
+    print("  • \033[36mFaster UI\033[0m: dashboard split into cached static CSS/JS assets")
+    print("  • \033[32mSingle source of truth\033[0m: server-computed pressure / priority / duration")
+    print("  • \033[33mPhase 2 Complete\033[0m: Execution Path · Time Integrity · Focus Lock · Weekly review")
+    print("  • \033[31mHardened\033[0m: security, design & code-health audits — fixes shipped")
     print(f"  \033[90m{'─' * 60}\033[0m")
     print("  \033[3mBuilt for deep work. Engineered for execution.\033[0m\n")
 

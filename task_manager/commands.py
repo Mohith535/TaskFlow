@@ -3021,7 +3021,7 @@ def stats_tasks(today=False, week=False, export=False, compute=False, accuracy=F
 def show_help() -> None:
     """Show comprehensive help with premium formatting."""
     print(f"""
-  TaskFlow v8.5.0 — The Execution Engine
+  TaskFlow v9.0.0 — The Execution Engine
   {"─" * 60}
 
   CORE COMMANDS:

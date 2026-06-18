@@ -16,7 +16,7 @@
     }
 
     // CODE-HEALTH: single TIS→colour threshold (was duplicated across loadStats + loadDayOfWeek)
-    function tfScoreColor(s) { return s >= 80 ? '#3FB950' : (s >= 60 ? '#D29922' : '#F85149'); }
+    function tfScoreColor(s) { return s >= 80 ? 'var(--viz-high)' : (s >= 60 ? 'var(--viz-medium)' : 'var(--viz-low)'); }
 
     // ── PHASE 1 UTILITIES ─────────────────────────────────────────────
     function escapeHtml(s) {
@@ -55,14 +55,14 @@
                 } else {
                     text = 'OVERDUE · ' + (isToday ? 'Today ' + timeStr : dateStr + ' · ' + timeStr);
                 }
-                color = '#F85149';
+                color = 'var(--red)';
             } else if (isToday) {
-                if (diffHr > 3) { text = 'Today at ' + timeStr; color = '#8B949E'; pressureLevel = 0; }
-                else if (diffHr > 1) { text = 'Today at ' + timeStr + ' · ' + Math.floor(diffHr) + 'h ' + (diffMin % 60) + 'm left'; color = '#D29922'; pressureLevel = 1; isUrgent = true; }
-                else if (diffMin > 15) { text = 'Today at ' + timeStr + ' · ' + diffMin + 'm left'; color = '#D29922'; pressureLevel = 2; isUrgent = true; }
-                else { text = 'Today at ' + timeStr + ' · ' + diffMin + 'm left ⚠'; color = '#F85149'; pressureLevel = 3; isUrgent = true; }
-            } else if (isTomorrow) { text = 'Tomorrow at ' + timeStr; color = '#8B949E'; }
-            else { text = dateStr + ' · ' + timeStr; color = '#8B949E'; }
+                if (diffHr > 3) { text = 'Today at ' + timeStr; color = 'var(--text-muted)'; pressureLevel = 0; }
+                else if (diffHr > 1) { text = 'Today at ' + timeStr + ' · ' + Math.floor(diffHr) + 'h ' + (diffMin % 60) + 'm left'; color = 'var(--amber)'; pressureLevel = 1; isUrgent = true; }
+                else if (diffMin > 15) { text = 'Today at ' + timeStr + ' · ' + diffMin + 'm left'; color = 'var(--amber)'; pressureLevel = 2; isUrgent = true; }
+                else { text = 'Today at ' + timeStr + ' · ' + diffMin + 'm left ⚠'; color = 'var(--red)'; pressureLevel = 3; isUrgent = true; }
+            } else if (isTomorrow) { text = 'Tomorrow at ' + timeStr; color = 'var(--text-muted)'; }
+            else { text = dateStr + ' · ' + timeStr; color = 'var(--text-muted)'; }
             return { text, color, isOverdue, isUrgent, pressureLevel };
         } catch(e) { return null; }
     }
@@ -595,7 +595,7 @@
 
         function durBadge(t) {
             return t.duration
-                ? `<span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--blue);background:rgba(88,166,255,0.08);padding:1px 6px;border-radius:4px;margin-left:8px;">${t.duration}</span>`
+                ? `<span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--blue);background:color-mix(in srgb, var(--accent-info) 8%, transparent);padding:1px 6px;border-radius:4px;margin-left:8px;">${t.duration}</span>`
                 : '';
         }
         function dlStr(t) {
@@ -617,16 +617,16 @@
 
         let html = '';
         if (data && data.day_note) {
-            const nc = data.day_mode === 'best' ? '#3FB950' : (data.day_mode === 'worst' ? '#D29922' : '#58A6FF');
+            const nc = data.day_mode === 'best' ? 'var(--viz-high)' : (data.day_mode === 'worst' ? 'var(--viz-medium)' : 'var(--accent-info)');
             html += `<div style="font-size:11px;color:${nc};letter-spacing:0.5px;margin-bottom:4px;">⚡ ${data.day_note}</div>`;
         }
-        html += group('★ PRIME TARGET', '#D29922', 'rgba(210,153,34,0.04)', prime);
-        html += group('SECONDARY', '#58A6FF', 'rgba(88,166,255,0.03)', sec);
-        html += group('LOW EFFORT', '#6E7681', 'rgba(139,148,158,0.03)', low);
+        html += group('★ PRIME TARGET', 'var(--amber)', 'color-mix(in srgb, var(--accent-warning) 4%, transparent)', prime);
+        html += group('SECONDARY', 'var(--blue)', 'color-mix(in srgb, var(--accent-info) 3%, transparent)', sec);
+        html += group('LOW EFFORT', 'var(--text-disabled)', 'rgba(139,148,158,0.03)', low);
         if (!prime.length && !sec.length && !low.length) {
             // S13-A BLOCK 1: nothing scheduled → a single generate action, not an empty void
             html = `<div style="opacity:0.6;font-size:12px;margin-bottom:10px;">No path generated for today.</div>
-                <button onclick="regeneratePath()" style="width:100%;background:transparent;border:1px dashed #30363D;color:#6E7681;font-size:11px;padding:10px;border-radius:8px;cursor:pointer;font-family:'DM Mono',monospace;letter-spacing:1px;">+ Generate Today's Path</button>`;
+                <button onclick="regeneratePath()" style="width:100%;background:transparent;border:1px dashed var(--border-neutral);color:var(--text-disabled);font-size:11px;padding:10px;border-radius:8px;cursor:pointer;font-family:'DM Mono',monospace;letter-spacing:1px;">+ Generate Today's Path</button>`;
         }
         body.innerHTML = html;
 
@@ -661,9 +661,9 @@
                 if (window.tfFocusActive) {
                     btn.dataset.focusLabel = '1';
                     btn.textContent = 'FOCUS ACTIVE — WILL QUEUE';
-                    btn.style.background = 'linear-gradient(135deg,#D29922,#E3B341)';
+                    btn.style.background = 'linear-gradient(135deg,var(--amber),#E3B341)';
                     btn.style.borderColor = 'transparent';
-                    btn.style.color = '#0D1117';
+                    btn.style.color = 'var(--bg-primary)';
                 } else if (btn.dataset.focusLabel) {
                     btn.dataset.focusLabel = '';
                     btn.textContent = 'DEPLOY MISSION';
@@ -708,18 +708,18 @@
             if (totalPressure > 0) {
                 banner.style.display = 'flex';
                 if (p3Count > 0) {
-                    banner.style.background = 'rgba(248,81,73,0.1)';
+                    banner.style.background = 'color-mix(in srgb, var(--accent-danger) 10%, transparent)';
                     banner.style.border = '1px solid var(--red)';
                     banner.style.color = 'var(--red)';
                     banner.innerHTML = `<span style="animation: glowPulse 1.5s infinite;">⚡</span> ${totalPressure} task(s) need attention now.`;
                 } else {
-                    banner.style.background = 'rgba(210,153,34,0.1)';
+                    banner.style.background = 'color-mix(in srgb, var(--accent-warning) 10%, transparent)';
                     banner.style.border = '1px solid var(--amber)';
                     banner.style.color = 'var(--amber)';
                     banner.innerHTML = `⚡ ${totalPressure} task(s) need attention now.`;
                 }
                 if (!recoveryActive) {
-                    banner.innerHTML += ` <button onclick="tfRecEntryConfirm()" style="margin-left:auto;background:rgba(210,153,34,0.1);border:1px solid rgba(210,153,34,0.3);border-radius:6px;padding:4px 12px;color:#D29922;font-size:11px;font-weight:500;cursor:pointer;">Salvage my day →</button>`;
+                    banner.innerHTML += ` <button onclick="tfRecEntryConfirm()" style="margin-left:auto;background:color-mix(in srgb, var(--accent-warning) 10%, transparent);border:1px solid color-mix(in srgb, var(--accent-warning) 30%, transparent);border-radius:6px;padding:4px 12px;color:var(--amber);font-size:11px;font-weight:500;cursor:pointer;">Salvage my day →</button>`;
                 }
             } else {
                 banner.style.display = 'none';
@@ -743,14 +743,14 @@
                 // Collapse anything overdue by more than 3 days into one summary line
                 if (dl.isOverdue && overdueDays > 3) { oldMissed++; return; }
                 if (isHard && dueToday && dl.isOverdue) {
-                    alerts.push({title:t.title, meta:'Hard deadline · due today, overdue', icon:'⚠ HARD DEADLINE TODAY', color:'#F85149', sort:0});
+                    alerts.push({title:t.title, meta:'Hard deadline · due today, overdue', icon:'⚠ HARD DEADLINE TODAY', color:'var(--red)', sort:0});
                 } else if (isHard && dueToday && dl.pressureLevel >= 2) {
-                    alerts.push({title:t.title, meta:dl.text, icon:'⚡ HARD DEADLINE APPROACHING', color:'#D29922', sort:1});
+                    alerts.push({title:t.title, meta:dl.text, icon:'⚡ HARD DEADLINE APPROACHING', color:'var(--amber)', sort:1});
                 } else if (isHard && dl.isOverdue) {
-                    alerts.push({title:t.title, meta:'Was due: '+dl.text.replace(/OVERDUE [·—]\s*/, ''), icon:'⚠ HARD DEADLINE MISSED', color:'#F85149', sort:1.5});
+                    alerts.push({title:t.title, meta:'Was due: '+dl.text.replace(/OVERDUE [·—]\s*/, ''), icon:'⚠ HARD DEADLINE MISSED', color:'var(--red)', sort:1.5});
                 } else if ((t.postpone_count||0) >= 3) {
                     const severe = t.postpone_count >= 5;
-                    alerts.push({title:t.title, meta:'Postponed '+t.postpone_count+'×'+(severe?' ⚠⚠':' ⚠'), icon: severe?'🚨 REPEATEDLY DEFERRED':'↩ REPEATEDLY DEFERRED', color: severe?'#F85149':'#D29922', sort:2});
+                    alerts.push({title:t.title, meta:'Postponed '+t.postpone_count+'×'+(severe?' ⚠⚠':' ⚠'), icon: severe?'🚨 REPEATEDLY DEFERRED':'↩ REPEATEDLY DEFERRED', color: severe?'var(--red)':'var(--amber)', sort:2});
                 }
             });
             alerts.sort((a,b) => a.sort - b.sort);
@@ -764,10 +764,10 @@
                         <div class="alert-meta">${a.meta}</div>
                     </div>`).join('');
             } else if (oldMissed === 0) {
-                html = '<div style="color:#3FB950; font-size:13px;">✓ All systems nominal.</div>';
+                html = '<div style="color:var(--green); font-size:13px;">✓ All systems nominal.</div>';
             }
             if (oldMissed > 0) {
-                html += `<div style="margin-top:8px;background:rgba(248,81,73,0.04);border:1px solid rgba(248,81,73,0.1);color:#F85149;font-size:12px;border-radius:8px;padding:8px 14px;">⚠ ${oldMissed} older missed deadline${oldMissed!==1?'s':''} pending review<br><span style="opacity:0.7;">Run: <span style="font-family:'DM Mono',monospace;">taskflow missed</span> to address them</span></div>`;
+                html += `<div style="margin-top:8px;background:color-mix(in srgb, var(--accent-danger) 4%, transparent);border:1px solid color-mix(in srgb, var(--accent-danger) 10%, transparent);color:var(--red);font-size:12px;border-radius:8px;padding:8px 14px;">⚠ ${oldMissed} older missed deadline${oldMissed!==1?'s':''} pending review<br><span style="opacity:0.7;">Run: <span style="font-family:'DM Mono',monospace;">taskflow missed</span> to address them</span></div>`;
             }
             alertsContainer.innerHTML = html;
 
@@ -803,28 +803,28 @@
                 const t = inWindow[0];
                 const durStr = t.duration ? (' · ' + t.duration) : '';
                 const endsStr = t.deadline ? (' · ends ~' + new Date(t.deadline).toLocaleTimeString([], {hour:'numeric', minute:'2-digit'})) : '';
-                nowEl.innerHTML = `<div style="background:rgba(88,166,255,0.05);border:1px solid rgba(88,166,255,0.2);border-left:3px solid #58A6FF;border-radius:10px;padding:14px 16px;">
+                nowEl.innerHTML = `<div style="background:color-mix(in srgb, var(--accent-info) 5%, transparent);border:1px solid color-mix(in srgb, var(--accent-info) 20%, transparent);border-left:3px solid var(--blue);border-radius:10px;padding:14px 16px;">
                     <div style="display:flex;justify-content:space-between;align-items:center;">
-                        <div style="font-size:10px;color:#58A6FF;letter-spacing:2px;font-weight:500;">▶ NOW — YOU ARE HERE</div>
-                        <div style="font-family:'DM Mono',monospace;color:#6E7681;font-size:11px;">${nowTimeStr}</div>
+                        <div style="font-size:10px;color:var(--blue);letter-spacing:2px;font-weight:500;">▶ NOW — YOU ARE HERE</div>
+                        <div style="font-family:'DM Mono',monospace;color:var(--text-disabled);font-size:11px;">${nowTimeStr}</div>
                     </div>
-                    <div style="font-size:15px;color:#E6EDF3;font-weight:500;margin-top:6px;">${escapeHtml(t.title)}</div>
-                    <div style="font-size:11px;color:#8B949E;margin-top:2px;">${t.priority}${durStr}${endsStr}</div>
-                    <button onclick="tfStartFocus(${t.id})" style="background:linear-gradient(135deg,#1F6FEB,#388BFD);border:none;border-radius:8px;height:34px;padding:0 14px;color:#fff;font-size:12px;font-weight:600;cursor:pointer;margin-top:10px;">Start Focus →</button>
+                    <div style="font-size:15px;color:var(--text-hero);font-weight:500;margin-top:6px;">${escapeHtml(t.title)}</div>
+                    <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">${t.priority}${durStr}${endsStr}</div>
+                    <button onclick="tfStartFocus(${t.id})" style="background:linear-gradient(135deg,var(--blue-dark),var(--blue-mid));border:none;border-radius:8px;height:34px;padding:0 14px;color:#fff;font-size:12px;font-weight:600;cursor:pointer;margin-top:10px;">Start Focus →</button>
                 </div>`;
             } else {
                 let sub;
                 if (futureNow.length > 0) {
                     const t = futureNow[0];
                     const mins = Math.round((new Date(t.deadline) - now) / 60000);
-                    sub = `<div style="color:#8B949E;font-size:12px;margin-top:4px;">Next: ${escapeHtml(t.title)} · in ${mins} min</div>`;
+                    sub = `<div style="color:var(--text-muted);font-size:12px;margin-top:4px;">Next: ${escapeHtml(t.title)} · in ${mins} min</div>`;
                 } else if (activeTasks.some(t => t.deadline && new Date(t.deadline) < now)) {
-                    sub = `<div style="color:#F85149;font-size:12px;margin-top:4px;">All scheduled missions overdue.<br>Run: <span style="font-family:'DM Mono',monospace;">taskflow missed</span></div>`;
+                    sub = `<div style="color:var(--red);font-size:12px;margin-top:4px;">All scheduled missions overdue.<br>Run: <span style="font-family:'DM Mono',monospace;">taskflow missed</span></div>`;
                 } else {
-                    sub = `<div style="color:#8B949E;font-size:12px;margin-top:4px;">Nothing due soon.</div>`;
+                    sub = `<div style="color:var(--text-muted);font-size:12px;margin-top:4px;">Nothing due soon.</div>`;
                 }
-                nowEl.innerHTML = `<div style="background:rgba(255,255,255,0.02);border:1px solid #21262D;border-radius:10px;padding:12px 16px;">
-                    <div style="font-size:13px;color:#E6EDF3;">No mission in current window.</div>
+                nowEl.innerHTML = `<div style="background:color-mix(in srgb, var(--text-primary) 2%, transparent);border:1px solid var(--border-subtle);border-radius:10px;padding:12px 16px;">
+                    <div style="font-size:13px;color:var(--text-hero);">No mission in current window.</div>
                     ${sub}
                 </div>`;
             }
@@ -857,7 +857,7 @@
 
             if (todays.length === 0) {
                 upcomingContainer.innerHTML = `<div style="opacity:0.6;font-size:13px;">No missions for today.</div>
-                    <button onclick="toggleCreateMission()" style="margin-top:10px;background:rgba(88,166,255,0.1);border:1px solid rgba(88,166,255,0.2);color:var(--blue);border-radius:8px;padding:8px 14px;font-size:12px;cursor:pointer;">+ Create Mission</button>`;
+                    <button onclick="toggleCreateMission()" style="margin-top:10px;background:color-mix(in srgb, var(--accent-info) 10%, transparent);border:1px solid color-mix(in srgb, var(--accent-info) 20%, transparent);color:var(--blue);border-radius:8px;padding:8px 14px;font-size:12px;cursor:pointer;">+ Create Mission</button>`;
             } else {
                 upcomingContainer.innerHTML = todays.slice(0, 6).map(t => {
                     const np = normalizePriority(t.priority);
@@ -865,10 +865,10 @@
                     const borderColor = isNow ? 'var(--blue)' : (np === 'high' ? 'var(--red)' : np === 'medium' ? 'var(--amber)' : 'var(--blue)');
                     const dlInfo = formatDeadline(t.deadline);
                     const dlStr = dlInfo ? `<span style="font-size:10px;color:${dlInfo.color};margin-left:8px;font-family:'DM Mono',monospace;">${dlInfo.text}</span>` : '';
-                    const nowBadge = isNow ? `<span style="background:rgba(88,166,255,0.2);color:var(--blue);font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;margin-right:6px;letter-spacing:0.5px;">NOW</span>` : '';
+                    const nowBadge = isNow ? `<span style="background:color-mix(in srgb, var(--accent-info) 20%, transparent);color:var(--blue);font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;margin-right:6px;letter-spacing:0.5px;">NOW</span>` : '';
                     // Fix 3: only show a duration line when one is actually set
                     const durLine = t.duration ? `<div style="font-size:11px;color:var(--text-disabled);margin-top:6px;font-family:'DM Mono',monospace;">Est. ${t.duration}</div>` : '';
-                    return `<div style="padding:12px;background:rgba(255,255,255,0.02);border-radius:8px;border-left:3px solid ${borderColor};">
+                    return `<div style="padding:12px;background:color-mix(in srgb, var(--text-primary) 2%, transparent);border-radius:8px;border-left:3px solid ${borderColor};">
                         <div style="display:flex;align-items:center;flex-wrap:wrap;">${nowBadge}${escapeHtml(t.title)}${dlStr}</div>
                         ${durLine}
                     </div>`;
@@ -879,9 +879,9 @@
                 if (future2.length > 0) {
                     const nt = future2[0];
                     const mins = Math.round((new Date(nt.deadline) - now) / 60000);
-                    upcomingContainer.innerHTML += `<div style="margin-top:10px;font-size:12px;color:#58A6FF;">Next: ${escapeHtml(nt.title)} · in ${mins} min</div>`;
+                    upcomingContainer.innerHTML += `<div style="margin-top:10px;font-size:12px;color:var(--blue);">Next: ${escapeHtml(nt.title)} · in ${mins} min</div>`;
                 } else if (todays.some(t => t.deadline && new Date(t.deadline) < now)) {
-                    upcomingContainer.innerHTML += `<div style="margin-top:10px;font-size:12px;color:#D29922;">All scheduled missions overdue. Run: <span style="font-family:'DM Mono',monospace;">taskflow missed</span></div>`;
+                    upcomingContainer.innerHTML += `<div style="margin-top:10px;font-size:12px;color:var(--amber);">All scheduled missions overdue. Run: <span style="font-family:'DM Mono',monospace;">taskflow missed</span></div>`;
                 }
             }
         }
@@ -1060,7 +1060,7 @@
         let html = '';
         if (desc) {
             html += `<div class="enrich-sub"><span class="enrich-sub-label">Notes</span>` +
-                    `<div class="enrich-notes-text" style="background:#0D1117;border:1px solid var(--border-subtle);border-radius:8px;padding:12px 14px;max-height:160px;">${tfEsc(desc)}</div></div>`;
+                    `<div class="enrich-notes-text" style="background:var(--bg-primary);border:1px solid var(--border-subtle);border-radius:8px;padding:12px 14px;max-height:160px;">${tfEsc(desc)}</div></div>`;
         }
         if (links.length) {
             let rows = '';
@@ -1166,7 +1166,7 @@
     };
 
     function tfConfetti(anchorEl) {
-        const colors = ['#3FB950', '#58A6FF'];
+        const colors = ['var(--green)', 'var(--blue)'];
         const host = anchorEl.parentElement || anchorEl;
         if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
         for (let i = 0; i < 6; i++) {
@@ -1392,7 +1392,7 @@
                 if (t.mission_type === 'Event') {
                     const timeRange = (t.start_time && t.end_time) ? ` · ${t.start_time} – ${t.end_time}` : '';
                     const dateStr = t.date ? ` · ${t.date}` : '';
-                    eventBadge = `<span class="badge" style="background:rgba(163,113,247,0.15);color:var(--ai-purple);border:1px solid rgba(163,113,247,0.3);">📅 EVENT${dateStr}${timeRange}</span>`;
+                    eventBadge = `<span class="badge" style="background:color-mix(in srgb, var(--accent-ai) 15%, transparent);color:var(--ai-purple);border:1px solid color-mix(in srgb, var(--accent-ai) 30%, transparent);">📅 EVENT${dateStr}${timeRange}</span>`;
                 }
 
                 // Pressure + overdue CSS classes
@@ -1545,7 +1545,7 @@
             const banner = document.getElementById('recovery-banner');
             if (recoveryActive) {
                 if (banner) banner.classList.add('active');
-                document.body.style.background = '#060A0F';
+                document.body.style.background = 'var(--bg-deep)';
             } else {
                 if (banner) banner.classList.remove('active');
                 document.body.style.background = '';
@@ -1602,7 +1602,7 @@
             const res = await fetch('/api/recovery-preview');
             const data = await res.json();
             const tasks = data.preview_tasks || [];
-            if (!tasks.length) return '<div style="color:#6E7681;font-size:12px;margin-top:8px;">No actionable tasks found.</div>';
+            if (!tasks.length) return '<div style="color:var(--text-disabled);font-size:12px;margin-top:8px;">No actionable tasks found.</div>';
             return tasks.map(t => {
                 const np = normalizePriority(t.priority);
                 const dur = t.duration ? `<span class="rec-prow-dur">[${t.duration}]</span>` : '';
@@ -1614,10 +1614,10 @@
     window.tfRecEntryConfirm = async function() {
         if (recoveryActive) { tfRecExitConfirm(); return; }
         const b = tfRecBackdrop();
-        b.innerHTML = '<div class="rec-dialog"><div class="rec-d-icon" style="color:#D29922;">⚡</div><div class="rec-d-title">Activate Recovery Mode?</div><div class="rec-d-desc">Loading…</div></div>';
+        b.innerHTML = '<div class="rec-dialog"><div class="rec-d-icon" style="color:var(--amber);">⚡</div><div class="rec-d-title">Activate Recovery Mode?</div><div class="rec-d-desc">Loading…</div></div>';
         const rows = await tfRecPreviewRows();
         b.innerHTML = `<div class="rec-dialog">
-            <div class="rec-d-icon" style="color:#D29922;">⚡</div>
+            <div class="rec-d-icon" style="color:var(--amber);">⚡</div>
             <div class="rec-d-title">Activate Recovery Mode?</div>
             <div class="rec-d-desc">This will simplify your view to focus on your 2 most important incomplete tasks. Everything else will fade out. You can exit anytime.</div>
             <div class="rec-d-label">Focusing on:</div>
@@ -1630,7 +1630,7 @@
     window.tfRecExitConfirm = function() {
         const b = tfRecBackdrop();
         b.innerHTML = `<div class="rec-dialog">
-            <div class="rec-d-icon" style="color:#8B949E;">←</div>
+            <div class="rec-d-icon" style="color:var(--text-muted);">←</div>
             <div class="rec-d-title">Exit Recovery Mode?</div>
             <div class="rec-d-desc">All tasks will become visible again. You'll lose the simplified view.</div>
             <button class="rec-btn-primary rec-btn-exit" onclick="tfRecExit(false)">Yes, exit recovery</button>
@@ -1642,7 +1642,7 @@
         tfRecCloseDialog();
         try {
             const res = await fetch('/api/recovery-activate', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({trigger_reason: reason})});
-            if (res.ok) { await checkRecoveryStatus(); try { renderTaskList(); } catch(e) {} if (typeof showToast === 'function') showToast('Recovery Mode active.', '#D29922'); }
+            if (res.ok) { await checkRecoveryStatus(); try { renderTaskList(); } catch(e) {} if (typeof showToast === 'function') showToast('Recovery Mode active.', 'var(--amber)'); }
         } catch(e) { if (typeof showToast === 'function') showToast('Could not activate recovery', 'var(--red)'); }
     };
 
@@ -1711,8 +1711,8 @@
         const main = document.querySelector('.col-main') || document.body;
         const el = document.createElement('div');
         el.id = 'rec-prewarn'; el.className = 'rec-prewarn';
-        el.innerHTML = '<span style="color:#D29922;font-size:14px;">⏳</span>' +
-            '<span class="rec-pw-mid"><span style="color:#D29922;">You haven\'t completed anything today.</span> <span style="color:#8B949E;">Focus window closing.</span></span>' +
+        el.innerHTML = '<span style="color:var(--amber);font-size:14px;">⏳</span>' +
+            '<span class="rec-pw-mid"><span style="color:var(--amber);">You haven\'t completed anything today.</span> <span style="color:var(--text-muted);">Focus window closing.</span></span>' +
             '<button class="rec-pw-link" onclick="tfRecActivate(\'D\')">Salvage my day →</button>' +
             '<button class="rec-pw-x" onclick="tfRecDismissPrewarn()">×</button>';
         main.insertBefore(el, main.firstChild);
@@ -1731,10 +1731,10 @@
         el.id = 'rec-sheet'; el.className = 'rec-sheet';
         el.innerHTML = '<div class="rec-sheet-handle"></div>' +
             '<div style="display:flex;justify-content:space-between;align-items:center;">' +
-            '<span style="color:#D29922;font-size:20px;">⚡</span>' +
+            '<span style="color:var(--amber);font-size:20px;">⚡</span>' +
             '<button class="rec-pw-x" onclick="tfRecDismissSheet(true)">×</button></div>' +
-            '<div style="font-size:20px;color:#E6EDF3;margin-top:8px;">Today\'s been difficult.</div>' +
-            '<div style="font-size:14px;color:#8B949E;margin-top:4px;">You have ' + incomplete + ' incomplete tasks. Want to simplify?</div>' +
+            '<div style="font-size:20px;color:var(--text-hero);margin-top:8px;">Today\'s been difficult.</div>' +
+            '<div style="font-size:14px;color:var(--text-muted);margin-top:4px;">You have ' + incomplete + ' incomplete tasks. Want to simplify?</div>' +
             rows +
             '<button class="rec-btn-primary" onclick="tfRecDismissSheet(false); tfRecActivate(\'auto_6pm\')">Activate Recovery Mode</button>' +
             '<button class="rec-btn-secondary" onclick="tfRecDismissSheet(true)">Not now</button>';
@@ -1779,7 +1779,7 @@
             const dl = formatDeadline(t.deadline);
             const isHard = t.deadline_type === 'hard';
             const dlText = dl ? dl.text : '';
-            const dlColor = dl ? dl.color : '#8B949E';
+            const dlColor = dl ? dl.color : 'var(--text-muted)';
             stack.innerHTML += `
             <div class="reminder-toast${isHard?' hard-reminder':''}" id="reminder-${t.id}">
                 <div class="toast-header">
@@ -1796,7 +1796,7 @@
             </div>`;
         });
         if (due.length > 3) {
-            stack.innerHTML += `<div style="font-size:12px;color:#8B949E;text-align:right;margin-top:4px;">and ${due.length-3} more reminders</div>`;
+            stack.innerHTML += `<div style="font-size:12px;color:var(--text-muted);text-align:right;margin-top:4px;">and ${due.length-3} more reminders</div>`;
         }
     }
 
@@ -1859,9 +1859,9 @@
                     const w = has ? Math.max(2, Math.round(tis)) : 0;
                     const bar = has ? `<div style="height:8px;width:${w}%;background:${color(tis)};border-radius:4px;"></div>` : '';
                     return `<div style="display:flex;align-items:center;gap:10px;">
-                        <div style="width:32px;color:#8B949E;font-size:11px;">${nm}</div>
-                        <div style="flex:1;height:8px;background:#21262D;border-radius:4px;overflow:hidden;">${bar}</div>
-                        <div style="width:28px;text-align:right;font-family:'DM Mono',monospace;font-size:11px;color:${has ? color(tis) : '#6E7681'};">${has ? tis : '—'}</div>
+                        <div style="width:32px;color:var(--text-muted);font-size:11px;">${nm}</div>
+                        <div style="flex:1;height:8px;background:var(--border-subtle);border-radius:4px;overflow:hidden;">${bar}</div>
+                        <div style="width:28px;text-align:right;font-family:'DM Mono',monospace;font-size:11px;color:${has ? color(tis) : 'var(--text-disabled)'};">${has ? tis : '—'}</div>
                     </div>`;
                 }).join('');
             }
@@ -1869,20 +1869,20 @@
             if (chipsEl) {
                 let chips = '';
                 if (d && d.best_day_name) {
-                    chips += `<div style="flex:1;background:rgba(63,185,80,0.08);border:1px solid rgba(63,185,80,0.15);border-radius:8px;padding:8px 12px;">
-                        <div style="color:#6E7681;font-size:9px;text-transform:uppercase;letter-spacing:1px;">BEST DAY</div>
-                        <div style="color:#3FB950;font-size:14px;font-weight:500;">${d.best_day_name}</div>
-                        <div style="color:#8B949E;font-size:11px;">avg ${d.best_day_avg_tis} TIS</div>
+                    chips += `<div style="flex:1;background:color-mix(in srgb, var(--accent-success) 8%, transparent);border:1px solid color-mix(in srgb, var(--accent-success) 15%, transparent);border-radius:8px;padding:8px 12px;">
+                        <div style="color:var(--text-disabled);font-size:9px;text-transform:uppercase;letter-spacing:1px;">BEST DAY</div>
+                        <div style="color:var(--green);font-size:14px;font-weight:500;">${d.best_day_name}</div>
+                        <div style="color:var(--text-muted);font-size:11px;">avg ${d.best_day_avg_tis} TIS</div>
                     </div>`;
                 }
                 if (d && d.worst_day_name && d.worst_day_avg_tis != null && d.worst_day_avg_tis < 65 && d.worst_day_name !== d.best_day_name) {
-                    chips += `<div style="flex:1;background:rgba(210,153,34,0.08);border:1px solid rgba(210,153,34,0.15);border-radius:8px;padding:8px 12px;">
-                        <div style="color:#6E7681;font-size:9px;text-transform:uppercase;letter-spacing:1px;">WATCH OUT</div>
-                        <div style="color:#D29922;font-size:14px;font-weight:500;">${d.worst_day_name}</div>
-                        <div style="color:#8B949E;font-size:11px;">avg ${d.worst_day_avg_tis} TIS</div>
+                    chips += `<div style="flex:1;background:color-mix(in srgb, var(--accent-warning) 8%, transparent);border:1px solid color-mix(in srgb, var(--accent-warning) 15%, transparent);border-radius:8px;padding:8px 12px;">
+                        <div style="color:var(--text-disabled);font-size:9px;text-transform:uppercase;letter-spacing:1px;">WATCH OUT</div>
+                        <div style="color:var(--amber);font-size:14px;font-weight:500;">${d.worst_day_name}</div>
+                        <div style="color:var(--text-muted);font-size:11px;">avg ${d.worst_day_avg_tis} TIS</div>
                     </div>`;
                 }
-                if (!chips) chips = `<div style="color:#6E7681;font-size:11px;">Building pattern… complete tasks across more days for day-of-week insights.</div>`;
+                if (!chips) chips = `<div style="color:var(--text-disabled);font-size:11px;">Building pattern… complete tasks across more days for day-of-week insights.</div>`;
                 chipsEl.innerHTML = chips;
             }
         } catch (e) { console.error('dow', e); }
@@ -1915,7 +1915,7 @@
             if (ring) { ring.setAttribute('stroke-dasharray', CIRC.toFixed(1)); ring.setAttribute('stroke-dashoffset', (CIRC * (1 - avg / 100)).toFixed(1)); ring.setAttribute('stroke', color(avg)); }
             const num = document.getElementById('tis-num'); if (num) { num.textContent = avg; num.setAttribute('fill', color(avg)); }
             const trend = document.getElementById('tis-trend');
-            if (trend) { const t = w.trend || 'stable'; const tc = t === 'improving' ? '#3FB950' : (t === 'declining' ? '#F85149' : '#D29922'); const ar = t === 'improving' ? '↑' : (t === 'declining' ? '↓' : '→'); trend.innerHTML = `<span style="color:${tc};">${ar} ${t}</span> · 7-day average`; }
+            if (trend) { const t = w.trend || 'stable'; const tc = t === 'improving' ? 'var(--green)' : (t === 'declining' ? 'var(--red)' : 'var(--amber)'); const ar = t === 'improving' ? '↑' : (t === 'declining' ? '↓' : '→'); trend.innerHTML = `<span style="color:${tc};">${ar} ${t}</span> · 7-day average`; }
             const bw = document.getElementById('tis-bestworst');
             if (bw && w.best_day && w.worst_day) bw.textContent = `Best ${_statsDow(w.best_day.date)} (${w.best_day.score}) · Watch ${_statsDow(w.worst_day.date)} (${w.worst_day.score})`;
 
@@ -1937,20 +1937,20 @@
             // Section 3 — breakdown chips
             const sum = k => days.reduce((a, x) => a + (x[k] || 0), 0);
             const chips = [
-                ['Completed', sum('tasks_completed'), '#3FB950'],
-                ['Missed', sum('tasks_missed'), '#F85149'],
-                ['Postponed', sum('tasks_postponed'), '#D29922'],
-                ['Dropped', sum('tasks_dropped'), '#8B949E'],
-                ['Focus sessions', sum('focus_sessions'), '#58A6FF'],
-                ['Focus minutes', sum('focus_minutes_total'), '#58A6FF'],
-                ['Streak', (w.execution_streak || 0) + 'd', '#D29922'],
-                ['Hard misses', w.hard_deadlines_missed_week || 0, '#F85149'],
+                ['Completed', sum('tasks_completed'), 'var(--green)'],
+                ['Missed', sum('tasks_missed'), 'var(--red)'],
+                ['Postponed', sum('tasks_postponed'), 'var(--amber)'],
+                ['Dropped', sum('tasks_dropped'), 'var(--text-muted)'],
+                ['Focus sessions', sum('focus_sessions'), 'var(--blue)'],
+                ['Focus minutes', sum('focus_minutes_total'), 'var(--blue)'],
+                ['Streak', (w.execution_streak || 0) + 'd', 'var(--amber)'],
+                ['Hard misses', w.hard_deadlines_missed_week || 0, 'var(--red)'],
             ];
             const chipsEl = document.getElementById('stats-chips');
             if (chipsEl) chipsEl.innerHTML = chips.map(([label, val, c]) =>
-                `<div style="background:#161B22; border:1px solid #21262D; border-radius:8px; padding:10px 14px;">
+                `<div style="background:var(--bg-surface); border:1px solid var(--border-subtle); border-radius:8px; padding:10px 14px;">
                     <div style="font-family:'DM Mono',monospace; font-size:24px; color:${c};">${val}</div>
-                    <div style="color:#6E7681; font-size:10px; text-transform:uppercase; letter-spacing:1px; margin-top:4px;">${label}</div>
+                    <div style="color:var(--text-disabled); font-size:10px; text-transform:uppercase; letter-spacing:1px; margin-top:4px;">${label}</div>
                 </div>`).join('');
 
             // Section 4 — patterns
@@ -1958,10 +1958,10 @@
             if (pat) {
                 const drift = w.avg_start_drift;
                 const driftStr = drift == null ? '—' : `${drift > 0 ? '+' : ''}${Math.round(drift)} min`;
-                const driftColor = drift == null ? 'var(--text-muted)' : (drift > 0 ? '#D29922' : '#3FB950');
+                const driftColor = drift == null ? 'var(--text-muted)' : (drift > 0 ? 'var(--amber)' : 'var(--green)');
                 pat.innerHTML = `
                     <div>PEAK HOUR <span style="float:right; color:var(--blue); font-family:'DM Mono',monospace;">${_statsHourRange(w.most_productive_hour)}</span></div>
-                    <div>MOST AVOIDED <span style="float:right; color:#D29922;">${w.most_avoided_tag ? ('#' + w.most_avoided_tag) : '—'}</span></div>
+                    <div>MOST AVOIDED <span style="float:right; color:var(--amber);">${w.most_avoided_tag ? ('#' + w.most_avoided_tag) : '—'}</span></div>
                     <div>AVG START DRIFT <span style="float:right; color:${driftColor}; font-family:'DM Mono',monospace;">${driftStr}</span></div>
                     <div>RECOVERY (week) <span style="float:right; color:var(--text-hero); font-family:'DM Mono',monospace;">${w.recovery_sessions || 0}</span></div>`;
             }
@@ -1972,9 +1972,9 @@
                 const hist = w.recovery_history || [];
                 rec.innerHTML = hist.length ? hist.map(h => {
                     const ok = h.was_successful;
-                    return `<div style="display:flex; justify-content:space-between; border-left:3px solid ${ok ? '#3FB950' : '#F85149'}; padding:6px 10px; background:rgba(255,255,255,0.02); border-radius:6px;">
+                    return `<div style="display:flex; justify-content:space-between; border-left:3px solid ${ok ? 'var(--green)' : 'var(--red)'}; padding:6px 10px; background:color-mix(in srgb, var(--text-primary) 2%, transparent); border-radius:6px;">
                         <span>${h.date || ''} · ${h.trigger_reason || '—'}</span>
-                        <span style="color:${ok ? '#3FB950' : '#F85149'};">${h.tasks_completed || 0} done ${ok ? '✓' : '✗'}</span>
+                        <span style="color:${ok ? 'var(--green)' : 'var(--red)'};">${h.tasks_completed || 0} done ${ok ? '✓' : '✗'}</span>
                     </div>`;
                 }).join('') : '<div style="opacity:0.5;">No recovery sessions yet.</div>';
             }
@@ -2341,7 +2341,7 @@
                     if (count > 0) {
                         const badge = document.createElement('span');
                         badge.className = 'header-count-badge';
-                        badge.style.cssText = 'background: rgba(255,255,255,0.1); color: var(--text-muted); font-size: 9px; padding: 2px 6px; border-radius: 10px; margin-left: 6px;';
+                        badge.style.cssText = 'background: color-mix(in srgb, var(--text-primary) 10%, transparent); color: var(--text-muted); font-size: 9px; padding: 2px 6px; border-radius: 10px; margin-left: 6px;';
                         badge.textContent = count;
                         header.appendChild(badge);
                     }
@@ -2437,9 +2437,9 @@
         const pc = task.postpone_count || 0;
         const canPostpone = pc < 5;
         let postponeWarn = '';
-        if (pc >= 5) postponeWarn = '<div style="color:#F85149;font-size:11px;margin-top:8px;padding:6px 10px;background:rgba(248,81,73,0.06);border-radius:6px;">⚠ Maximum postpones reached. Execute or Drop this mission.</div>';
-        else if (pc >= 3) postponeWarn = '<div style="color:#D29922;font-size:11px;margin-top:8px;padding:6px 10px;background:rgba(210,153,34,0.06);border-radius:6px;">⚠ Postponed ' + pc + '× — the mirror doesn\'t lie. Consider dropping.</div>';
-        else if (pc >= 2) postponeWarn = '<div style="color:#8B949E;font-size:11px;margin-top:8px;">Postponed ' + pc + '× — be honest with yourself.</div>';
+        if (pc >= 5) postponeWarn = '<div style="color:var(--red);font-size:11px;margin-top:8px;padding:6px 10px;background:color-mix(in srgb, var(--accent-danger) 6%, transparent);border-radius:6px;">⚠ Maximum postpones reached. Execute or Drop this mission.</div>';
+        else if (pc >= 3) postponeWarn = '<div style="color:var(--amber);font-size:11px;margin-top:8px;padding:6px 10px;background:color-mix(in srgb, var(--accent-warning) 6%, transparent);border-radius:6px;">⚠ Postponed ' + pc + '× — the mirror doesn\'t lie. Consider dropping.</div>';
+        else if (pc >= 2) postponeWarn = '<div style="color:var(--text-muted);font-size:11px;margin-top:8px;">Postponed ' + pc + '× — be honest with yourself.</div>';
 
         const createdDate = task.created_at ? new Date(task.created_at).toLocaleDateString([], {day:'numeric', month:'short', year:'numeric'}) : 'Unknown';
 
@@ -2464,7 +2464,7 @@
             <div class="brief-body" id="brief-body">
                 <div class="brief-enrich-block" id="brief-enrich" data-bid="${task.id}">${tfBriefEnrichment(task)}</div>
 
-                <div style="background:rgba(255,255,255,0.02); padding:18px; border-radius:14px; border:1px solid rgba(255,255,255,0.05);">
+                <div style="background:color-mix(in srgb, var(--text-primary) 2%, transparent); padding:18px; border-radius:14px; border:1px solid color-mix(in srgb, var(--text-primary) 5%, transparent);">
                     <div class="section-label" style="margin-bottom:12px;font-size:9px;">FOCUS PROTOCOL</div>
                     <div style="font-size:34px; font-family:var(--font-mono); margin-bottom:14px; color:var(--text-hero); text-align:center; opacity:0.8;">${focusClock}</div>
                     <button class="btn-execute" style="width:100%; margin-bottom:10px; padding:13px;" onclick="startFocus(${task.id})">DEPLOY FOCUS SESSION</button>
@@ -2708,7 +2708,7 @@
                 core.style.transform = 'scale(0.8)';
                 core.style.boxShadow = '0 0 40px var(--blue)';
             }
-            btnEl.style.background = 'rgba(88, 166, 255, 0.2)';
+            btnEl.style.background = 'color-mix(in srgb, var(--accent-info) 20%, transparent)';
             setTimeout(() => { 
                 if (core) {
                     core.style.transform = ''; 
@@ -2825,11 +2825,11 @@
                     if (parsed) {
                         parsedDeadlineISO = parsed.toISOString();
                         const nice = parsed.toLocaleDateString([], {weekday:'long',day:'numeric',month:'short',year:'numeric'}) + ' at ' + parsed.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
-                        if(disp){disp.textContent='→ ' + nice; disp.style.color='#3FB950'; disp.classList.add('visible');}
+                        if(disp){disp.textContent='→ ' + nice; disp.style.color='var(--green)'; disp.classList.add('visible');}
                         if(section) section.style.display='block';
                     } else {
                         parsedDeadlineISO = null;
-                        if(disp){disp.textContent="→ Could not understand. Try: 'Friday 3pm'"; disp.style.color='#F85149'; disp.classList.add('visible');}
+                        if(disp){disp.textContent="→ Could not understand. Try: 'Friday 3pm'"; disp.style.color='var(--red)'; disp.classList.add('visible');}
                         if(section)section.style.display='none';
                     }
                     if(window.tfUpdateProgressDots) tfUpdateProgressDots();
@@ -2958,9 +2958,9 @@
                     const parsed = parseDeadlineInput(val);
                     if (parsed && disp) {
                         const nice = parsed.toLocaleDateString([], {weekday:'short',day:'numeric',month:'short'}) + ' ' + parsed.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
-                        disp.textContent = '→ ' + nice; disp.style.color = '#3FB950'; disp.style.opacity = '1';
+                        disp.textContent = '→ ' + nice; disp.style.color = 'var(--green)'; disp.style.opacity = '1';
                         if (typeRow) typeRow.style.display = 'flex';
-                    } else if (disp) { disp.textContent = '→ Could not parse'; disp.style.color = '#F85149'; disp.style.opacity = '1'; if(typeRow) typeRow.style.display='none'; }
+                    } else if (disp) { disp.textContent = '→ Could not parse'; disp.style.color = 'var(--red)'; disp.style.opacity = '1'; if(typeRow) typeRow.style.display='none'; }
                 }, 600);
             });
         }
@@ -3013,7 +3013,7 @@
             if (blockEl && data.blocked_items && data.blocked_items.sites) {
                 activeBlockedSites = data.blocked_items.sites;
                 blockEl.innerHTML = activeBlockedSites.map(s => 
-                    `<div class="badge tag" style="background:rgba(248,81,73,0.1); border-color:rgba(248,81,73,0.3); color:var(--red);">${s}</div>`
+                    `<div class="badge tag" style="background:color-mix(in srgb, var(--accent-danger) 10%, transparent); border-color:color-mix(in srgb, var(--accent-danger) 30%, transparent); color:var(--red);">${s}</div>`
                 ).join('');
             } else {
                 activeBlockedSites = [];
@@ -3063,7 +3063,7 @@
         
         if (remaining <= 60) {
             timerEl.style.color = 'var(--red)';
-            timerEl.style.textShadow = '0 0 50px rgba(248,81,73,0.5)';
+            timerEl.style.textShadow = '0 0 50px color-mix(in srgb, var(--accent-danger) 50%, transparent)';
         } else if (remaining <= 300) {
             timerEl.style.color = '#f0a030';
             timerEl.style.textShadow = '0 0 50px rgba(240,160,48,0.5)';
@@ -3072,9 +3072,9 @@
         }
 
         const elapsedMins = Math.floor(passedData / 60);
-        if (elapsedMins >= 20) overlay.style.boxShadow = 'inset 0 0 100px rgba(163,113,247,0.3)';
-        else if (elapsedMins >= 10) overlay.style.boxShadow = 'inset 0 0 80px rgba(88,166,255,0.2)';
-        else if (elapsedMins >= 5) overlay.style.boxShadow = 'inset 0 0 50px rgba(88,166,255,0.1)';
+        if (elapsedMins >= 20) overlay.style.boxShadow = 'inset 0 0 100px color-mix(in srgb, var(--accent-ai) 30%, transparent)';
+        else if (elapsedMins >= 10) overlay.style.boxShadow = 'inset 0 0 80px color-mix(in srgb, var(--accent-info) 20%, transparent)';
+        else if (elapsedMins >= 5) overlay.style.boxShadow = 'inset 0 0 50px color-mix(in srgb, var(--accent-info) 10%, transparent)';
         else overlay.style.boxShadow = 'none';
     }
 
@@ -3261,7 +3261,7 @@
             `;
         } else {
             container.innerHTML = targets.map((t, idx) => `
-                <div class="task-card" style="padding: 20px; cursor: default; transition:all 0.3s;" onmouseenter="this.style.boxShadow='0 0 20px rgba(88,166,255,0.2)'; this.style.transform='translateX(4px)'" onmouseleave="this.style.boxShadow='none'; this.style.transform='none'">
+                <div class="task-card" style="padding: 20px; cursor: default; transition:all 0.3s;" onmouseenter="this.style.boxShadow='0 0 20px color-mix(in srgb, var(--accent-info) 20%, transparent)'; this.style.transform='translateX(4px)'" onmouseleave="this.style.boxShadow='none'; this.style.transform='none'">
                     <div style="display:flex; justify-content:space-between; align-items:center;">
                         <div>
                             <div style="font-weight:700; color:var(--text-hero); font-size: 18px; margin-bottom: 8px;">${escapeHtml(t.title)}</div>
@@ -3369,6 +3369,24 @@
     let activeSimType = null;
     let clock = null;
 
+    // THEME: particle colour follows --particle-color so it adapts per theme
+    // (e.g. subtle dark dots on Paper instead of invisible blue-on-white).
+    function tfParticleRGB() {
+        try {
+            const v = getComputedStyle(document.documentElement).getPropertyValue('--particle-color').trim();
+            const m = v.match(/(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+            if (m) return (parseInt(m[1]) << 16) | (parseInt(m[2]) << 8) | parseInt(m[3]);
+        } catch (e) {}
+        return 0x58A6FF;
+    }
+    function tfUpdateParticleTheme() {
+        const c = tfParticleRGB();
+        if (currentParticles && currentParticles.traverse) {
+            currentParticles.traverse(o => { if (o.material && o.material.color) o.material.color.setHex(c); });
+        }
+    }
+    window.tfUpdateParticleTheme = tfUpdateParticleTheme;
+
     // ── Fix 3: Operator particle settings (toggle + opacity + why), persisted ──
     function tfApplyParticleSettings(fade) {
         const c = document.getElementById('threejs-canvas');
@@ -3411,6 +3429,7 @@
         if (!p) return;
         if (p.classList.contains('open')) { tfCloseOperatorPanel(); return; }
         tfSyncOperatorPanel();
+        tfSyncThemeUI();
         p.classList.add('open');
         setTimeout(() => { document.addEventListener('click', tfOpOutside); document.addEventListener('keydown', tfOpEsc); }, 0);
     };
@@ -3433,6 +3452,85 @@
     window.tfToggleWhy = function() {
         const p = document.getElementById('op-why-panel');
         if (p) p.classList.toggle('open');
+    };
+
+    // ── THEME SYSTEM ──────────────────────────────────────────────────
+    window.tfActiveTheme = localStorage.getItem('tf_active_theme') || 'midnight';
+    const TF_THEMES = [
+        { id: 'midnight', label: 'Midnight', bg: '#0D1117', accent: '#58A6FF' },
+        { id: 'terminal', label: 'Terminal', bg: '#000000', accent: '#00FF9C' },
+        { id: 'paper',    label: 'Paper',    bg: '#F6F5F2', accent: '#0066CC' },
+        { id: 'slate',    label: 'Slate',    bg: '#1A1D23', accent: '#6B9BD1' }
+    ];
+    const TF_CUSTOM_VARS = ['--bg-base', '--bg-surface', '--text-primary', '--accent-info'];
+    function tfClearCustomInline() { TF_CUSTOM_VARS.forEach(v => document.documentElement.style.removeProperty(v)); }
+    function tfToHex(s) {
+        s = (s || '').trim();
+        if (s.startsWith('#')) return s.length === 4 ? '#' + s.slice(1).split('').map(c => c + c).join('') : s.slice(0, 7);
+        const m = s.match(/(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+        if (m) return '#' + [1, 2, 3].map(i => parseInt(m[i]).toString(16).padStart(2, '0')).join('');
+        return '';
+    }
+    function tfSyncThemeSwatches() {
+        document.querySelectorAll('.op-swatch').forEach(s => s.classList.toggle('active', s.dataset.themeId === (window.tfActiveTheme || 'midnight')));
+    }
+    window.tfApplyTheme = function(name, save) {
+        const root = document.documentElement;
+        tfClearCustomInline();
+        if (name === 'custom') {
+            root.removeAttribute('data-theme');
+            try { const c = JSON.parse(localStorage.getItem('tf_custom_theme') || '{}'); for (const k in c) root.style.setProperty(k, c[k]); } catch (e) {}
+        } else if (name && name !== 'midnight') {
+            root.setAttribute('data-theme', name);
+        } else {
+            root.removeAttribute('data-theme');
+        }
+        window.tfActiveTheme = name || 'midnight';
+        if (save !== false) localStorage.setItem('tf_active_theme', window.tfActiveTheme);
+        if (window.tfUpdateParticleTheme) window.tfUpdateParticleTheme();
+        tfSyncThemeSwatches();
+    };
+    function tfRenderThemeSwatches() {
+        const wrap = document.getElementById('op-theme-swatches');
+        if (!wrap) return;
+        const defs = TF_THEMES.slice();
+        const custom = localStorage.getItem('tf_custom_theme');
+        if (custom) { try { const c = JSON.parse(custom); defs.push({ id: 'custom', label: 'Custom', bg: c['--bg-base'] || '#0D1117', accent: c['--accent-info'] || '#58A6FF' }); } catch (e) {} }
+        wrap.innerHTML = defs.map(d =>
+            '<div class="op-swatch-wrap"><button class="op-swatch" data-theme-id="' + d.id + '" title="' + d.label + '" onclick="tfApplyTheme(\'' + d.id + '\')" style="background:linear-gradient(135deg,' + d.bg + ' 0 50%,' + d.accent + ' 50% 100%);"></button><span class="op-swatch-label">' + d.label + '</span></div>'
+        ).join('');
+        tfSyncThemeSwatches();
+    }
+    function tfSeedPickers() {
+        try {
+            const cs = getComputedStyle(document.documentElement);
+            const set = (id, v) => { const el = document.getElementById(id); if (el) { const h = tfToHex(cs.getPropertyValue(v)); if (h) el.value = h; } };
+            set('tf-pick-bg', '--bg-base'); set('tf-pick-surface', '--bg-surface'); set('tf-pick-text', '--text-primary'); set('tf-pick-accent', '--accent-info');
+        } catch (e) {}
+    }
+    function tfSyncThemeUI() { tfRenderThemeSwatches(); tfSeedPickers(); }
+    window.tfPickVar = function(v, val) {
+        document.documentElement.style.setProperty(v, val);
+        if (window.tfUpdateParticleTheme) window.tfUpdateParticleTheme();
+    };
+    window.tfToggleCustomize = function() { const p = document.getElementById('op-custom-panel'); if (p) p.classList.toggle('open'); };
+    window.tfSaveCustomTheme = function() {
+        const g = id => { const el = document.getElementById(id); return el ? el.value : null; };
+        const c = { '--bg-base': g('tf-pick-bg'), '--bg-surface': g('tf-pick-surface'), '--text-primary': g('tf-pick-text'), '--accent-info': g('tf-pick-accent') };
+        localStorage.setItem('tf_custom_theme', JSON.stringify(c));
+        localStorage.setItem('tf_active_theme', 'custom');
+        window.tfApplyTheme('custom');
+        tfRenderThemeSwatches();
+        try { showToast('Custom theme saved', 'var(--accent-success)'); } catch (e) {}
+    };
+    window.tfResetTheme = function() {
+        localStorage.removeItem('tf_active_theme'); localStorage.removeItem('tf_custom_theme');
+        tfClearCustomInline();
+        document.documentElement.removeAttribute('data-theme');
+        window.tfActiveTheme = 'midnight';
+        if (window.tfUpdateParticleTheme) window.tfUpdateParticleTheme();
+        tfSyncThemeUI();
+        try { showToast('Reset to Midnight', 'var(--accent-info)'); } catch (e) {}
     };
 
     function initThreeJS() {
@@ -3508,7 +3606,7 @@
         }
         const pGeo = new THREE.BufferGeometry();
         pGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-        const pMat = new THREE.PointsMaterial({color: 0x58A6FF, size: 0.04, transparent: true, opacity: 0.9});
+        const pMat = new THREE.PointsMaterial({color: tfParticleRGB(), size: 0.04, transparent: true, opacity: 0.9});
         group.add(new THREE.Points(pGeo, pMat));
 
         // Connect nodes
@@ -3523,7 +3621,7 @@
         }
         const lGeo = new THREE.BufferGeometry();
         lGeo.setAttribute('position', new THREE.Float32BufferAttribute(linePos, 3));
-        const lMat = new THREE.LineBasicMaterial({color: 0x388BFD, transparent: true, opacity: 0.15});
+        const lMat = new THREE.LineBasicMaterial({color: tfParticleRGB(), transparent: true, opacity: 0.15});
         group.add(new THREE.LineSegments(lGeo, lMat));
         return group;
     }
@@ -3534,8 +3632,8 @@
         canvas.width = 32; canvas.height = 32;
         const ctx = canvas.getContext('2d');
         const grad = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
-        grad.addColorStop(0, 'rgba(255,255,255,1)');
-        grad.addColorStop(0.2, 'rgba(210,153,34,0.8)'); // Amber
+        grad.addColorStop(0, 'rgba(255,255,255,1)');            // canvas 2D can't parse var()/color-mix — keep literal
+        grad.addColorStop(0.2, 'rgba(210,153,34,0.8)');         // warm ember sprite (material colour themed via tfParticleRGB)
         grad.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.fillStyle = grad;
         ctx.fillRect(0,0,32,32);
@@ -3579,7 +3677,7 @@
         }
         const geo = new THREE.BufferGeometry();
         geo.setAttribute('position', new THREE.BufferAttribute(linePos, 3));
-        const mat = new THREE.LineBasicMaterial({color: 0xA371F7, transparent: true, opacity: 0.4});
+        const mat = new THREE.LineBasicMaterial({color: tfParticleRGB(), transparent: true, opacity: 0.4});
         const lines = new THREE.LineSegments(geo, mat);
         lines.userData.velocities = velocities;
         return lines;

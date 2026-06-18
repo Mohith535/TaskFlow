@@ -61,3 +61,17 @@ prompts/
 docs/SECURITY_AUDIT.md
 docs/DESIGN_AUDIT.md
 docs/CODE_HEALTH_AUDIT.md
+
+# OS-generated junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Python build artifacts
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Atomic-write temp files (storage writes <file>.tmp then renames)
+*.tmp

@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🌊 TaskFlow v8.5.0
+# 🌊 TaskFlow v9.0.0
 
 ### The Execution Engine for Deep Work
 
@@ -11,7 +11,7 @@
 <br/>
 
 <p>
-  <img src="https://img.shields.io/badge/Version-8.5.0-0d1117?style=for-the-badge&labelColor=161b22" alt="Version" />
+  <img src="https://img.shields.io/badge/Version-9.0.0-0d1117?style=for-the-badge&labelColor=161b22" alt="Version" />
   <img src="https://img.shields.io/badge/Python-3.8+-3776ab?style=for-the-badge&logo=python&logoColor=white" alt="Python" />
   <img src="https://img.shields.io/badge/100%25_Offline-Local_First-2ea043?style=for-the-badge" alt="Offline" />
   <img src="https://img.shields.io/badge/License-MIT-8b5cf6?style=for-the-badge" alt="License" />
@@ -32,6 +32,7 @@
   <a href="#-quick-start">Quick Start</a> · 
   <a href="#-what-makes-taskflow-different">Why TaskFlow</a> · 
   <a href="#-the-system">The System</a> · 
+  <a href="#-themes">Themes</a> · 
   <a href="#-command-reference">Commands</a> · 
   <a href="#-whats-built--whats-coming">Roadmap</a> · 
   <a href="docs/deep-dive.md">Psychology Deep-Dive →</a>
@@ -213,7 +214,7 @@ Estimate time on every task. Track actuals. Build your personal accuracy profile
 Duration: 1h  →  Actual: 1h 34m
 Accuracy ratio: 1.57 (you underestimate by ~57%)
 ```
-The foundation of the Phase 2 AI estimation layer — your own history becomes your forecasting instrument.
+The foundation of the Phase 3 AI estimation layer — your own history becomes your forecasting instrument.
 
 </td>
 </tr>
@@ -371,13 +372,21 @@ The full behavioral execution engine — no AI required.
 - Recovery Mode (auto + manual)
 - Task enrichment (notes, links, checklist)
 
-### 🔄 Phase 2 — In Progress
+### ✅ Phase 2 — Complete (v8.5.0)
 History-driven behavioral intelligence.
 
 - Daily Execution Path (energy-curve scheduling)
 - Time Integrity Score (planned vs actual drift)
 - Focus Window Lock (queue-not-block during sessions)
-- Weekly behavioral review
+- Weekly behavioral review + day-of-week analytics
+
+### ✅ v9.0.0 — Hardening & Themes
+Polish, safety, and identity.
+
+- Four built-in themes + a custom theme builder (CSS-variable driven)
+- Dashboard split into cached static assets (`static/dashboard.css` / `.js`)
+- Single source of truth — the server computes pressure / overdue / duration / priority; the UI just consumes them
+- Security, design & code-health audits, with fixes shipped (CSRF + Host validation, CSP, output escaping, the offline promise restored)
 
 ### 🔮 Phase 3 — After LLM Integration
 AI that knows how you actually work.
@@ -400,7 +409,7 @@ AI that knows how you actually work.
 
 ```mermaid
 graph TD
-    CLI["CLI Router (argparse)"] --> CMD["Command Engine (3200+ lines)"]
+    CLI["CLI Router (argparse)"] --> CMD["Command Engine (6k+ lines)"]
     CLI --> WEB["Web HUD Server (ThreadingHTTPServer)"]
     
     CMD --> DB["Storage Layer (JSON + Atomic Writes)"]
@@ -409,7 +418,7 @@ graph TD
     CMD --> FM["Focus Manager"]
     FM --> BLK["System Blocker (Hosts + Process Control)"]
     
-    WEB --> UI["Mission Control UI (4500 lines)"]
+    WEB --> UI["Mission Control UI (static/dashboard.css + .js)"]
     
     DB --> FS[("Local Storage (~/.taskflow/)")]
 ```
@@ -521,17 +530,28 @@ pip install --upgrade git+https://github.com/Mohith535/TaskFlow.git
 
 <br/>
 
-## 🎨 Community Themes
+## 🎨 Themes
 
-TaskFlow's Web HUD is open for community customization. The UI layer is built with a clean theme system — CSS variables control all colors, spacing, and fonts.
+TaskFlow ships with **four built-in themes** and a **custom theme builder**. Switch instantly from **OPERATOR M → Theme** (bottom-left of the dashboard) — changes apply live, with no reload, and persist across sessions.
 
-**Want to build a theme?**
-1. Fork the repository
-2. Modify the CSS variables in the `:root` block of `task_manager/web_ui.py` (every color, font, and width token lives there)
-3. Submit a PR with a screenshot
-4. The best theme each month gets featured here
+| Theme | Personality |
+|:---|:---|
+| **Midnight** *(default)* | The original deep-space dark — calm and low-light, built for long 11pm sessions. |
+| **Terminal** | Green phosphor on true black, for the CLI purist who already lives in a shell. |
+| **Paper** | Daylight mode — clean white, ink-dark text, for bright rooms and people who don't do dark mode. |
+| **Slate** | Low-stimulation — softened, desaturated tones (see the note below). |
 
-*The theme gallery is coming soon.*
+**Build your own:** open **Customize** under the swatches to set Background, Surface, Text, and Accent with live color pickers — the dashboard recolors as you drag. **Save as Custom Theme** keeps it; **Reset to Midnight** clears it. A theme is just a set of CSS custom properties.
+
+### An honest note on what themes are (and aren't)
+
+Unlike TaskFlow's execution psychology — the postpone mirror, Recovery Mode, the pressure system — which is engineered to change how you *behave*, the theme system is mostly about **ownership**. A tool you've made your own is one you keep coming back to: that's real, well-documented product psychology (the endowment / IKEA effect), but it's *adoption* psychology, not *execution* psychology. We'd rather say that plainly than dress a color picker up as a productivity breakthrough.
+
+The one genuine exception is **Slate**. Its deliberately muted, desaturated urgency colors aren't just a softer palette — for people who read high-alarm red as anxiety rather than motivation, turning that signal down is a real behavioral accommodation. It's the same Yerkes-Dodson "right amount of arousal" idea the pressure system runs on, just dialed *down* instead of up.
+
+### Roll your own (contributors)
+
+Themes are pure CSS custom properties. To add one: fork the repo, copy a `[data-theme="…"]` block in [`task_manager/static/dashboard.css`](task_manager/static/dashboard.css), override the semantic tokens (`--bg-base`, `--accent-*`, `--text-*`, `--viz-*`, `--particle-color`), and open a PR with a screenshot.
 
 <br/>
 

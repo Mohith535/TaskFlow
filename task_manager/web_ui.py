@@ -8,6 +8,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <!-- SEC-06: external Google-Fonts CDN removed to honor the 100% offline promise (it leaked
          the user's IP to Google on every load). Falls back to system mono/sans below. To restore
          the exact look, bundle the font files under static/ and @font-face them locally. -->
+    <script>
+    /* THEME: apply the saved theme synchronously before first paint — avoids a flash of the wrong theme */
+    (function(){try{
+        var t=localStorage.getItem('tf_active_theme');
+        if(t&&t!=='midnight'&&t!=='custom'){document.documentElement.setAttribute('data-theme',t);}
+        if(t==='custom'){var c=JSON.parse(localStorage.getItem('tf_custom_theme')||'{}');for(var k in c){document.documentElement.style.setProperty(k,c[k]);}}
+    }catch(e){}})();
+    </script>
     <link rel="stylesheet" href="/static/dashboard.css">
 </head>
 <body class="state-idle">
@@ -34,9 +42,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <!-- FLOATING OMNIBAR OVERLAY (Ctrl+K from any view) -->
     <div id="omnibar-overlay" class="omnibar-overlay">
         <div class="omnibar-container">
-            <button id="omnibar-close" onclick="document.getElementById('omnibar-overlay').classList.remove('active')" style="position:absolute;top:-14px;right:-14px;width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:var(--text-muted);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;transition:all 0.3s;backdrop-filter:blur(8px);" onmouseover="this.style.background='rgba(248,81,73,0.9)';this.style.color='#fff';this.style.borderColor='transparent';this.style.boxShadow='0 0 20px rgba(248,81,73,0.4)';this.style.transform='rotate(90deg) scale(1.1)'" onmouseout="this.style.background='rgba(255,255,255,0.06)';this.style.color='var(--text-muted)';this.style.borderColor='rgba(255,255,255,0.15)';this.style.boxShadow='none';this.style.transform='scale(1)'">&times;</button>
+            <button id="omnibar-close" onclick="document.getElementById('omnibar-overlay').classList.remove('active')" style="position:absolute;top:-14px;right:-14px;width:36px;height:36px;border-radius:50%;background:color-mix(in srgb, var(--text-primary) 6%, transparent);border:1px solid color-mix(in srgb, var(--text-primary) 15%, transparent);color:var(--text-muted);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;transition:all 0.3s;backdrop-filter:blur(8px);" onmouseover="this.style.background='color-mix(in srgb, var(--accent-danger) 90%, transparent)';this.style.color='#fff';this.style.borderColor='transparent';this.style.boxShadow='0 0 20px color-mix(in srgb, var(--accent-danger) 40%, transparent)';this.style.transform='rotate(90deg) scale(1.1)'" onmouseout="this.style.background='color-mix(in srgb, var(--text-primary) 6%, transparent)';this.style.color='var(--text-muted)';this.style.borderColor='color-mix(in srgb, var(--text-primary) 15%, transparent)';this.style.boxShadow='none';this.style.transform='scale(1)'">&times;</button>
             <input type="text" id="omnibar-input" placeholder="Capture a thought..." autocomplete="off">
-            <div id="omnibar-time-section" style="margin-top:12px;padding:14px 16px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:12px;">
+            <div id="omnibar-time-section" style="margin-top:12px;padding:14px 16px;background:color-mix(in srgb, var(--text-primary) 2%, transparent);border:1px solid color-mix(in srgb, var(--text-primary) 6%, transparent);border-radius:12px;">
                 <div style="font-size:9px;font-weight:700;color:var(--text-disabled);letter-spacing:1.5px;margin-bottom:8px;">TIME BLOCK</div>
                 <div style="display:flex;gap:6px;" id="omni-dur-grid">
                     <button class="dur-pill omni-dur" data-dur="15m" style="flex:1;height:32px;font-size:11px;">15m</button>
@@ -90,13 +98,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
                 <div>
                     <div style="font-size:10px; font-weight:700; color:var(--text-disabled); letter-spacing:2px; margin-bottom:12px;">OBJECTIVE</div>
-                    <div id="focus-task-notes" style="padding:16px; background:rgba(255,255,255,0.03); border-radius:12px; border:1px solid rgba(255,255,255,0.05); font-size:14px; color:var(--text-body); line-height:1.6; opacity:0.8;">No tactical notes provided.</div>
+                    <div id="focus-task-notes" style="padding:16px; background:color-mix(in srgb, var(--text-primary) 3%, transparent); border-radius:12px; border:1px solid color-mix(in srgb, var(--text-primary) 5%, transparent); font-size:14px; color:var(--text-body); line-height:1.6; opacity:0.8;">No tactical notes provided.</div>
                 </div>
 
                 <div>
                     <div style="font-size:10px; font-weight:700; color:var(--text-disabled); letter-spacing:2px; margin-bottom:12px;">FOCUS CYCLE</div>
                     <div style="display:flex; align-items:center; gap:16px;">
-                        <div style="flex:1; height:8px; background:rgba(255,255,255,0.1); border-radius:4px; overflow:hidden;">
+                        <div style="flex:1; height:8px; background:color-mix(in srgb, var(--text-primary) 10%, transparent); border-radius:4px; overflow:hidden;">
                             <div id="focus-cycle-bar" style="height:100%; width:25%; background:linear-gradient(90deg, var(--blue), var(--ai-purple)); transition:width 0.5s;"></div>
                         </div>
                         <div id="focus-cycle-text" style="font-size:12px; font-weight:700; color:var(--text-hero);">1 / 4</div>
@@ -116,14 +124,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                         <!-- Blocked sites will appear here -->
                     </div>
                     <div id="focus-defense-feed" style="font-size:12px; color:var(--text-muted); height:16px; transition:opacity 0.3s; opacity:0;"></div>
-                    <div id="focus-defense-counter" style="font-size:11px; color:rgba(255,255,255,0.4); margin-top:8px;">✦ 0 breach attempts deflected</div>
+                    <div id="focus-defense-counter" style="font-size:11px; color:color-mix(in srgb, var(--text-primary) 40%, transparent); margin-top:8px;">✦ 0 breach attempts deflected</div>
                 </div>
             </div>
 
             <!-- Right: Execution Status -->
-            <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:40px; border-left:1px solid rgba(255,255,255,0.05); padding-left:60px; position:relative;">
+            <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:40px; border-left:1px solid color-mix(in srgb, var(--text-primary) 5%, transparent); padding-left:60px; position:relative;">
                 <div id="focus-timer" class="timer-running" style="font-size:120px; font-family:var(--font-mono); font-weight:700; color:var(--blue); line-height:1; transition: color 2s ease;">25:00</div>
-                <div id="focus-paused-indicator" style="position:absolute; top:40%; left:50%; transform:translate(-50%,-50%); font-size:24px; font-weight:700; color:var(--text-hero); letter-spacing:8px; display:none; background:rgba(0,0,0,0.8); padding:10px 20px; border-radius:10px; border:1px solid rgba(255,255,255,0.1);">PAUSED</div>
+                <div id="focus-paused-indicator" style="position:absolute; top:40%; left:50%; transform:translate(-50%,-50%); font-size:24px; font-weight:700; color:var(--text-hero); letter-spacing:8px; display:none; background:rgba(0,0,0,0.8); padding:10px 20px; border-radius:10px; border:1px solid color-mix(in srgb, var(--text-primary) 10%, transparent);">PAUSED</div>
                 
                 <div id="focus-controls" style="display:flex; flex-direction:column; gap:16px; width:100%;">
                     <button id="btn-focus-ai" onclick="assistExecution()" class="btn-assist pulsing">
@@ -171,13 +179,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     
     <!-- Early Completion Modal -->
     <div id="complete-modal" class="abort-modal">
-        <div class="abort-modal-content" style="border-color: rgba(74,222,128,0.3); box-shadow: 0 20px 60px rgba(74,222,128,0.15);">
+        <div class="abort-modal-content" style="border-color: color-mix(in srgb, var(--accent-emerald) 30%, transparent); box-shadow: 0 20px 60px color-mix(in srgb, var(--accent-emerald) 15%, transparent);">
             <div class="abort-icon" style="color: var(--emerald); animation: none; font-size:48px;">✓</div>
             <h2 style="color:var(--text-hero); margin-bottom:12px; font-size:24px;">Mission Completed Early?</h2>
             <p id="complete-modal-time" style="color:var(--text-muted); margin-bottom:30px; line-height:1.5;">Remaining time: calculating...</p>
             <div style="display:flex; flex-direction:column; gap:12px;">
                 <button onclick="submitMissionComplete()" class="btn-modal-primary" style="background:var(--emerald); color:#000;">Complete & End Session</button>
-                <button onclick="hideCompleteModal()" class="btn-modal-danger" style="color:var(--text-muted); border-color:rgba(255,255,255,0.2);">Continue Focus</button>
+                <button onclick="hideCompleteModal()" class="btn-modal-danger" style="color:var(--text-muted); border-color:color-mix(in srgb, var(--text-primary) 20%, transparent);">Continue Focus</button>
             </div>
         </div>
     </div>
@@ -195,7 +203,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     <div style="color:var(--ai-purple); font-weight:700;">System Stability: OPTIMAL</div>
                 </div>
 
-                <div style="width: 50px; height: 2px; background: rgba(255,255,255,0.1); margin: 0 auto 25px;"></div>
+                <div style="width: 50px; height: 2px; background: color-mix(in srgb, var(--text-primary) 10%, transparent); margin: 0 auto 25px;"></div>
 
                 <div style="font-size: 32px; color: var(--blue); margin-bottom: 10px; animation: glowPulse 2s infinite;">⚡</div>
                 <h2 style="color:var(--text-hero); font-size:24px; margin: 0;">Momentum Detected</h2>
@@ -237,7 +245,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 Take a short break to recover.
             </div>
             
-            <button onclick="closeRewardScreen()" style="background:var(--bg-surface); border:1px solid rgba(255,255,255,0.1); color:var(--text-hero); padding:16px 32px; border-radius:12px; font-weight:700; cursor:pointer; transition:all 0.3s; box-shadow:0 0 20px rgba(255,255,255,0.1);">
+            <button onclick="closeRewardScreen()" style="background:var(--bg-surface); border:1px solid color-mix(in srgb, var(--text-primary) 10%, transparent); color:var(--text-hero); padding:16px 32px; border-radius:12px; font-weight:700; cursor:pointer; transition:all 0.3s; box-shadow:0 0 20px color-mix(in srgb, var(--text-primary) 10%, transparent);">
                 Return to Dashboard
             </button>
         </div>
@@ -296,6 +304,17 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                         <span class="op-chip op-chip-green">↑ Focus on static backgrounds</span>
                     </div>
                 </div>
+                <div class="op-h" style="margin-top:18px;">THEME</div>
+                <div class="op-theme-row" id="op-theme-swatches"></div>
+                <div class="op-customize" onclick="tfToggleCustomize()">Customize ▾</div>
+                <div id="op-custom-panel" class="op-custom-panel">
+                    <div class="op-pick-row"><span>Background</span><input type="color" id="tf-pick-bg" class="op-pick" oninput="tfPickVar('--bg-base', this.value)"></div>
+                    <div class="op-pick-row"><span>Surface</span><input type="color" id="tf-pick-surface" class="op-pick" oninput="tfPickVar('--bg-surface', this.value)"></div>
+                    <div class="op-pick-row"><span>Primary text</span><input type="color" id="tf-pick-text" class="op-pick" oninput="tfPickVar('--text-primary', this.value)"></div>
+                    <div class="op-pick-row"><span>Accent</span><input type="color" id="tf-pick-accent" class="op-pick" oninput="tfPickVar('--accent-info', this.value)"></div>
+                    <button class="op-save-theme" onclick="tfSaveCustomTheme()">Save as Custom Theme</button>
+                </div>
+                <div class="op-reset" onclick="tfResetTheme()">Reset to Midnight</div>
             </div>
         </div>
     </aside>
@@ -307,12 +326,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             <div style="max-width: 800px; margin: 0 auto; width: 100%;">
                 
                 <!-- 1. AI INPUT -->
-                <div class="ai-zone" style="margin-top: 24px; text-align: center; border: 1px solid rgba(163, 113, 247, 0.3); box-shadow: 0 0 40px rgba(163, 113, 247, 0.1);">
+                <div class="ai-zone" style="margin-top: 24px; text-align: center; border: 1px solid color-mix(in srgb, var(--accent-ai) 30%, transparent); box-shadow: 0 0 40px color-mix(in srgb, var(--accent-ai) 10%, transparent);">
                     <div style="font-size: 12px; font-weight: 700; color: var(--ai-purple); margin-bottom: 20px; letter-spacing: 2px;">INTELLIGENCE PROTOCOL</div>
                     <div class="ai-input-wrap" style="background: rgba(0,0,0,0.2); justify-content: center; padding: 4px 16px;">
                         <span style="color:var(--ai-purple); font-size:20px;">✦</span>
                         <input type="text" id="ai-input" class="ai-input" placeholder="What's the next objective?" style="text-align: center; font-size: 16px; padding: 12px;">
-                        <button class="btn-execute" id="btn-execute" style="background: rgba(163, 113, 247, 0.1); color: var(--ai-purple); border-color: rgba(163, 113, 247, 0.3);">SYNTHESIZE</button>
+                        <button class="btn-execute" id="btn-execute" style="background: color-mix(in srgb, var(--accent-ai) 10%, transparent); color: var(--ai-purple); border-color: color-mix(in srgb, var(--accent-ai) 30%, transparent);">SYNTHESIZE</button>
                     </div>
                 </div>
 
@@ -332,7 +351,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                         <!-- Filled by JS via /api/path -->
                     </div>
                     <button id="cc-path-regen" onclick="regeneratePath()"
-                        style="margin-top:16px; width:100%; background:transparent; border:1px dashed #30363D; color:#6E7681; font-size:11px; padding:10px; border-radius:8px; cursor:pointer; font-family:'DM Mono',monospace; letter-spacing:1px;">
+                        style="margin-top:16px; width:100%; background:transparent; border:1px dashed var(--border-neutral); color:var(--text-disabled); font-size:11px; padding:10px; border-radius:8px; cursor:pointer; font-family:'DM Mono',monospace; letter-spacing:1px;">
                         ↻ REGENERATE PATH
                     </button>
                 </div>
@@ -357,7 +376,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 <div style="display:flex; flex-direction:column; gap:16px; min-width:0;">
 
                     <!-- 3. PRIORITY ALERTS -->
-                    <div class="mission-panel" style="padding: 24px; border-color: rgba(248, 81, 73, 0.2); box-shadow: inset 0 0 20px rgba(248, 81, 73, 0.05);">
+                    <div class="mission-panel" style="padding: 24px; border-color: color-mix(in srgb, var(--accent-danger) 20%, transparent); box-shadow: inset 0 0 20px color-mix(in srgb, var(--accent-danger) 5%, transparent);">
                         <div class="section-label" style="color: var(--red);">PRIORITY ALERTS</div>
                         <div id="cc-alerts" style="min-height: 120px; color: var(--red); font-size: 12px; display: flex; flex-direction: column; gap: 8px; margin-top: 16px;">
                             <!-- Filled by JS -->
@@ -385,17 +404,17 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                         <div style="display:flex; gap:24px; margin-top:16px; padding-top:12px; border-top:1px solid var(--border-subtle);">
                             <div>
                                 <div style="font-size:10px; color:var(--text-disabled); letter-spacing:1.5px; text-transform:uppercase; margin-bottom:4px;">OVERDUE</div>
-                                <div id="cc-overdue-count" style="font-size:18px; font-weight:700; color:#F85149; font-family:var(--font-mono);">0</div>
+                                <div id="cc-overdue-count" style="font-size:18px; font-weight:700; color:var(--red); font-family:var(--font-mono);">0</div>
                             </div>
                             <div>
                                 <div style="font-size:10px; color:var(--text-disabled); letter-spacing:1.5px; text-transform:uppercase; margin-bottom:4px;">DEFERRED</div>
-                                <div id="cc-deferred-count" style="font-size:18px; font-weight:700; color:#D29922; font-family:var(--font-mono);">0</div>
+                                <div id="cc-deferred-count" style="font-size:18px; font-weight:700; color:var(--amber); font-family:var(--font-mono);">0</div>
                             </div>
                         </div>
                     </div>
 
                     <!-- 5. AI INSIGHT PANEL -->
-                    <div class="mission-panel" style="padding: 24px; border-color: rgba(163, 113, 247, 0.2);">
+                    <div class="mission-panel" style="padding: 24px; border-color: color-mix(in srgb, var(--accent-ai) 20%, transparent);">
                         <div class="section-label" style="color: var(--ai-purple);">INTELLIGENCE INSIGHT</div>
                         <div style="margin-top: 24px; font-size: 13px; color: var(--text-body); line-height: 1.6;">
                             <span style="color:var(--ai-purple);">✦</span> <span id="cc-insight">System stable. High-priority execution recommended to maintain optimal momentum.</span>
@@ -520,14 +539,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     <div class="mission-panel" style="padding:32px;">
                         <div class="section-label" style="color:var(--ai-purple);">SYSTEM LOG</div>
                         <div id="intel-logs" style="margin-top:20px; display:flex; flex-direction:column; gap:16px;">
-                            <div style="padding:12px; border-left:2px solid var(--green); background:rgba(255,255,255,0.02); font-size:12px;">Your real behavioral telemetry is live in the <strong>Analytics</strong> tab — Time Integrity Score, patterns, streaks and recovery history, computed from how you actually work.</div>
-                            <div style="padding:12px; border-left:2px solid var(--blue); background:rgba(255,255,255,0.02); font-size:12px;">CLI: <code>taskflow stats</code>, <code>taskflow heatmap</code>, <code>taskflow rescue</code>, <code>taskflow path</code>.</div>
-                            <div style="padding:12px; border-left:2px solid var(--ai-purple); background:rgba(255,255,255,0.02); font-size:12px;">The adaptive AI layer (predictive scheduling, natural-language coaching) arrives in <strong>Phase 3</strong>.</div>
+                            <div style="padding:12px; border-left:2px solid var(--green); background:color-mix(in srgb, var(--text-primary) 2%, transparent); font-size:12px;">Your real behavioral telemetry is live in the <strong>Analytics</strong> tab — Time Integrity Score, patterns, streaks and recovery history, computed from how you actually work.</div>
+                            <div style="padding:12px; border-left:2px solid var(--blue); background:color-mix(in srgb, var(--text-primary) 2%, transparent); font-size:12px;">CLI: <code>taskflow stats</code>, <code>taskflow heatmap</code>, <code>taskflow rescue</code>, <code>taskflow path</code>.</div>
+                            <div style="padding:12px; border-left:2px solid var(--ai-purple); background:color-mix(in srgb, var(--text-primary) 2%, transparent); font-size:12px;">The adaptive AI layer (predictive scheduling, natural-language coaching) arrives in <strong>Phase 3</strong>.</div>
                         </div>
                     </div>
                     
                     <!-- Suggestions -->
-                    <div class="mission-panel" style="padding:32px; background:rgba(163, 113, 247, 0.05); border-color:rgba(163, 113, 247, 0.2);">
+                    <div class="mission-panel" style="padding:32px; background:color-mix(in srgb, var(--accent-ai) 5%, transparent); border-color:color-mix(in srgb, var(--accent-ai) 20%, transparent);">
                         <div class="section-label" style="color:var(--ai-purple);">AI ADVISORY</div>
                         <div id="intel-advisory" style="margin-top:20px; font-size:13px; line-height:1.6; color:var(--text-body);">
                             <div style="margin-bottom:16px;"><span style="color:var(--ai-purple);">✦</span> TaskFlow keeps its intelligence <strong>honest</strong>: every number you see is computed from your own logged behavior — never invented.</div>
@@ -552,7 +571,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                             <div class="section-label" style="margin:0 0 12px;">TIME INTEGRITY SCORE</div>
                             <svg width="180" height="180" viewBox="0 0 180 180" style="margin:0 auto; display:block;">
                                 <circle cx="90" cy="90" r="78" fill="none" stroke="var(--border-neutral)" stroke-width="10"></circle>
-                                <circle id="tis-ring" cx="90" cy="90" r="78" fill="none" stroke="#3FB950" stroke-width="10"
+                                <circle id="tis-ring" cx="90" cy="90" r="78" fill="none" stroke="var(--green)" stroke-width="10"
                                         stroke-linecap="round" stroke-dasharray="490" stroke-dashoffset="490"
                                         transform="rotate(-90 90 90)" style="transition:stroke-dashoffset 0.8s ease, stroke 0.4s;"></circle>
                                 <text id="tis-num" x="90" y="86" text-anchor="middle" font-family="var(--font-mono)" font-size="48" font-weight="300" fill="var(--text-hero)">—</text>
@@ -599,7 +618,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <!-- ADVISOR HUD -->
     <aside class="col-advisor">
         <div class="advisor-badge"><div class="pulse-dot"></div> AI ADVISOR ACTIVE</div>
-        <div style="background:rgba(255,255,255,0.02); padding:24px; border-radius:16px; border:1px solid var(--border-neutral);">
+        <div style="background:color-mix(in srgb, var(--text-primary) 2%, transparent); padding:24px; border-radius:16px; border:1px solid var(--border-neutral);">
             <div class="advisor-msg" id="advisor-msg">
                 System standing by. All protocols reporting nominal. Initiate deployment to begin intelligence analysis.
             </div>
@@ -619,7 +638,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 <span id="xp-text">40 / 100 XP</span>
             </div>
             <div class="post-rec-badge" id="post-rec-badge" style="display:none;">
-                <span style="color:#3FB950;font-size:14px;">✓</span>
+                <span style="color:var(--green);font-size:14px;">✓</span>
                 <div>
                     <div class="prb-t">Day recovered.</div>
                     <div class="prb-s" id="post-rec-badge-sub"></div>
@@ -628,7 +647,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             <div class="rec-salvage-btn" id="rec-salvage-btn" onclick="tfRecSalvageClick()">
                 <span style="font-size:12px;">⚡</span> <span id="rec-salvage-text">SALVAGE MY DAY</span>
             </div>
-            <button class="btn-deploy btn-execute" onclick="toggleCreateMission()" style="margin-top:20px; font-size:12px; font-weight:700; background: linear-gradient(135deg, rgba(88,166,255,0.15), rgba(88,166,255,0.05)); color: var(--blue); border: 1px solid rgba(88,166,255,0.2); width:100%; transition:all 0.3s cubic-bezier(0.16, 1, 0.3, 1); box-shadow: 0 4px 12px rgba(0,0,0,0.2);">+ CREATE MISSION</button>
+            <button class="btn-deploy btn-execute" onclick="toggleCreateMission()" style="margin-top:20px; font-size:12px; font-weight:700; background: linear-gradient(135deg, color-mix(in srgb, var(--accent-info) 15%, transparent), color-mix(in srgb, var(--accent-info) 5%, transparent)); color: var(--blue); border: 1px solid color-mix(in srgb, var(--accent-info) 20%, transparent); width:100%; transition:all 0.3s cubic-bezier(0.16, 1, 0.3, 1); box-shadow: 0 4px 12px rgba(0,0,0,0.2);">+ CREATE MISSION</button>
         </div>
     </aside>
 
@@ -698,7 +717,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     <div style="display:flex; gap:8px; align-items:center;">
                         <input type="text" id="mission-deadline" class="deadline-input"
                                placeholder="e.g. tomorrow 3pm, Friday, in 2 hours" autocomplete="off" style="flex:1;">
-                        <div style="position:relative; width:42px; height:42px; background:rgba(255,255,255,0.05); border:1px solid var(--border-neutral); border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer;" title="Pick a date manually">
+                        <div style="position:relative; width:42px; height:42px; background:color-mix(in srgb, var(--text-primary) 5%, transparent); border:1px solid var(--border-neutral); border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer;" title="Pick a date manually">
                             <span style="font-size:16px;">📅</span>
                             <input type="date" id="mission-deadline-fallback" style="position:absolute; top:0; left:0; width:100%; height:100%; opacity:0; cursor:pointer;" onchange="document.getElementById('mission-deadline').value = this.value; document.getElementById('mission-deadline').dispatchEvent(new Event('input'));">
                         </div>
@@ -757,7 +776,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                             <input type="text" id="event-end-time" class="input-system" placeholder="e.g. 2:10 PM" autocomplete="off" style="font-family:var(--font-mono); font-size:13px; text-align:center;">
                         </div>
                     </div>
-                    <div id="event-duration-display" style="margin-top:10px; padding:8px 12px; background:rgba(163,113,247,0.08); border:1px solid rgba(163,113,247,0.15); border-radius:8px; font-family:var(--font-mono); font-size:12px; color:var(--ai-purple); text-align:center; display:none;">
+                    <div id="event-duration-display" style="margin-top:10px; padding:8px 12px; background:color-mix(in srgb, var(--accent-ai) 8%, transparent); border:1px solid color-mix(in srgb, var(--accent-ai) 15%, transparent); border-radius:8px; font-family:var(--font-mono); font-size:12px; color:var(--ai-purple); text-align:center; display:none;">
                         <span style="opacity:0.6;">DURATION:</span> <span id="event-duration-value">—</span>
                     </div>
                 </div>
@@ -824,7 +843,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
             </div><!-- /dm-body -->
             <div class="dm-footer">
-                <span id="dm-focus-badge" style="display:none; font-size:10px; color:#58A6FF; background:rgba(88,166,255,0.1); border:1px solid #58A6FF; border-radius:12px; padding:3px 8px; font-family:'DM Mono',monospace; align-self:center; margin-right:8px;"></span>
+                <span id="dm-focus-badge" style="display:none; font-size:10px; color:var(--blue); background:color-mix(in srgb, var(--accent-info) 10%, transparent); border:1px solid var(--blue); border-radius:12px; padding:3px 8px; font-family:'DM Mono',monospace; align-self:center; margin-right:8px;"></span>
                 <button class="btn-deploy" id="btn-deploy" disabled>DEPLOY MISSION</button>
                 <button class="dm-cancel" onclick="toggleCreateMission()">CANCEL</button>
             </div>
