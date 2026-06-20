@@ -596,12 +596,15 @@
             border-radius: 0 12px 12px 0;
             z-index: 20;
         }
-        .task-card:hover .task-action-strip {
-            width: 100px; opacity: 1; padding: 0 20px;
+        /* Strip is a SIBLING of .task-card (child of .task-card-wrap), so the reveal must
+           hang off the wrap's hover, not the card's — a descendant selector on .task-card
+           never matched and kept the strip invisible. */
+        .task-card-wrap:hover .task-action-strip {
+            width: 156px; opacity: 1; padding: 0 16px;
         }
-        
+
         .action-icon {
-            width: 32px; height: 32px; border-radius: 50%;
+            width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
             display: flex; align-items: center; justify-content: center;
             background: color-mix(in srgb, var(--text-primary) 3%, transparent); border: 1px solid color-mix(in srgb, var(--accent-emerald) 20%, transparent);
             color: var(--emerald); cursor: pointer; transition: all 200ms;
@@ -1882,3 +1885,55 @@
         .op-save-theme:hover { background: color-mix(in srgb, var(--accent-info) 18%, transparent); }
         .op-reset { font-size:11px; color: var(--text-tertiary); cursor:pointer; margin-top:10px; text-align:center; }
         .op-reset:hover { color: var(--accent-danger); }
+        /* Hidden "Advanced" -> DATA COLLECTION (Nova) — intentionally low-discoverability */
+        .op-advanced-link { font-size:10px; color: var(--text-disabled); opacity:0.35; cursor:pointer; margin-top:16px; text-align:center; letter-spacing:1px; transition: opacity 160ms ease-out; }
+        .op-advanced-link:hover { opacity:0.7; }
+        .op-advanced { display:none; margin-top:14px; padding-top:14px; border-top:1px solid var(--border-subtle); }
+        .op-advanced.open { display:block; }
+        .op-h-advanced { color:#484F58; }
+        .op-sub-advanced { font-size:11px; color: var(--text-disabled); }
+        .op-nova-note { display:none; font-size:10px; color: var(--text-disabled); margin-top:8px; }
+        .op-nova-note.show { display:block; }
+
+        /* ── EDIT SYSTEM: card edit pencil + deadline-change confirmation ── */
+        .action-icon.edit:hover { color: var(--accent-info); }
+        .action-icon.edit:hover svg { fill: var(--accent-info); }
+
+        .dc-overlay { position: fixed; inset: 0; background: color-mix(in srgb, var(--bg-base) 82%, transparent); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); z-index: 10050; display: none; align-items: center; justify-content: center; padding: 24px; }
+        .dc-overlay.active { display: flex; }
+        .dc-modal { width: 100%; max-width: 460px; background: var(--bg-surface-raised, var(--bg-surface)); border: 1px solid var(--border-neutral); border-radius: 16px; padding: 24px; box-shadow: 0 24px 60px rgba(0,0,0,0.5); }
+        .dc-head { font-size: 13px; font-weight: 700; color: var(--text-primary); letter-spacing: 0.5px; }
+        .dc-q { font-size: 12px; color: var(--text-secondary); margin: 4px 0 16px; }
+        .dc-cards { display: flex; flex-direction: column; gap: 8px; }
+        .dc-card { display: flex; align-items: center; gap: 12px; text-align: left; width: 100%; background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 10px; padding: 12px 14px; color: var(--text-secondary); font-size: 13px; cursor: pointer; transition: border-color 140ms ease-out, background 140ms ease-out, color 140ms ease-out; font-family: inherit; }
+        .dc-card:hover { border-color: var(--border-neutral); color: var(--text-primary); }
+        .dc-card.selected { border-color: var(--accent-info); background: color-mix(in srgb, var(--accent-info) 8%, transparent); color: var(--text-primary); }
+        .dc-k { flex-shrink: 0; width: 22px; height: 22px; border-radius: 6px; background: color-mix(in srgb, var(--accent-warning) 16%, transparent); color: var(--accent-warning); font-family: var(--font-mono); font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+        .dc-card.selected .dc-k { background: var(--accent-info); color: #fff; }
+        .dc-feedback { font-size: 12px; color: var(--text-secondary); margin-top: 14px; line-height: 1.6; }
+        .dc-feedback:empty { margin-top: 0; }
+        .dc-lighter { color: var(--viz-high, var(--accent-success)); font-weight: 600; }
+        .dc-accept { margin-top: 10px; background: color-mix(in srgb, var(--accent-success) 12%, transparent); border: 1px solid color-mix(in srgb, var(--accent-success) 28%, transparent); color: var(--accent-success); border-radius: 8px; padding: 7px 14px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; transition: background 150ms ease-out; }
+        .dc-accept:hover { background: color-mix(in srgb, var(--accent-success) 20%, transparent); }
+
+        /* Path panel — evening "set up tomorrow" mode + overdue candidate cards */
+        .path-evening-note { background: color-mix(in srgb, var(--accent-ai) 7%, transparent); border: 1px solid color-mix(in srgb, var(--accent-ai) 20%, transparent); border-radius: 10px; padding: 12px 14px; }
+        .path-evening-h { font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--ai-purple); font-weight: 700; margin-bottom: 6px; }
+        .path-evening-t { font-size: 12px; color: var(--text-body); line-height: 1.6; }
+        .path-cand { display: flex; justify-content: space-between; align-items: center; gap: 12px; background: color-mix(in srgb, var(--text-primary) 2%, transparent); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 10px 14px; }
+        .path-cand-btn { background: color-mix(in srgb, var(--accent-success) 12%, transparent); border: 1px solid color-mix(in srgb, var(--accent-success) 28%, transparent); color: var(--accent-success); border-radius: 6px; padding: 5px 10px; font-size: 11px; font-weight: 600; cursor: pointer; font-family: 'DM Mono', monospace; white-space: nowrap; transition: background 150ms ease-out; }
+        .path-cand-btn:hover { background: color-mix(in srgb, var(--accent-success) 20%, transparent); }
+        .path-plan-btn { width: 100%; margin-top: 12px; background: color-mix(in srgb, var(--accent-ai) 10%, transparent); border: 1px solid color-mix(in srgb, var(--accent-ai) 25%, transparent); color: var(--ai-purple); border-radius: 8px; padding: 10px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; transition: background 150ms ease-out; }
+        .path-plan-btn:hover { background: color-mix(in srgb, var(--accent-ai) 18%, transparent); }
+        .dc-dur-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+        .dc-dur { background: var(--bg-surface); border: 1px solid var(--border-subtle); color: var(--text-secondary); border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; font-family: var(--font-mono); }
+        .dc-dur:hover { border-color: var(--border-neutral); color: var(--text-primary); }
+        .dc-dur.selected { border-color: var(--accent-info); background: color-mix(in srgb, var(--accent-info) 10%, transparent); color: var(--text-primary); }
+        .dc-text-wrap { display: none; margin-top: 14px; }
+        .dc-text-wrap.show { display: block; }
+        .dc-text { width: 100%; min-height: 60px; resize: vertical; background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 10px; padding: 10px 12px; color: var(--text-primary); font-size: 13px; font-family: inherit; }
+        .dc-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+        .dc-cancel { background: transparent; border: 1px solid var(--border-neutral); color: var(--text-secondary); border-radius: 10px; padding: 10px 18px; font-size: 12px; cursor: pointer; font-family: inherit; }
+        .dc-cancel:hover { color: var(--text-primary); }
+        .dc-confirm { background: var(--accent-info); border: none; color: #fff; border-radius: 10px; padding: 10px 18px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; }
+        .dc-confirm:disabled { opacity: 0.4; cursor: not-allowed; }

@@ -315,6 +315,18 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     <button class="op-save-theme" onclick="tfSaveCustomTheme()">Save as Custom Theme</button>
                 </div>
                 <div class="op-reset" onclick="tfResetTheme()">Reset to Midnight</div>
+                <div class="op-advanced-link" onclick="tfToggleAdvanced(event)">··· Advanced</div>
+                <div id="op-advanced" class="op-advanced">
+                    <div class="op-h op-h-advanced">DATA COLLECTION</div>
+                    <div class="op-row">
+                        <div>
+                            <div class="op-label">Behavioral history</div>
+                            <div class="op-sub op-sub-advanced">Edit reasons, planning patterns (Nova data)</div>
+                        </div>
+                        <div id="op-nova-toggle" class="op-toggle" onclick="tfToggleNovaData()"><div class="op-thumb"></div></div>
+                    </div>
+                    <div id="op-nova-note" class="op-nova-note">Core task history always recorded.</div>
+                </div>
             </div>
         </div>
     </aside>
@@ -811,7 +823,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                             <div id="mission-notes-counter" class="enrich-counter"></div>
                         </div>
                     </div>
-                    <div class="flex-row">
+                    <div class="flex-row enrich-create-only">
                         <div class="mission-field">
                             <label class="section-label" style="font-size:9px;">LINKS &amp; REFERENCES</label>
                             <div class="enrich-link-input-row">
@@ -830,7 +842,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                             <div id="mission-links-list" class="enrich-chips"></div>
                         </div>
                     </div>
-                    <div class="flex-row">
+                    <div class="flex-row enrich-create-only">
                         <div class="mission-field">
                             <label class="section-label" style="font-size:9px;">CHECKLIST (OPTIONAL)</label>
                             <input type="text" id="mission-checklist-input" class="input-system" placeholder="Add a sub-task, then press Enter..." autocomplete="off"
@@ -846,6 +858,29 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 <span id="dm-focus-badge" style="display:none; font-size:10px; color:var(--blue); background:color-mix(in srgb, var(--accent-info) 10%, transparent); border:1px solid var(--blue); border-radius:12px; padding:3px 8px; font-family:'DM Mono',monospace; align-self:center; margin-right:8px;"></span>
                 <button class="btn-deploy" id="btn-deploy" disabled>DEPLOY MISSION</button>
                 <button class="dm-cancel" onclick="toggleCreateMission()">CANCEL</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- DEADLINE CHANGE CONFIRMATION (Edit System, Part 3/5) -->
+    <div id="deadline-confirm-overlay" class="dc-overlay">
+        <div class="dc-modal" onclick="event.stopPropagation()">
+            <div class="dc-head" id="dc-head">Deadline changing</div>
+            <div class="dc-q">What's behind this change?</div>
+            <div class="dc-cards" id="dc-cards">
+                <button type="button" class="dc-card" data-rc="A" onclick="tfPickReason('A')"><span class="dc-k">A</span><span>Wrong date — I set it incorrectly to begin with</span></button>
+                <button type="button" class="dc-card" data-rc="B" onclick="tfPickReason('B')"><span class="dc-k">B</span><span>I need more runway — I haven't been able to start it yet</span></button>
+                <button type="button" class="dc-card" data-rc="C" onclick="tfPickReason('C')"><span class="dc-k">C</span><span>Something external moved it — not in my control</span></button>
+                <button type="button" class="dc-card" data-rc="D" onclick="tfPickReason('D')"><span class="dc-k">D</span><span>It's bigger than I first thought</span></button>
+                <button type="button" class="dc-card" data-rc="E" onclick="tfPickReason('E')"><span class="dc-k">E</span><span>Something else</span></button>
+            </div>
+            <div class="dc-feedback" id="dc-feedback"></div>
+            <div class="dc-text-wrap" id="dc-text-wrap">
+                <textarea id="dc-text" class="dc-text" placeholder="Tell us more (optional — helps your future planning)"></textarea>
+            </div>
+            <div class="dc-footer">
+                <button type="button" class="dc-cancel" onclick="tfCloseDeadlineConfirm()">Back</button>
+                <button type="button" class="dc-confirm" id="dc-confirm" disabled onclick="tfConfirmDeadlineEdit()">Update Mission</button>
             </div>
         </div>
     </div>

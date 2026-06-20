@@ -269,6 +269,7 @@
         p.classList.toggle('active');
         const isOpen = p.classList.contains('active');
         document.body.style.overflow = isOpen ? 'hidden' : '';
+        if (!isOpen) { try { tfExitEditMode(); } catch (e) {} }
         if (isOpen) {
             // Reset to Task mode on open
             setMissionType('Task');
@@ -463,6 +464,7 @@
 
     if (btnDeploy) {
         btnDeploy.addEventListener('click', async () => {
+            if (window.tfEditId != null) { await tfHandleEditSave(); return; }
             const title = missionTitle.value.trim();
             const tagStr = document.getElementById('mission-tags') ? document.getElementById('mission-tags').value : "";
             const tags = tagStr.split(',').map(s=>s.trim()).filter(s=>s.length > 0);
@@ -585,6 +587,14 @@
         const h = Math.floor(m / 60), mm = m % 60;
         return h && mm ? `${h}h ${mm}m` : (h ? `${h}h` : `${mm}m`);
     }
+    // Human "time until" — never show hours-as-minutes (the "in 676 min" bug).
+    function tfFmtUntil(mins) {
+        mins = Math.round(mins);
+        if (mins < 0) mins = 0;
+        if (mins >= 1440) { const d = Math.round(mins / 1440); return d <= 1 ? 'tomorrow' : ('in ' + d + ' days'); }
+        if (mins > 60) { const h = Math.floor(mins / 60), m = mins % 60; return 'in ' + h + 'h' + (m ? ' ' + m + 'm' : ''); }
+        return 'in ' + mins + ' min';
+    }
     function renderPath(data) {
         const body = document.getElementById('cc-path-body');
         const meta = document.getElementById('cc-path-meta');
@@ -615,6 +625,45 @@
             </div>`;
         }
 
+        const now = new Date();
+        const isEvening = now.getHours() >= 18;             // willpower is lowest at night
+        const hasPath = !!(prime.length || sec.length || low.length);
+        const cands = (data && data.overdue_candidates) || [];
+        const overdueTotal = (data && data.overdue_total) || 0;
+        const lbl = document.querySelector('#cc-path-panel .section-label');
+        const regenBtn = document.getElementById('cc-path-regen');
+
+        // ── EVENING MODE — checked FIRST, regardless of whether a path exists (Issue 1) ──
+        // Decision fatigue is highest at night, so we stop pushing a full day and instead help
+        // name ONE thing for tomorrow (Zeigarnik offload → Scullin 2018; Fresh Start Effect →
+        // Dai/Milkman/Riis 2014). Generate/Regenerate are morning actions — hidden here.
+        if (isEvening) {
+            if (lbl) lbl.textContent = 'TONIGHT · SET UP TOMORROW';
+            if (regenBtn) regenBtn.style.display = 'none';
+            let html = `<div class="path-evening-note">
+                <div class="path-evening-h">🌙 Winding down</div>
+                <div class="path-evening-t">Willpower runs lowest now — tonight isn't for restarting the day. Name <b>one</b> thing to start tomorrow: it clears your head for sleep and makes tomorrow a clean slate.</div>
+            </div>`;
+            if (cands.length) {
+                html += '<div style="font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-disabled);font-weight:700;margin:14px 0 8px;">Candidates for tomorrow</div>';
+                html += '<div style="display:flex;flex-direction:column;gap:8px;">' + cands.map(tfCandidateCard).join('') + '</div>';
+            } else if (hasPath) {
+                // No overdue backlog but a path exists → show it softened, as reference not command.
+                const g = group('★ PRIME TARGET', 'var(--amber)', 'color-mix(in srgb, var(--accent-warning) 4%, transparent)', prime)
+                        + group('SECONDARY', 'var(--blue)', 'color-mix(in srgb, var(--accent-info) 3%, transparent)', sec)
+                        + group('LOW EFFORT', 'var(--text-disabled)', 'rgba(139,148,158,0.03)', low);
+                html += `<div style="opacity:0.55;margin-top:6px;">${g}</div>`;
+            }
+            html += `<button onclick="toggleCreateMission()" class="path-plan-btn">→ Plan Tomorrow's First Step</button>`;
+            body.innerHTML = html;
+            if (meta) meta.textContent = overdueTotal ? (overdueTotal + ' overdue') : 'Plan, don\'t push';
+            try { window.tfPathIds = [].concat(prime, sec, low).map(x => x.id); } catch (e) {}
+            return;
+        }
+
+        // ── DAYTIME (unchanged when a path exists) ──
+        if (lbl) lbl.textContent = "TODAY'S EXECUTION PATH";
+        if (regenBtn) regenBtn.style.display = '';
         let html = '';
         if (data && data.day_note) {
             const nc = data.day_mode === 'best' ? 'var(--viz-high)' : (data.day_mode === 'worst' ? 'var(--viz-medium)' : 'var(--accent-info)');
@@ -623,13 +672,14 @@
         html += group('★ PRIME TARGET', 'var(--amber)', 'color-mix(in srgb, var(--accent-warning) 4%, transparent)', prime);
         html += group('SECONDARY', 'var(--blue)', 'color-mix(in srgb, var(--accent-info) 3%, transparent)', sec);
         html += group('LOW EFFORT', 'var(--text-disabled)', 'rgba(139,148,158,0.03)', low);
-        if (!prime.length && !sec.length && !low.length) {
-            // S13-A BLOCK 1: nothing scheduled → a single generate action, not an empty void
+        if (!hasPath) {
             html = `<div style="opacity:0.6;font-size:12px;margin-bottom:10px;">No path generated for today.</div>
                 <button onclick="regeneratePath()" style="width:100%;background:transparent;border:1px dashed var(--border-neutral);color:var(--text-disabled);font-size:11px;padding:10px;border-radius:8px;cursor:pointer;font-family:'DM Mono',monospace;letter-spacing:1px;">+ Generate Today's Path</button>`;
+            if (overdueTotal) {
+                html += `<div style="margin-top:10px;font-size:12px;color:var(--amber);">You have ${overdueTotal} overdue mission${overdueTotal !== 1 ? 's' : ''} pending. Run: <span style="font-family:'DM Mono',monospace;">taskflow missed</span></div>`;
+            }
         }
         body.innerHTML = html;
-
         if (meta) {
             const total = (sm.prime || 0) + (sm.secondary || 0) + (sm.low_effort || 0);
             let m = `Est. ${_pathFmtMins(total)}`;
@@ -639,6 +689,41 @@
         // stash today's path task IDs so TODAY'S MISSIONS can include them
         try { window.tfPathIds = [].concat(prime, sec, low).map(x => x.id); } catch (e) {}
     }
+    // One overdue-candidate card for the evening panel (forward-looking, not a wall of failures).
+    function tfCandidateCard(t) {
+        const np = (typeof normalizePriority === 'function') ? normalizePriority(t.priority) : 'medium';
+        const dl = (typeof formatDeadline === 'function') ? formatDeadline(t.deadline) : null;
+        const od = dl ? `<span style="font-size:10px;color:${dl.color};font-family:'DM Mono',monospace;">${dl.text}</span>` : '';
+        const dur = t.duration ? `<span style="font-size:10px;color:var(--text-disabled);font-family:'DM Mono',monospace;">${t.duration}</span>` : '';
+        return `<div class="path-cand" data-id="${t.id}">
+            <div style="min-width:0;">
+                <div style="font-size:14px;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(t.title)}</div>
+                <div style="margin-top:5px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><span class="badge ${np}">${(t.priority || '').toUpperCase()}</span>${od}</div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">${dur}
+                <button class="path-cand-btn" onclick="tfScheduleTomorrow(${t.id}, this)">→ tomorrow</button>
+            </div>
+        </div>`;
+    }
+    window.tfScheduleTomorrow = async function(id, btn) {
+        const tm = new Date(); tm.setDate(tm.getDate() + 1);
+        const iso = tm.getFullYear() + '-' + String(tm.getMonth() + 1).padStart(2, '0') + '-' + String(tm.getDate()).padStart(2, '0');
+        try {
+            const res = await fetch('/api/tasks/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scheduled_date: iso }) });
+            if (res.ok) {
+                const card = btn.closest('.path-cand');
+                if (card) {
+                    card.innerHTML = '<div style="color:var(--accent-success);font-size:13px;padding:6px 2px;">Scheduled for tomorrow ✓</div>';
+                    card.style.transition = 'opacity 400ms ease-out';
+                    setTimeout(() => { card.style.opacity = '0'; setTimeout(() => card.remove(), 420); }, 1000);
+                }
+                showToast('Scheduled for tomorrow ✓', 'var(--green)');
+                try { loadTasks(); } catch (e) {}
+            } else {
+                showToast('Couldn\'t schedule — try again', 'var(--red)');
+            }
+        } catch (e) { showToast('Couldn\'t schedule — try again', 'var(--red)'); }
+    };
     function loadPath() {
         fetch('/api/path').then(r => r.json()).then(renderPath).catch(() => {});
     }
@@ -817,7 +902,7 @@
                 if (futureNow.length > 0) {
                     const t = futureNow[0];
                     const mins = Math.round((new Date(t.deadline) - now) / 60000);
-                    sub = `<div style="color:var(--text-muted);font-size:12px;margin-top:4px;">Next: ${escapeHtml(t.title)} · in ${mins} min</div>`;
+                    sub = `<div style="color:var(--text-muted);font-size:12px;margin-top:4px;">Next: ${escapeHtml(t.title)} · ${tfFmtUntil(mins)}</div>`;
                 } else if (activeTasks.some(t => t.deadline && new Date(t.deadline) < now)) {
                     sub = `<div style="color:var(--red);font-size:12px;margin-top:4px;">All scheduled missions overdue.<br>Run: <span style="font-family:'DM Mono',monospace;">taskflow missed</span></div>`;
                 } else {
@@ -879,7 +964,7 @@
                 if (future2.length > 0) {
                     const nt = future2[0];
                     const mins = Math.round((new Date(nt.deadline) - now) / 60000);
-                    upcomingContainer.innerHTML += `<div style="margin-top:10px;font-size:12px;color:var(--blue);">Next: ${escapeHtml(nt.title)} · in ${mins} min</div>`;
+                    upcomingContainer.innerHTML += `<div style="margin-top:10px;font-size:12px;color:var(--blue);">Next: ${escapeHtml(nt.title)} · ${tfFmtUntil(mins)}</div>`;
                 } else if (todays.some(t => t.deadline && new Date(t.deadline) < now)) {
                     upcomingContainer.innerHTML += `<div style="margin-top:10px;font-size:12px;color:var(--amber);">All scheduled missions overdue. Run: <span style="font-family:'DM Mono',monospace;">taskflow missed</span></div>`;
                 }
@@ -1277,6 +1362,262 @@
         tfRenderLinkChips(); tfRenderChecklistBuild();
     };
 
+    // ── EDIT SYSTEM (Part 5): edit an existing mission via the Create panel ──
+    function tfPriorityToTier(p) {
+        const s = String(p || '').toLowerCase();
+        if (s === 'critical' || s === 'high') return 'high';
+        if (s === 'strategic' || s === 'medium') return 'medium';
+        return 'low';
+    }
+    function tfShortDate(iso) {
+        if (!iso) return 'none';
+        try { return new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric' }); }
+        catch (e) { return String(iso); }
+    }
+    window.tfExitEditMode = function() {
+        window.tfEditId = null;
+        window.tfEditOriginalDeadline = null;
+        window.tfEditDurationOverride = null;
+        const lbl = document.querySelector('.dm-title-label'); if (lbl) lbl.textContent = 'New Mission';
+        if (btnDeploy) btnDeploy.textContent = 'DEPLOY MISSION';
+        const sw = document.querySelector('.mission-type-switcher'); if (sw) sw.style.display = '';
+        document.querySelectorAll('.enrich-create-only').forEach(el => el.style.display = '');
+    };
+    window.tfOpenEditMission = function(id) {
+        const t = (allTasks || []).find(x => x.id === id);
+        if (!t) { showToast('Task not found', 'var(--red)'); return; }
+        window.tfEditId = id;
+        window.tfEditOriginalDeadline = t.deadline || null;
+        window.tfEditDurationOverride = null;
+        setMissionType('Task');
+        const sw = document.querySelector('.mission-type-switcher'); if (sw) sw.style.display = 'none';
+        document.querySelectorAll('.enrich-create-only').forEach(el => el.style.display = 'none');
+        const lbl = document.querySelector('.dm-title-label'); if (lbl) lbl.textContent = 'Edit Mission';
+        if (btnDeploy) { btnDeploy.textContent = 'UPDATE MISSION'; btnDeploy.disabled = false; btnDeploy.classList.add('active'); }
+        missionTitle.value = t.title || '';
+        const tg = document.getElementById('mission-tags'); if (tg) tg.value = (t.tags || []).join(', ');
+        const tier = tfPriorityToTier(t.priority);
+        document.querySelectorAll('.pill-btn').forEach(b => b.classList.toggle('selected', b.dataset.priority === tier));
+        selectedPriority = tier;
+        const dur = t.duration || '';
+        document.querySelectorAll('[data-dur]').forEach(b => b.classList.toggle('selected', b.dataset.dur === dur));
+        const di = document.getElementById('mission-duration'); if (di) di.value = dur;
+        const dlInput = document.getElementById('mission-deadline');
+        const disp = document.getElementById('deadline-parsed-display');
+        const section = document.getElementById('deadline-type-section');
+        document.querySelectorAll('[data-dl-preset]').forEach(b => b.classList.remove('selected'));
+        if (t.deadline) {
+            parsedDeadlineISO = t.deadline;
+            const d = new Date(t.deadline);
+            const nice = d.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' }) + ' at ' + d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+            if (dlInput) dlInput.value = nice;
+            if (disp) { disp.textContent = '→ ' + nice; disp.style.color = 'var(--green)'; disp.classList.add('visible'); }
+            if (section) section.style.display = 'block';
+            setDeadlineType(t.deadline_type === 'hard' ? 'hard' : 'soft');
+        } else {
+            parsedDeadlineISO = null;
+            if (dlInput) dlInput.value = '';
+            if (disp) { disp.textContent = ''; disp.classList.remove('visible'); }
+            if (section) section.style.display = 'none';
+            setDeadlineType('soft');
+        }
+        const notes = document.getElementById('mission-notes');
+        if (notes) { notes.value = t.description || ''; try { tfAutoGrow(notes); } catch (e) {} }
+        const en = document.getElementById('dm-enrich');
+        if (en) en.classList.toggle('open', !!t.description);
+        const overlay = document.getElementById('deploy-modal-overlay');
+        if (overlay && !overlay.classList.contains('active')) {
+            overlay.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+        const body = document.getElementById('dm-body'); if (body) body.scrollTop = 0;
+        if (window.tfUpdateProgressDots) tfUpdateProgressDots();
+        setTimeout(() => { try { missionTitle.focus(); } catch (e) {} }, 200);
+    };
+    function tfDeadlineDiffers(a, b) {
+        if (!a && !b) return false;
+        if (!a || !b) return true;
+        try { return Math.abs(new Date(a).getTime() - new Date(b).getTime()) >= 60000; }
+        catch (e) { return a !== b; }
+    }
+    async function tfHandleEditSave() {
+        const id = window.tfEditId;
+        const title = missionTitle.value.trim();
+        if (!title) { showToast('Objective required', 'var(--red)'); return; }
+        const tagStr = document.getElementById('mission-tags') ? document.getElementById('mission-tags').value : '';
+        const tags = tagStr.split(',').map(s => s.trim()).filter(Boolean);
+        const duration = (document.getElementById('mission-duration') || {}).value || '';
+        const notes = (document.getElementById('mission-notes') || {}).value || '';
+        const newDeadline = parsedDeadlineISO || null;
+        const oldDeadline = window.tfEditOriginalDeadline || null;
+        const payload = {
+            title: title,
+            priority: selectedPriority,
+            tags: tags,
+            duration: duration,
+            description: notes,
+            deadline: newDeadline,
+            deadline_type: newDeadline ? selectedDeadlineType : null
+        };
+        if (tfDeadlineDiffers(oldDeadline, newDeadline)) {
+            tfOpenDeadlineConfirm(id, oldDeadline, newDeadline, payload);
+        } else {
+            await tfCommitEdit(id, payload, null);
+        }
+    }
+    async function tfCommitEdit(id, payload, historyEntry, successMsg) {
+        if (id == null) { showToast('Edit context lost — reopen the task', 'var(--red)'); return; }
+        const body = Object.assign({}, payload);
+        if (historyEntry) body.edit_history_entry = historyEntry;
+        setSystemState('thinking');
+        try {
+            const res = await fetch('/api/tasks/' + id, {
+                method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+            });
+            if (res.ok) {
+                tfCloseDeadlineConfirm();
+                const overlay = document.getElementById('deploy-modal-overlay');
+                if (overlay) overlay.classList.remove('active');
+                document.body.style.overflow = '';
+                tfExitEditMode();
+                showToast(successMsg || 'Mission updated.', 'var(--green)');
+                await loadTasks();
+                setSystemState('idle');
+            } else {
+                const e = await res.json().catch(() => ({}));
+                showToast('Update failed: ' + (e.error || res.statusText), 'var(--red)');
+                setSystemState('idle');
+            }
+        } catch (err) {
+            showToast('Error updating mission', 'var(--red)');
+            console.error(err); setSystemState('idle');
+        }
+    }
+    // ── Deadline-change confirmation — the "what's behind this change?" step ──
+    // Psychology: a cognitive-dissonance moment. Wording is deliberately non-judgmental
+    // (cuts social-desirability bias so the captured reason is honest); option B nudges
+    // toward an earlier, specific restart (Ariely & Wertenbroch 2002: earlier self-imposed
+    // deadlines beat last-minute ones).
+    window._tfDC = null;
+    function tfLighterDayClient(newISO) {
+        const now = new Date();
+        const today = new Date(now); today.setHours(0, 0, 0, 0);
+        // Past 5pm, today is effectively gone for *starting* something — begin at tomorrow.
+        const startOffset = (now.getHours() >= 17) ? 1 : 0;
+        const end = newISO ? new Date(newISO) : null; if (end) end.setHours(0, 0, 0, 0);
+        const dkey = dt => dt.getFullYear() + '-' + (dt.getMonth() + 1) + '-' + dt.getDate();   // LOCAL key (no UTC drift)
+        const counts = {};
+        (allTasks || []).forEach(t => {
+            if (t.completed || t.dropped_at || t.offloaded_at || !t.deadline) return;
+            const d = new Date(t.deadline); d.setHours(0, 0, 0, 0);
+            counts[dkey(d)] = (counts[dkey(d)] || 0) + 1;
+        });
+        let best = null;
+        for (let i = startOffset; i < 7; i++) {
+            const day = new Date(today); day.setDate(today.getDate() + i);
+            if (end && day >= end) break;   // never suggest on/after the deadline itself
+            const c = counts[dkey(day)] || 0;
+            if (best === null || c < best.c) best = { day: day, c: c };
+        }
+        return best;
+    }
+    function tfDCShowText() {
+        const novaOn = !(window.tfNovaEnabled && !window.tfNovaEnabled());
+        const tw = document.getElementById('dc-text-wrap'); if (tw) tw.classList.toggle('show', novaOn);
+    }
+    window.tfOpenDeadlineConfirm = function(id, oldISO, newISO, payload) {
+        window._tfDC = { id: id, old: oldISO, new: newISO, payload: payload, reason: null, durationOverride: null };
+        const head = document.getElementById('dc-head');
+        if (head) head.textContent = 'Deadline moving: ' + tfShortDate(oldISO) + ' → ' + tfShortDate(newISO);
+        document.querySelectorAll('#dc-cards .dc-card').forEach(c => c.classList.remove('selected'));
+        const fb = document.getElementById('dc-feedback'); if (fb) fb.innerHTML = '';
+        const tx = document.getElementById('dc-text'); if (tx) tx.value = '';
+        const cf = document.getElementById('dc-confirm'); if (cf) cf.disabled = true;
+        tfDCShowText();   // optional context field is discoverable from the start
+        const ov = document.getElementById('deadline-confirm-overlay'); if (ov) ov.classList.add('active');
+    };
+    window.tfCloseDeadlineConfirm = function() {
+        const ov = document.getElementById('deadline-confirm-overlay'); if (ov) ov.classList.remove('active');
+    };
+    window.tfPickReason = function(rc) {
+        if (!window._tfDC) return;
+        window._tfDC.reason = rc;
+        window._tfDC.durationOverride = null;
+        window._tfDC.suggestion = null;
+        document.querySelectorAll('#dc-cards .dc-card').forEach(c => c.classList.toggle('selected', c.dataset.rc === rc));
+        const cf = document.getElementById('dc-confirm'); if (cf) cf.disabled = false;
+        tfDCShowText();
+        const fb = document.getElementById('dc-feedback');
+        if (!fb) return;
+        if (rc === 'B') {
+            const ld = tfLighterDayClient(window._tfDC.new);
+            let line;
+            if (ld && ld.c < 2) {
+                window._tfDC.suggestion = ld.day.toISOString();
+                const label = ld.day.toLocaleDateString([], { month: 'short', day: 'numeric' });
+                line = '<span class="dc-lighter">' + label + ' looks lighter — planning a first step then beats waiting for the deadline.</span>'
+                     + '<div><button type="button" class="dc-accept" onclick="tfAcceptLighterDay()">Use ' + label + ' instead →</button></div>';
+            } else {
+                line = 'Your next 7 days look full — shrinking this to a 15-minute first step makes starting easier.';
+            }
+            fb.innerHTML = 'Starting is the hardest part — that\'s normal, not a character flaw.<br>' + line;
+        } else if (rc === 'C') {
+            fb.innerHTML = 'Got it — outside your control. Noted, no flag on you.';
+        } else if (rc === 'D') {
+            const cur = (document.getElementById('mission-duration') || {}).value || '—';
+            const chips = ['15m', '30m', '1h', '2h', '3h', '4h+'].map(d =>
+                '<button type="button" class="dc-dur" data-d="' + d + '" onclick="tfPickEditDuration(\'' + d + '\')">' + d + '</button>').join('');
+            fb.innerHTML = 'Bigger than expected is useful signal. Update the estimate? Current: <b>' + cur + '</b>'
+                + '<div class="dc-dur-chips">' + chips + '<button type="button" class="dc-dur dc-keep selected" onclick="tfPickEditDuration(\'\')">Keep</button></div>';
+        } else {
+            fb.innerHTML = '';
+        }
+    };
+    window.tfPickEditDuration = function(d) {
+        if (!window._tfDC) return;
+        window._tfDC.durationOverride = d || null;
+        document.querySelectorAll('#dc-feedback .dc-dur').forEach(b => b.classList.toggle('selected', (b.dataset.d || '') === d));
+    };
+    // Accept the lighter-day suggestion in one click — capture the earlier commitment
+    // in the moment (Gollwitzer: act now, don't make them re-navigate). Uses _tfDC.id.
+    window.tfAcceptLighterDay = async function() {
+        const dc = window._tfDC;
+        if (!dc || !dc.suggestion) return;
+        const sug = new Date(dc.suggestion);
+        let h = 9, m = 0;   // default 9am when the original deadline had no specific time
+        if (dc.old) {
+            const od = new Date(dc.old);
+            if (!(od.getHours() === 0 && od.getMinutes() === 0)) { h = od.getHours(); m = od.getMinutes(); }
+        }
+        sug.setHours(h, m, 0, 0);
+        const iso = sug.toISOString();
+        const novaOn = !(window.tfNovaEnabled && !window.tfNovaEnabled());
+        const payload = Object.assign({}, dc.payload, { deadline: iso, deadline_type: dc.payload.deadline_type || 'soft' });
+        const entry = {
+            field: 'deadline', old_value: dc.old, new_value: iso,
+            reason_code: novaOn ? 'B' : null,
+            reason_text: novaOn ? 'accepted lighter-day suggestion' : null
+        };
+        const label = sug.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' });
+        await tfCommitEdit(dc.id, payload, entry, 'Deadline moved to ' + label + ' — starting earlier, good call. ✓');
+    };
+    window.tfConfirmDeadlineEdit = async function() {
+        if (!window._tfDC || !window._tfDC.reason) return;
+        const dc = window._tfDC;
+        const payload = Object.assign({}, dc.payload);
+        if (dc.durationOverride) payload.duration = dc.durationOverride;
+        const novaOn = !(window.tfNovaEnabled && !window.tfNovaEnabled());
+        const txt = (document.getElementById('dc-text') || {}).value || '';
+        const entry = {
+            field: 'deadline',
+            old_value: dc.old,
+            new_value: dc.new,
+            reason_code: novaOn ? dc.reason : null,
+            reason_text: (novaOn && txt.trim()) ? txt.trim() : null
+        };
+        await tfCommitEdit(dc.id, payload, entry);
+    };
+
     function renderTaskList() {
         try {
             const container = document.getElementById('task-list-container');
@@ -1432,6 +1773,9 @@
                         ${tfBuildEnrichZone(t)}${recoveryComplete}
                     </div>
                         <div class="task-action-strip">
+                            <div class="action-icon edit" onclick="event.stopPropagation(); tfOpenEditMission(${t.id})" title="Edit Mission">
+                                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+                            </div>
                             <div class="action-icon" onclick="event.stopPropagation(); startFocusFromCard(${t.id}, this)" title="Deploy Focus Protocol">
                                 <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M8 5v14l11-7z"/></svg>
                             </div>
@@ -3430,6 +3774,8 @@
         if (p.classList.contains('open')) { tfCloseOperatorPanel(); return; }
         tfSyncOperatorPanel();
         tfSyncThemeUI();
+        tfSyncNovaToggle();
+        if (e && e.altKey) { const a = document.getElementById('op-advanced'); if (a) a.classList.add('open'); }
         p.classList.add('open');
         setTimeout(() => { document.addEventListener('click', tfOpOutside); document.addEventListener('keydown', tfOpEsc); }, 0);
     };
@@ -3452,6 +3798,30 @@
     window.tfToggleWhy = function() {
         const p = document.getElementById('op-why-panel');
         if (p) p.classList.toggle('open');
+    };
+
+    // ── DATA COLLECTION (Nova) — hidden Advanced toggle ──────────────────
+    // Global behavioral-history switch. Core task history (status/postpone/reminder)
+    // is always recorded server-side; this only gates the richer edit-reason data.
+    window.tfNovaEnabled = function() { return localStorage.getItem('tf_nova_data_enabled') !== 'false'; };
+    function tfSyncNovaToggle() {
+        const on = window.tfNovaEnabled();
+        const tog = document.getElementById('op-nova-toggle');
+        const note = document.getElementById('op-nova-note');
+        if (tog) tog.classList.toggle('on', on);
+        if (note) note.classList.toggle('show', !on);
+    }
+    window.tfToggleAdvanced = function(e) {
+        if (e) e.stopPropagation();
+        const a = document.getElementById('op-advanced');
+        if (a) a.classList.toggle('open');
+        tfSyncNovaToggle();
+    };
+    window.tfToggleNovaData = function() {
+        const next = !window.tfNovaEnabled();
+        localStorage.setItem('tf_nova_data_enabled', next ? 'true' : 'false');
+        tfSyncNovaToggle();
+        try { showToast(next ? 'Behavioral history on' : 'Behavioral history off — core history still recorded', next ? 'var(--accent-success)' : 'var(--text-secondary)'); } catch (e) {}
     };
 
     // ── THEME SYSTEM ──────────────────────────────────────────────────

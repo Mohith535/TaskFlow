@@ -171,6 +171,20 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
         if total is None:
             total = section_minutes["prime"] + section_minutes["secondary"] + section_minutes["low_effort"]
 
+        # Issue 2: forward-looking overdue candidates so the UI never shows a false
+        # "nothing to do" when there's a backlog. Single source = commands.overdue_candidates.
+        cand_tasks = _cmds.overdue_candidates(tasks, 5)
+        overdue_packed = [{
+            "id": t.id, "title": t.title, "priority": t.priority, "duration": t.duration,
+            "deadline": t.deadline, "deadline_type": getattr(t, 'deadline_type', None),
+            **_computed_task_fields(t),
+        } for t in cand_tasks]
+        overdue_total = sum(
+            1 for t in tasks
+            if (not t.completed and not getattr(t, 'dropped_at', None) and not getattr(t, 'offloaded_at', None)
+                and _computed_task_fields(t).get('is_overdue'))
+        )
+
         return {
             "generated_date": cfg.get('path_generated_date'),
             "sections": packed,
@@ -178,7 +192,11 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
             "total_minutes": total,
             "adherence": cfg.get('path_adherence_today'),
             "day_note": cfg.get('path_day_note'),
-            "day_mode": cfg.get('path_day_mode')
+            "day_mode": cfg.get('path_day_mode'),
+            "overdue_candidates": overdue_packed,
+            "overdue_total": overdue_total,
+            "evening": _dt.now().hour >= 18,
+            "has_path": bool(packed["prime"] or packed["secondary"] or packed["low_effort"]),
         }
 
     def do_GET(self):
@@ -422,7 +440,8 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
                     "generated_date": None,
                     "sections": {"prime": [], "secondary": [], "low_effort": [], "unscheduled": []},
                     "section_minutes": {"prime": 0, "secondary": 0, "low_effort": 0, "unscheduled": 0},
-                    "total_minutes": 0, "adherence": None, "error": str(e)
+                    "total_minutes": 0, "adherence": None, "error": str(e),
+                    "overdue_candidates": [], "overdue_total": 0, "evening": False, "has_path": False
                 })
 
         elif path.startswith("/static/"):
@@ -1148,7 +1167,7 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
         if self._guard(mutating=True):   # SEC-02/07
             return
         parts = [p for p in parsed.path.split('/') if p]
-        if len(parts) >= 4 and parts[0] == 'api' and parts[1] == 'tasks':
+        if len(parts) >= 3 and parts[0] == 'api' and parts[1] == 'tasks':
             from datetime import datetime as _dt
             try:
                 task_id = int(parts[2])
@@ -1159,6 +1178,79 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
             task = self._find_task(tasks, task_id)
             if not task:
                 self._send_json(404, {"error": "Task not found"})
+                return
+
+            # PATCH /api/tasks/<id>  — general field edit (Edit System).
+            # Whitelist editable fields only; id / created_at / completed_at / postpone_count
+            # and all behavioral telemetry are intentionally NOT editable here.
+            if len(parts) == 3:
+                from task_manager.commands import normalize_duration as _norm_dur, parse_deadline as _parse_dl
+                body = self._read_body()
+                if 'title' in body:
+                    nt = (body.get('title') or '').strip()
+                    if nt:
+                        task.title = nt[:500]
+                if body.get('priority') is not None:
+                    task.priority = normalize_priority(str(body.get('priority')))
+                if 'tags' in body:
+                    tags = body.get('tags') or []
+                    if isinstance(tags, str):
+                        tags = [s.strip() for s in tags.split(',') if s.strip()]
+                    task.tags = [str(t).strip() for t in tags if str(t).strip()][:20]
+                if 'duration' in body:
+                    nd = _norm_dur(body.get('duration'))
+                    if nd:
+                        task.duration = nd
+                if 'description' in body:
+                    desc = body.get('description')
+                    task.description = desc if desc else None
+                    task.description_updated_at = _dt.now().isoformat()
+                if 'scheduled_date' in body:
+                    sd = body.get('scheduled_date')
+                    task.scheduled_date = sd if sd else None
+                deadline_touched = False
+                if 'deadline' in body:
+                    raw = body.get('deadline')
+                    if not raw:
+                        task.deadline = None
+                        task.reminder_time = None
+                        task.reminder_time_2 = None
+                    else:
+                        parsed = None
+                        try:
+                            parsed = _dt.fromisoformat(str(raw))
+                        except Exception:
+                            parsed = _parse_dl(str(raw))
+                        if parsed:
+                            task.deadline = parsed.isoformat()
+                            deadline_touched = True
+                if 'deadline_type' in body and task.deadline:
+                    task.deadline_type = 'hard' if body.get('deadline_type') == 'hard' else 'soft'
+                if not task.deadline:
+                    task.deadline_type = None
+                # Append client-supplied edit_history entry (APPEND-ONLY).
+                entry = body.get('edit_history_entry')
+                if isinstance(entry, dict):
+                    if getattr(task, 'edit_history', None) is None:
+                        task.edit_history = []
+                    nova_on = storage.storage.load_config().get('nova_data_enabled', True) is not False
+                    rt = entry.get("reason_text")
+                    task.edit_history.append({
+                        "timestamp": entry.get("timestamp") or _dt.now().isoformat(),
+                        "field": str(entry.get("field", "edit"))[:40],
+                        "old_value": entry.get("old_value"),
+                        "new_value": entry.get("new_value"),
+                        "reason_code": entry.get("reason_code") if nova_on else None,
+                        "reason_text": (str(rt)[:1000] if (rt and nova_on) else None),
+                    })
+                if deadline_touched and task.deadline:
+                    try:
+                        commands.calculate_reminder_time(task)
+                    except Exception:
+                        pass
+                self._sync_counters(task)
+                storage.save_tasks(tasks)
+                self._send_json(200, {**task.to_dict(), **_computed_task_fields(task)})
                 return
 
             # PATCH /api/tasks/<id>/description

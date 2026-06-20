@@ -86,6 +86,10 @@ class Task:
     focus_total_minutes: int = 0         # total actual focus minutes accumulated
     last_focus_at: Optional[str] = None  # ISO datetime of the last focus session
 
+    # EDIT SYSTEM — append-only edit log + per-task Nova-data flag
+    edit_history: List[dict] = field(default_factory=list)
+    nova_data_enabled: bool = True
+
     def __post_init__(self):
         """Validate task after initialization."""
         self._validate()
@@ -200,7 +204,11 @@ class Task:
             # S11 fields
             "focus_session_count": self.focus_session_count,
             "focus_total_minutes": self.focus_total_minutes,
-            "last_focus_at": self.last_focus_at
+            "last_focus_at": self.last_focus_at,
+
+            # Edit system
+            "edit_history": self.edit_history,
+            "nova_data_enabled": self.nova_data_enabled
         }
     
     @classmethod
@@ -276,6 +284,10 @@ class Task:
         data["focus_session_count"] = data.get("focus_session_count", 0)
         data["focus_total_minutes"] = data.get("focus_total_minutes", 0)
         data["last_focus_at"] = data.get("last_focus_at")
+
+        # Edit system
+        data["edit_history"] = data.get("edit_history", [])
+        data["nova_data_enabled"] = data.get("nova_data_enabled", True)
 
         # D1-02: drop any unknown/stale keys so one renamed field can't TypeError the whole
         # task into the "skipped" bin during load_tasks().

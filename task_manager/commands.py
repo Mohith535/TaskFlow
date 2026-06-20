@@ -206,6 +206,7 @@ def postpone_flow(task: Task, tasks: List[Task], original_deadline: datetime, to
     if count in [3, 4] and p_choice == "6":
         task.status = "dropped"
         task.dropped_at = now.isoformat()
+        _record_edit(task, "status", "todo", "dropped", always=True)
         task.drop_reason = "user decision — missed deadline"
         task.last_decision = "D"
         task.last_decision_at = now.isoformat()
@@ -249,6 +250,9 @@ def postpone_flow(task: Task, tasks: List[Task], original_deadline: datetime, to
                 print("Could not understand. Try: \"tomorrow 3pm\" or \"Friday\"")
                 
     if new_dt:
+        _record_edit(task, "postpone",
+                     original_deadline.isoformat() if original_deadline else None,
+                     new_dt.isoformat(), always=True)
         task.deadline = new_dt.isoformat()
         task.postpone_count += 1
         task.postpone_history.append(now.isoformat())
@@ -365,6 +369,7 @@ def prompt_missed_task(task: Task, tasks: List[Task]) -> bool:
     elif choice == 'D':
         task.status = "dropped"
         task.dropped_at = datetime.now().isoformat()
+        _record_edit(task, "status", "todo", "dropped", always=True)
         task.drop_reason = "user decision — missed deadline"
         task.last_decision = "D"
         task.last_decision_at = datetime.now().isoformat()
@@ -386,6 +391,7 @@ def prompt_missed_task(task: Task, tasks: List[Task]) -> bool:
     elif choice == 'O':
         task.status = "offloaded"
         task.offloaded_at = datetime.now().isoformat()
+        _record_edit(task, "status", "todo", "offloaded", always=True)
         task.last_decision = "O"
         task.last_decision_at = datetime.now().isoformat()
         task.last_missed_prompt = today_str
@@ -591,6 +597,7 @@ def command_postpone(task_id: int) -> bool:
         elif choice == 'D':
             task.status = "dropped"
             task.dropped_at = datetime.now().isoformat()
+            _record_edit(task, "status", "todo", "dropped", always=True)
             task.drop_reason = "user decision — missed deadline"
             task.last_decision = "D"
             task.last_decision_at = datetime.now().isoformat()
@@ -610,6 +617,7 @@ def command_postpone(task_id: int) -> bool:
         elif choice == 'O':
             task.status = "offloaded"
             task.offloaded_at = datetime.now().isoformat()
+            _record_edit(task, "status", "todo", "offloaded", always=True)
             task.last_decision = "O"
             task.last_decision_at = datetime.now().isoformat()
             task.last_missed_prompt = today_str
@@ -2888,6 +2896,7 @@ def complete_task(task_id: int):
 
             task.completed = True
             task.status = "completed"
+            _record_edit(task, "status", "todo", "completed", always=True)
             task.completed_at = datetime.now().strftime("%Y-%m-%d %H:%M")
             task.actual_end_time = datetime.now().isoformat()
             
@@ -3089,31 +3098,303 @@ def undo_task(task_id: int) -> bool:
     return False
 
 
-def edit_task(task_id: int) -> bool:
-    """Edit a task."""
+def _nova_enabled() -> bool:
+    """Global behavioral-history toggle (config.json `nova_data_enabled`). Default ON."""
+    try:
+        return storage.load_config().get('nova_data_enabled', True) is not False
+    except Exception:
+        return True
+
+
+def _record_edit(task, field_name, old_value, new_value, reason_code=None, reason_text=None, always=False):
+    """Append one entry to task.edit_history (APPEND-ONLY — never modify/delete).
+
+    `always=True` (status / postpone / reminder / deadline) is recorded regardless of the
+    Nova toggle, because TaskFlow needs it to function — but reason_code/reason_text are
+    only kept when Nova data is enabled. `always=False` edits (title/priority/duration/tags/
+    notes) are skipped entirely when the toggle is off.
+    """
+    nova = _nova_enabled()
+    if not always and not nova:
+        return
+    if getattr(task, 'edit_history', None) is None:
+        task.edit_history = []
+    task.edit_history.append({
+        "timestamp": datetime.now().isoformat(),
+        "field": field_name,
+        "old_value": old_value,
+        "new_value": new_value,
+        "reason_code": reason_code if nova else None,
+        "reason_text": reason_text if nova else None,
+    })
+
+
+def _lighter_day(new_deadline_dt):
+    """Pure calendar math (no LLM): the day in [today, new_deadline) with the fewest
+    deadlined incomplete tasks. Returns (datetime, count) or None."""
     tasks = storage.load_tasks()
-    
-    for task in tasks:
-        if task.id == task_id:
-            print(f"\nEditing Task #{task_id}: {task.title}")
-            print("(Press Enter to keep current value)")
-            
-            new_title = get_valid_input(f"Title [{task.title}]: ", task.title)
-            new_title = validate_title(new_title)
-            if not new_title:
-                return False
-            
-            task.title = new_title
-            
-            new_priority = get_valid_input(f"Priority (L/M/H) [{task.priority[0]}]: ", task.priority[0])
-            task.priority = normalize_priority(new_priority)
-            
-            storage.save_tasks(tasks)
-            Messenger.success(f"Task #{task_id} updated successfully.")
-            return True
-    
-    Messenger.task_not_found(task_id)
-    return False
+    now = datetime.now()
+    today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    # Past 5pm, today is gone for starting something — begin the search at tomorrow.
+    start = 1 if now.hour >= 17 else 0
+    end = new_deadline_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+    counts = {}
+    for t in tasks:
+        if t.completed or getattr(t, 'dropped_at', None) or getattr(t, 'offloaded_at', None):
+            continue
+        d = _parse_dt_any(getattr(t, 'deadline', None))
+        if not d:
+            continue
+        if d.tzinfo is not None:
+            d = d.replace(tzinfo=None)
+        key = d.strftime('%Y-%m-%d')
+        counts[key] = counts.get(key, 0) + 1
+    best = None
+    for i in range(start, 7):
+        day = today + timedelta(days=i)
+        if day >= end:
+            break
+        c = counts.get(day.strftime('%Y-%m-%d'), 0)
+        if best is None or c < best[1]:
+            best = (day, c)
+    return best
+
+
+def _deadline_reason_flow(task, old_iso, new_iso):
+    """Part 3 — ask WHY the deadline moved, give calm contextual feedback, optionally update
+    duration (option D). Returns (reason_code, reason_text, duration_override)."""
+    R = Style.RESET_ALL
+    bar = Fore.CYAN + ("━" * 42) + R
+
+    def human(iso):
+        if not iso:
+            return "none"
+        d = _parse_dt_any(iso)
+        return d.strftime('%b %d').replace(' 0', ' ') if d else iso
+
+    print("\n" + bar)
+    print(f"{Fore.WHITE + Style.BRIGHT}  Deadline moving: {human(old_iso)} → {human(new_iso)}{R}")
+    print(bar)
+    print(f"{Fore.WHITE + Style.BRIGHT}  What's behind this change?{R}\n")
+    print(f"  {Fore.YELLOW}[A]{R} Wrong date — I set it incorrectly to begin with")
+    print(f"  {Fore.YELLOW}[B]{R} I need more runway — I haven't been able to start it yet")
+    print(f"  {Fore.YELLOW}[C]{R} Something external moved it — not in my control")
+    print(f"  {Fore.YELLOW}[D]{R} It's bigger than I first thought")
+    print(f"  {Fore.YELLOW}[E]{R} Something else\n")
+    choice = get_valid_input(f"{Fore.WHITE + Style.DIM}  Choice [A/B/C/D/E]: {R}", "E").strip().upper()
+    if choice not in ('A', 'B', 'C', 'D', 'E'):
+        choice = 'E'
+
+    reason_text = None
+    if _nova_enabled():
+        rt = get_valid_input(f"{Fore.WHITE + Style.DIM}  Tell us more (optional — helps your future planning): {R}", "")
+        reason_text = rt.strip() or None
+
+    dur_override = None
+    new_dt = _parse_dt_any(new_iso)
+
+    if choice == 'A':
+        pass  # fast path — wrong date, no lecture
+    elif choice == 'B':
+        print("\n" + bar)
+        print(f"  {Fore.WHITE}Noted. Deadline moved to {human(new_iso)}.{R}\n")
+        print(f"  {Fore.WHITE}Starting is the hardest part — that's normal, not a character flaw.{R}\n")
+        ld = _lighter_day(new_dt) if new_dt else None
+        if ld and ld[1] < 2:
+            print(f"  {Fore.GREEN}{ld[0].strftime('%b %d').replace(' 0', ' ')} looks lighter — planning a first step then beats waiting for the deadline.{R}")
+        else:
+            print(f"  {Fore.WHITE}Your next 7 days look full — shrinking this to a 15-minute first step makes starting easier.{R}")
+        print(bar)
+    elif choice == 'C':
+        print("\n" + bar)
+        print(f"  {Fore.WHITE}Got it — outside your control. Noted, no flag on you.{R}")
+        print(f"  {Fore.WHITE}Deadline moved to {human(new_iso)}.{R}")
+        print(bar)
+    elif choice == 'D':
+        print("\n" + bar)
+        print(f"  {Fore.WHITE}Noted. Deadline moved to {human(new_iso)}.{R}\n")
+        print(f"  {Fore.WHITE}Bigger than expected is useful signal.")
+        print(f"  Update the estimate?{R}")
+        cur = task.duration or '—'
+        ans = get_valid_input(f"  Current estimate: {cur}   [U]pdate / [K]eep / [S]kip: ", "K").strip().upper()
+        if ans == 'U':
+            din = get_valid_input("  New duration (15m/30m/1h/2h/3h/4h+): ", "").strip()
+            nd = normalize_duration(din)
+            if nd:
+                dur_override = nd
+        print(bar)
+        # Phase 3 note: this is where the LLM would say "your #code tasks typically run
+        # 1.6x longer than estimated" from history. For now we just offer the manual update.
+    else:  # E
+        print("\n" + bar)
+        print(f"  {Fore.WHITE}Noted. Deadline moved to {human(new_iso)}.{R}")
+        print(bar)
+
+    return choice, reason_text, dur_override
+
+
+def edit_task(task_id: int) -> bool:
+    """Full interactive edit (Parts 2–3). Pre-fills every field; Enter keeps it.
+    Changing the deadline triggers the reason-confirmation flow."""
+    tasks = storage.load_tasks()
+    task = next((t for t in tasks if t.id == task_id), None)
+    if not task:
+        Messenger.task_not_found(task_id)
+        return False
+
+    R = Style.RESET_ALL
+
+    def human_dl(iso):
+        if not iso:
+            return "none"
+        d = _parse_dt_any(iso)
+        return d.strftime('%a %d %b, %I:%M %p').replace(' 0', ' ') if d else iso
+
+    print(f"\n{Fore.CYAN + Style.BRIGHT}Editing Mission #{task_id}{R}")
+    print(f"{Style.DIM}Press Enter to keep each current value.{R}\n")
+
+    # 1) Title
+    title_old = task.title
+    new_title = validate_title(get_valid_input(f"Title [{title_old}]: ", title_old)) or title_old
+
+    # 2) Priority
+    pin = get_valid_input(f"Priority [{task.priority}] (L/M/H/C/S/N · Enter keeps): ", "").strip()
+    new_priority = normalize_priority(pin) if pin else task.priority
+
+    # 3) Tags
+    cur_tags = list(task.tags or [])
+    tin = get_valid_input(f"Tags [{', '.join(cur_tags) or 'none'}] (comma-separated · Enter keeps): ", "")
+    new_tags = [s.strip() for s in tin.split(',') if s.strip()] if tin.strip() else cur_tags
+
+    # 4) Duration
+    din = get_valid_input(f"Duration [{task.duration or 'none'}] (15m/30m/1h/2h/3h/4h+ · Enter keeps): ", "").strip()
+    new_duration = task.duration
+    if din:
+        nd = normalize_duration(din)
+        if nd:
+            new_duration = nd
+        else:
+            print(f"{Fore.YELLOW}Not a standard duration — keeping {task.duration or 'none'}.{R}")
+
+    # 5) Deadline (special flow on change)
+    dl_old = task.deadline
+    old_dtype = getattr(task, 'deadline_type', None)
+    dlin = get_valid_input(f"Deadline [{human_dl(dl_old)}] (e.g. 'tomorrow 5pm' · '-' clears · Enter keeps): ", "").strip()
+    new_deadline = dl_old
+    deadline_changed = False
+    if dlin == '-':
+        if dl_old:
+            new_deadline = None
+            deadline_changed = True
+    elif dlin:
+        parsed = parse_deadline(dlin)
+        if parsed:
+            iso = parsed.isoformat()
+            if (dl_old or '')[:16] != iso[:16]:
+                new_deadline = iso
+                deadline_changed = True
+        else:
+            print(f"{Fore.YELLOW}Could not understand '{dlin}' — keeping current deadline.{R}")
+
+    # 6) Deadline type (only if a deadline will remain)
+    new_dtype = old_dtype
+    if new_deadline:
+        t2 = get_valid_input(f"Deadline type [{old_dtype or 'soft'}] (s=soft / h=hard · Enter keeps): ", "").strip().lower()
+        if t2.startswith('h'):
+            new_dtype = 'hard'
+        elif t2.startswith('s'):
+            new_dtype = 'soft'
+        elif new_dtype is None:
+            new_dtype = 'soft'
+    else:
+        new_dtype = None
+
+    # 7) Notes
+    cur_note = task.description or ''
+    preview = (cur_note[:60] + '…') if len(cur_note) > 60 else cur_note
+    nin = get_valid_input(f"Notes [{preview or 'none'}] (type to replace · 'e' multi-line · Enter keeps): ", "")
+    new_desc = task.description
+    if nin.strip() == 'e':
+        new_desc = prompt_description()
+    elif nin.strip():
+        new_desc = nin
+
+    # Deadline reason flow (the heart) — before the summary
+    reason_code = reason_text = None
+    if deadline_changed:
+        reason_code, reason_text, dur_override = _deadline_reason_flow(task, dl_old, new_deadline)
+        if dur_override:
+            new_duration = dur_override
+
+    type_changed = (not deadline_changed) and bool(new_deadline) and (new_dtype != old_dtype)
+
+    # Build change list
+    changes = []
+    if new_title != title_old:
+        changes.append(("Title", title_old, new_title))
+    if new_priority != task.priority:
+        changes.append(("Priority", task.priority, new_priority))
+    if new_tags != cur_tags:
+        changes.append(("Tags", ', '.join(cur_tags) or 'none', ', '.join(new_tags) or 'none'))
+    if new_duration != task.duration:
+        changes.append(("Duration", task.duration or 'none', new_duration or 'none'))
+    if deadline_changed:
+        changes.append(("Deadline", human_dl(dl_old), human_dl(new_deadline)))
+    if type_changed:
+        changes.append(("Deadline type", old_dtype or 'soft', new_dtype))
+    if new_desc != task.description:
+        changes.append(("Notes", "set" if task.description else "none", "cleared" if not new_desc else "updated"))
+
+    if not changes:
+        Messenger.note("No changes made.")
+        return False
+
+    bar = "─" * 45
+    print(f"\n{Fore.CYAN}{bar}{R}")
+    print(f"{Fore.WHITE + Style.BRIGHT}Review changes:{R}")
+    for fld, ov, nv in changes:
+        print(f"  {fld + ':':<15}{Fore.WHITE + Style.DIM}{ov}{R} → {Fore.WHITE}{nv}{R}")
+    print(f"{Fore.CYAN}{bar}{R}")
+    if get_valid_input("  [S]ave changes  ·  [C]ancel: ", "S").strip().upper() == 'C':
+        Messenger.info("Edit cancelled. Nothing changed.")
+        return False
+
+    # Apply + record (append-only; Nova toggle respected inside _record_edit)
+    if new_title != title_old:
+        _record_edit(task, "title", title_old, new_title)
+        task.title = new_title
+    if new_priority != task.priority:
+        _record_edit(task, "priority", task.priority, new_priority)
+        task.priority = new_priority
+    if new_tags != cur_tags:
+        _record_edit(task, "tags", cur_tags, new_tags)
+        task.tags = new_tags
+    if new_duration != task.duration:
+        _record_edit(task, "duration", task.duration, new_duration)
+        task.duration = new_duration
+    if deadline_changed:
+        _record_edit(task, "deadline", dl_old, new_deadline, reason_code, reason_text, always=True)
+        task.deadline = new_deadline
+        task.deadline_type = new_dtype
+        if new_deadline:
+            try:
+                calculate_reminder_time(task)
+            except Exception:
+                pass
+        else:
+            task.reminder_time = None
+            task.reminder_time_2 = None
+    elif type_changed:
+        _record_edit(task, "deadline_type", old_dtype, new_dtype)
+        task.deadline_type = new_dtype
+    if new_desc != task.description:
+        _record_edit(task, "description", "(set)" if task.description else None, "(updated)" if new_desc else "(cleared)")
+        task.description = new_desc
+        task.description_updated_at = datetime.now().isoformat()
+
+    storage.save_tasks(tasks)
+    Messenger.success(f"Mission #{task_id} updated.")
+    return True
 
 
 def search_tasks(keyword: str) -> None:
@@ -3371,6 +3652,49 @@ def view_task(task_id: int) -> None:
     
     print(f"  {DIM_LINE}{' · '.join(footer_parts)}{R}")
     print(f"{DIM_LINE}{divider}{R}")
+
+    # EDIT HISTORY (Part 6) — only shown when entries exist
+    history = getattr(task, 'edit_history', None) or []
+    if history:
+        REASON_LABELS = {
+            "A": "Wrong date", "B": "Needed more runway", "C": "External change",
+            "D": "Scope grew", "E": "Other",
+        }
+
+        def _fmt_val(v, field):
+            if v is None:
+                return "none"
+            if isinstance(v, list):
+                return ", ".join(str(x) for x in v) or "none"
+            if field == "deadline" and isinstance(v, str):
+                d = _parse_dt_any(v)
+                if d:
+                    return d.strftime('%b %d').replace(' 0', ' ')
+            return str(v)
+
+        print()
+        print(f"{Fore.CYAN + Style.DIM}{divider}{R}")
+        print(f"{Fore.CYAN + Style.DIM}EDIT HISTORY{R}")
+        print(f"{Fore.CYAN + Style.DIM}{divider}{R}")
+        for e in history:
+            ts = e.get("timestamp")
+            try:
+                ts_str = datetime.fromisoformat(ts).strftime('%b %d %H:%M').replace(' 0', ' ')
+            except Exception:
+                ts_str = ts or "?"
+            field = e.get("field", "field")
+            print(f"  {Fore.WHITE + Style.DIM}{ts_str}{R} — {field} changed")
+            print(f"    {Fore.WHITE}{_fmt_val(e.get('old_value'), field)} → {_fmt_val(e.get('new_value'), field)}{R}")
+            if field == "deadline":
+                rc = e.get("reason_code")
+                if rc:
+                    print(f"    {Fore.YELLOW + Style.DIM}Reason: {REASON_LABELS.get(rc, rc)} ({rc}){R}")
+                    rt = e.get("reason_text")
+                    if rt:
+                        print(f"    {Fore.WHITE + Style.DIM}\"{rt}\"{R}")
+                else:
+                    print(f"    {Fore.WHITE + Style.DIM}reason not recorded{R}")
+        print(f"{Fore.CYAN + Style.DIM}{divider}{R}")
 
 
 def change_priority(task_id: int, level: str) -> bool:
@@ -4124,9 +4448,9 @@ def normalize_priority(priority: str) -> str:
     priority = priority.strip().lower()
     
     priority_map = {
-        'high': 'Critical', 'h': 'Critical', 'critical': 'Critical',
-        'medium': 'Strategic', 'm': 'Strategic', 'strategic': 'Strategic',
-        'low': 'Noise', 'l': 'Noise', 'noise': 'Noise',
+        'high': 'Critical', 'h': 'Critical', 'critical': 'Critical', 'c': 'Critical',
+        'medium': 'Strategic', 'm': 'Strategic', 'strategic': 'Strategic', 's': 'Strategic',
+        'low': 'Noise', 'l': 'Noise', 'noise': 'Noise', 'n': 'Noise',
         'purge': 'Purge', 'p': 'Purge'
     }
     
@@ -4633,6 +4957,106 @@ def _render_path_focus(by_id, sections):
     print()
 
 
+def overdue_candidates(tasks=None, limit=5):
+    """Forward-looking 'best to schedule for tomorrow' list (Issue 2).
+
+    Overdue + incomplete, not abandoned (postpone_count < 5). Ranked Critical/High first,
+    then tasks that have a duration (more plannable), then MOST-recently overdue (so months-old
+    dead tasks sink). This is a rescue surface, not a wall of failures.
+    """
+    if tasks is None:
+        tasks = storage.load_tasks()
+    now = datetime.now()
+    cands = []
+    for t in tasks:
+        if t.completed or getattr(t, 'dropped_at', None) or getattr(t, 'offloaded_at', None):
+            continue
+        if getattr(t, 'postpone_count', 0) >= 5:
+            continue
+        d = _parse_dt_any(getattr(t, 'deadline', None))
+        if not d:
+            continue
+        if d.tzinfo is not None:
+            d = d.replace(tzinfo=None)
+        if d >= now:
+            continue
+        cands.append((t, d))
+    tier = {'critical': 0, 'high': 0, 'strategic': 1, 'medium': 1}
+    cands.sort(key=lambda it: (tier.get((it[0].priority or '').lower(), 2),
+                               0 if getattr(it[0], 'duration', None) else 1,
+                               -it[1].timestamp()))
+    return [t for t, _ in cands[:limit]]
+
+
+def _count_overdue(tasks):
+    now = datetime.now()
+    n = 0
+    for t in tasks:
+        if t.completed or getattr(t, 'dropped_at', None) or getattr(t, 'offloaded_at', None):
+            continue
+        d = _parse_dt_any(getattr(t, 'deadline', None))
+        if not d:
+            continue
+        if d.tzinfo is not None:
+            d = d.replace(tzinfo=None)
+        if d < now:
+            n += 1
+    return n
+
+
+def _print_candidate_line(t):
+    """One overdue-candidate row for the CLI evening panel."""
+    R = Style.RESET_ALL
+    now = datetime.now()
+    od = ''
+    d = _parse_dt_any(getattr(t, 'deadline', None))
+    if d:
+        if d.tzinfo is not None:
+            d = d.replace(tzinfo=None)
+        if d < now:
+            od = f"  {Fore.RED}OVERDUE — {d.strftime('%b %d').replace(' 0', ' ')}{R}"
+    p = (t.priority or '').lower()
+    pcol = Fore.RED if p in ('critical', 'high') else (Fore.CYAN if p in ('strategic', 'medium') else Fore.WHITE + Style.DIM)
+    dur = f"  {Fore.WHITE + Style.DIM}{t.duration}{R}" if t.duration else ''
+    print(f"    {Fore.GREEN}→{R} {Fore.WHITE}[{t.id}] {t.title}{R}{dur}  {pcol}{t.priority}{R}{od}")
+
+
+def _render_path_empty_state():
+    """No tasks scheduled for today — but the user is rarely actually 'done'. Surface overdue
+    work as forward-looking candidates instead of a false 'nothing to do' (Issue 2). Evening
+    framing leans on the Fresh Start Effect; daytime points at `taskflow missed`."""
+    R = Style.RESET_ALL
+    tasks = storage.load_tasks()
+    now = datetime.now()
+    evening = now.hour >= 18
+    n_overdue = _count_overdue(tasks)
+    cands = overdue_candidates(tasks, 5)
+
+    if n_overdue == 0 and not cands:
+        print(f"\n{Fore.WHITE}No missions scheduled. Run: {Fore.CYAN}taskflow add{R}\n")
+        return
+
+    plural = 's' if n_overdue != 1 else ''
+    if evening:
+        bar = Fore.CYAN + ("━" * 42) + R
+        print("\n" + bar)
+        print(f"{Fore.WHITE + Style.BRIGHT}  🌙 TONIGHT · SET UP TOMORROW{R}")
+        print(bar)
+        print(f"  {Fore.WHITE}No new tasks scheduled for today.{R}")
+        print(f"  {Fore.WHITE}You have {Fore.YELLOW}{n_overdue}{R}{Fore.WHITE} overdue mission{plural}.{R}\n")
+        if cands:
+            print(f"  {Fore.WHITE + Style.DIM}Willpower's lowest now — don't restart the day. Top candidates for tomorrow:{R}\n")
+            for t in cands:
+                _print_candidate_line(t)
+            print(f"\n  {Fore.WHITE}Pick one to start tomorrow:{R}")
+            print(f"    {Fore.CYAN}taskflow schedule <id> tomorrow{R}")
+        print(bar + "\n")
+    else:
+        print(f"\n{Fore.WHITE}No tasks scheduled for today.{R}")
+        print(f"{Fore.WHITE}You have {Fore.YELLOW}{n_overdue}{R}{Fore.WHITE} overdue mission{plural} pending.{R}")
+        print(f"{Fore.WHITE + Style.DIM}Consider: {Fore.CYAN}taskflow missed{R}{Fore.WHITE + Style.DIM} to address them.{R}\n")
+
+
 def command_path(refresh: bool = False, focus: bool = False):
     """`taskflow path` — show/generate the Daily Execution Path (S10-C)."""
     config = storage.load_config()
@@ -4648,7 +5072,7 @@ def command_path(refresh: bool = False, focus: bool = False):
     by_id = {t.id: t for t in tasks}
 
     if not sections.get('prime'):
-        print(f"\n{Fore.WHITE}No missions for today. Add one: {Fore.CYAN}taskflow add{Style.RESET_ALL}\n")
+        _render_path_empty_state()
         return
 
     if focus:

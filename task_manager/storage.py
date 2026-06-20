@@ -319,7 +319,9 @@ class TaskStorage:
             "execution_streak": 0,
             "streak_last_date": None,
             "last_weekly_review": None,
-            "last_summary_date": None
+            "last_summary_date": None,
+            # Edit system — global Nova behavioral-data toggle (OPERATOR M → Advanced)
+            "nova_data_enabled": True
         }
         if not self.config_file.exists():
             return default_config
