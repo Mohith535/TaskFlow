@@ -3,6 +3,32 @@
 All notable changes to TaskFlow. The project follows a phase-based roadmap —
 see the README's "What's Built & What's Coming" for the bigger picture.
 
+## v9.1.0 — Time-Aware & Editable
+
+TaskFlow learned to read the clock and to ask questions instead of just storing answers.
+
+### Added
+- **Task editing** — `taskflow edit <id>` (full interactive editor) and an in-dashboard edit
+  panel (pencil on card hover). Changing a deadline triggers a calm, judgment-free
+  "what's behind this change?" flow (5 reasons + optional context) whose wording is designed
+  to capture honest behavioral data without self-indictment.
+- **The 6pm Shift** — after evening, the Daily Execution Path becomes "Tonight · set up
+  tomorrow": today's tasks soften to a quiet record and the panel invites one specific first
+  step for tomorrow (decision-fatigue-aware; Scullin 2018 + Fresh Start Effect).
+- **Overdue as candidates** — when nothing is scheduled but a backlog exists, the path surfaces
+  the top overdue tasks (ranked Critical/High → has-duration → most-recently-overdue; abandoned
+  tasks postponed 5+ times excluded), each one click from being scheduled for tomorrow. Shared
+  `overdue_candidates()` logic powers both the CLI and the dashboard.
+- One-click "→ tomorrow" / "use this day" scheduling from the evening and deadline flows
+  (capturing the commitment in the moment — Gollwitzer implementation intentions).
+- `edit_history` (append-only) on every task; an OPERATOR M → Advanced toggle controls the
+  richer behavioral ("Nova") data.
+
+### Changed
+- **Human time everywhere** — time-until now reads "in 11h 16m" / "tomorrow", never "in 676 min".
+- The lighter-day suggestion is time-of-day aware (won't suggest starting "today" after 5pm) and
+  uses a local date key (fixed a UTC/IST off-by-one).
+
 ## v9.0.0 — Hardening & Themes
 
 A milestone release: the dashboard becomes fully themeable, and the codebase gets a

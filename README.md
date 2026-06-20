@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🌊 TaskFlow v9.0.0
+# 🌊 TaskFlow v9.1.0
 
 ### The Execution Engine for Deep Work
 
@@ -11,7 +11,7 @@
 <br/>
 
 <p>
-  <img src="https://img.shields.io/badge/Version-9.0.0-0d1117?style=for-the-badge&labelColor=161b22" alt="Version" />
+  <img src="https://img.shields.io/badge/Version-9.1.0-0d1117?style=for-the-badge&labelColor=161b22" alt="Version" />
   <img src="https://img.shields.io/badge/Python-3.8+-3776ab?style=for-the-badge&logo=python&logoColor=white" alt="Python" />
   <img src="https://img.shields.io/badge/100%25_Offline-Local_First-2ea043?style=for-the-badge" alt="Offline" />
   <img src="https://img.shields.io/badge/License-MIT-8b5cf6?style=for-the-badge" alt="License" />
@@ -218,6 +218,36 @@ The foundation of the Phase 3 AI estimation layer — your own history becomes y
 
 </td>
 </tr>
+<tr>
+<td width="25%">
+
+### ✏️ Edit That Asks Why
+Change a deadline and TaskFlow asks **why** — not to judge, to learn your patterns.<br/><br/>
+*"I need more runway" · "It's bigger than I thought" · "Something external moved it."* The wording is deliberately judgment-free, so your answer is honest. And every edit lands in an append-only history you can't quietly rewrite. A tool that's curious about you, not just storing you.
+
+</td>
+<td width="25%">
+
+### 🌙 It Knows It's Late
+Open TaskFlow at 10pm and it won't hand you a fresh wall of work.<br/><br/>
+After 6pm the path becomes **"Tonight · set up tomorrow"** — today dims, and it asks you to name just *one* thing to start in the morning. Willpower is lowest at night; the tool stops pushing and winds down with you. *(See ["The 6pm Shift"](#-the-6pm-shift) below.)*
+
+</td>
+<td width="25%">
+
+### 🎯 Overdue Isn't a Verdict
+Twelve tasks overdue and nothing scheduled? Most apps say *"nothing to do."* That lie breeds avoidance.<br/><br/>
+TaskFlow surfaces your **best candidates for tomorrow** — ranked by what matters and what's freshest, abandoned tasks quietly set aside — each one click from being scheduled. Overdue is a starting point, never a scarlet letter.
+
+</td>
+<td width="25%">
+
+### ⏱️ Time, in Human Terms
+Nothing ever reads *"in 676 min."* It reads **"in 11h 16m"** — or simply *"tomorrow."*<br/><br/>
+Postpone something and the "lighter day" it suggests won't tell you to *start tonight* at 9pm — it knows the evening's gone, and one click commits you to the earlier day. The difference between a tool that tracks time and one that understands it.
+
+</td>
+</tr>
 </table>
 
 <br/>
@@ -225,6 +255,26 @@ The foundation of the Phase 3 AI estimation layer — your own history becomes y
 > **📖 Want the full psychology breakdown?** Every feature is backed by published research — from Csíkszentmihályi's Flow State to Cialdini's Commitment Principle.
 > 
 > **[Read the Deep-Dive →](docs/deep-dive.md)**
+
+<br/>
+
+---
+
+<br/>
+
+## 🌙 The 6pm Shift
+
+Here's the part no other task manager does: **TaskFlow behaves differently after 6pm — on purpose.**
+
+You know the feeling — opening a productivity app late at night to a glowing wall of everything you *didn't* do. It doesn't make you work. It makes you close the app. Your decision-making is measurably worst in the evening, and a long checklist is the last thing a depleted brain can act on.
+
+So at night, TaskFlow inverts. Today's list **dims to a quiet record**. The panel stops pushing and asks for **one specific thing to start tomorrow** — because naming a single concrete next step is what actually quiets the mental loop and helps you sleep *(Scullin et al., 2018)*. And it says *tomorrow*, not "later today," because a new day reads as a **fresh start** — yesterday's misses feel closed, not carried *(Dai, Milkman & Riis, 2014)*.
+
+Your tasks don't change at 6pm. The way the tool talks to you does.
+
+> And if you're staring at a backlog instead of a plan, it doesn't shame you with it — it hands you your **best candidates for tomorrow**, one click from scheduled. Rescue, not punishment. Always.
+
+*The full reasoning lives in the [Psychology Deep-Dive →](docs/deep-dive.md).*
 
 <br/>
 
@@ -312,7 +362,7 @@ Run `taskflow ui` to launch a local web dashboard with:
 | `taskflow dump <text>` | Instant capture with NLP — `"task #tag !h"` for priority + tags |
 | `taskflow list` | Mission board view — filter with `--todo`, `--done`, `--priority`, `--tag` |
 | `taskflow view <id>` | Full mission brief with history and metadata |
-| `taskflow edit <id>` | Modify mission parameters |
+| `taskflow edit <id>` | Edit any field — moving a deadline asks *why* (judgment-free, for your planning) |
 | `taskflow complete <id>` | Mark as done ✓ |
 | `taskflow undo <id>` | Re-open a completed mission |
 | `taskflow delete <id>` | Remove from database |
@@ -387,6 +437,14 @@ Polish, safety, and identity.
 - Dashboard split into cached static assets (`static/dashboard.css` / `.js`)
 - Single source of truth — the server computes pressure / overdue / duration / priority; the UI just consumes them
 - Security, design & code-health audits, with fixes shipped (CSRF + Host validation, CSP, output escaping, the offline promise restored)
+
+### ✅ v9.1.0 — Time-Aware & Editable
+The tool learned to read the clock and ask questions.
+
+- **Edit any mission** (`taskflow edit`) — and changing a deadline asks *why*, judgment-free, to learn your planning patterns
+- **The 6pm Shift** — after evening, the path becomes "Tonight · set up tomorrow" (a wind-down, not a wall)
+- **Overdue as candidates** — "nothing today" now surfaces your best next moves, one click to schedule for tomorrow
+- **Time in human terms** — "in 11h 16m," never "in 676 min"; lighter-day suggestions respect the hour
 
 ### 🔮 Phase 3 — After LLM Integration
 AI that knows how you actually work.

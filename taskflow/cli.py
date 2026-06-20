@@ -107,14 +107,14 @@ from task_manager.storage import storage
 import colorama
 
 APP_NAME = "TaskFlow"
-APP_VERSION = "v9.0.0"
+APP_VERSION = "v9.1.0"
 APP_TAGLINE = "The Execution Engine"
 
 
 def show_help() -> None:
     """Show comprehensive help with premium formatting."""
     print(f"""
-  TaskFlow v9.0.0 — The Execution Engine
+  TaskFlow v9.1.0 — The Execution Engine
   {"─" * 60}
 
   CORE COMMANDS:
@@ -375,11 +375,11 @@ def show_version():
         print(f"  • Missions:       (unable to read)")
     
     print(f"\n  \033[1mWHAT'S NEW IN {APP_VERSION}:\033[0m")
-    print("  • \033[35mThemes\033[0m: 4 built-in themes + a custom builder (OPERATOR M → Theme)")
-    print("  • \033[36mFaster UI\033[0m: dashboard split into cached static CSS/JS assets")
-    print("  • \033[32mSingle source of truth\033[0m: server-computed pressure / priority / duration")
-    print("  • \033[33mPhase 2 Complete\033[0m: Execution Path · Time Integrity · Focus Lock · Weekly review")
-    print("  • \033[31mHardened\033[0m: security, design & code-health audits — fixes shipped")
+    print("  • \033[36mTime-aware\033[0m: after 6pm the path becomes 'Tonight · set up tomorrow'")
+    print("  • \033[35mEdit any mission\033[0m: taskflow edit <id> — and it asks WHY a deadline moves")
+    print("  • \033[33mOverdue → candidates\033[0m: 'nothing today' now surfaces your best next moves")
+    print("  • \033[32mClearer time\033[0m: reads 'in 11h 16m', never 'in 676 min'")
+    print("  • \033[34mThemes\033[0m: 4 built-in + a custom builder (OPERATOR M → Theme)")
     print(f"  \033[90m{'─' * 60}\033[0m")
     print("  \033[3mBuilt for deep work. Engineered for execution.\033[0m\n")
 

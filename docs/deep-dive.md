@@ -29,6 +29,9 @@
 - [14. Dopamine & Momentum — Behavioral Persistence](#-14-dopamine--momentum--behavioral-persistence)
 - [15. Recovery Mode — Cognitive Overload Defense](#-15-recovery-mode--cognitive-overload-defense)
 - [16. Dual-Mode Reality Engine — Temporal Structuring](#-16-dual-mode-reality-engine--temporal-structuring)
+- [17. The Deadline Change — Cognitive Dissonance & the Self-Justification Trap](#-17-the-deadline-change--cognitive-dissonance--the-self-justification-trap)
+- [18. The Evening Problem — Why TaskFlow Changes Behavior After 6pm](#-18-the-evening-problem--why-taskflow-changes-behavior-after-6pm)
+- [19. The Edit History — Behavioral Data as a Mirror](#-19-the-edit-history--behavioral-data-as-a-mirror)
 - [Technical Architecture](#-technical-architecture)
 - [References](#-references)
 
@@ -624,11 +627,75 @@ For flexible tasks, the **NLP Parser** accepts natural language: `tomorrow 3pm`,
 
 ---
 
+## 🔀 17. The Deadline Change — Cognitive Dissonance & the Self-Justification Trap
+
+> Builds directly on [Section 5 — Deadline Taxonomy](#-5-deadline-taxonomy--why-treating-all-deadlines-the-same-is-a-design-failure) and [Section 9 — Forced Confrontation](#-9-forced-confrontation--why-silent-overdue-labels-are-a-design-failure).
+
+### The Psychology
+
+Moving a deadline is never a neutral act. The user committed to finishing by X; they are now changing X. That gap between *intention* and *behavior* produces **cognitive dissonance** (Festinger, 1957) — an uncomfortable tension the mind resolves not by changing the behavior, but by **rewriting the story**. By the time a person reaches for the deadline field, the self-justifying narrative is usually already in place: *"the requirements changed," "I was waiting on someone," "it wasn't really due then anyway."* Tavris & Aronson (2007) describe this self-justification engine — it runs automatically, beneath awareness, to protect the self-image of *"someone who does what they say."*
+
+This creates a **data problem** and a **trust problem** at the same moment, and TaskFlow has to solve both without flinching.
+
+**The data problem — social-desirability bias.** If TaskFlow asked the blunt question *"Are you procrastinating?"*, almost no one would say yes — even when it is true. People answer sensitive questions to protect their self-image, not to report reality (**social-desirability bias**; Edwards, 1957; Nederhof, 1985). Faced with a self-indicting option, a user clicks the face-saving one instead ("external reason"), and the behavioral signal TaskFlow is trying to learn from is corrupted at the source.
+
+**The fix — remove the face threat, keep the signal.** TaskFlow's five reasons are worded to be *honest to answer*. "I need more runway — I haven't been able to start it yet" captures the exact same behavioral pattern as "I procrastinated," but carries zero self-indictment. The user can tell the truth without confessing a character flaw. Same signal, no shame — which is the only way the signal stays accurate.
+
+**The trust mechanism — autonomy.** Self-Determination Theory (Deci & Ryan, 1985) names autonomy as a core psychological need: people resist what is imposed and embrace what they choose. A tool that *accuses* ("you're behind again") triggers reactance; a tool that *asks* ("what's behind this change?") and lets the user name their own reason preserves agency. The entire difference between a judge and an ally lives in who gets to author the explanation.
+
+**The forward move — earlier beats later.** Once the reason is captured, the tool doesn't just record it. For a postponement it nudges toward an *earlier* restart, because Ariely & Wertenbroch (2002) showed self-imposed deadlines work — but earlier, spaced ones outperform waiting until the last moment. And the one-click "use this day" accept exists because of Gollwitzer & Sheeran's (2006) meta-analysis — *d = 0.65 across 94 studies* — showing an **implementation intention** (committing to *when* you'll act) roughly doubles follow-through versus holding the goal alone. Capturing that commitment in the moment, while the user is already thinking about it, is worth far more than making them re-navigate to do it later. (Phase 3 extends this from a day to a specific *time*.)
+
+### How TaskFlow Implements This
+
+When `old_deadline != new_deadline`, TaskFlow asks — once, calmly — *"What's behind this change?"* with five judgment-free options (A–E), an optional free-text box, and contextual help: a postponement surfaces a lighter day to restart on (one click to accept); a "bigger than I thought" offers to update the duration estimate. The reason is written to the task's append-only `edit_history` (see [Section 19](#-19-the-edit-history--behavioral-data-as-a-mirror)), and only when behavioral data is enabled. The **wording**, not the mechanism, is the design — and the wording is doing real psychological work.
+
+---
+
+## 🌙 18. The Evening Problem — Why TaskFlow Changes Behavior After 6pm
+
+> A time-of-day application of [Section 7 — Calibrated Urgency](#-7-calibrated-urgency--the-yerkes-dodson-law-applied-to-ui-design) and [Section 15 — Recovery Mode](#-15-recovery-mode--cognitive-overload-defense).
+
+### The Psychology
+
+Most tools render the same screen at 9am and 11pm. That is a design error, because **the user at 11pm is not the same cognitive animal as the user at 9am.**
+
+**Decision fatigue / ego depletion** (Baumeister et al., 1998). Self-control and decision quality draw on a finite resource that depletes across the day. By evening the tank is low — which is exactly when a long, glowing execution checklist does the most damage. Presenting a tired brain with a wall of unfinished tasks doesn't produce action; it produces avoidance and anxiety, and the user closes the tab. The correct evening move is to *reduce* the decision load, not relocate it.
+
+**Specific next-day planning and sleep** (Scullin et al., 2018, *Journal of Experimental Psychology: General*). In a controlled, polysomnographic study, participants who spent five minutes writing a *specific* next-day to-do list fell asleep meaningfully faster than those who wrote about completed tasks — and the more specific the list, the stronger the effect. The mechanism is the **Zeigarnik Effect** ([Section 13](#-13-frictionless-capture--the-zeigarnik-effect)) in reverse: an unfinished task runs an open cognitive loop, but *naming a concrete plan for it* closes the loop enough to let the mind rest. This is why TaskFlow's evening prompt asks for **one specific thing**, not a vague "plan tomorrow."
+
+**The Fresh Start Effect** (Dai, Milkman & Riis, 2014, *Management Science*). Temporal landmarks — a new day, week, or month — create a psychological discontinuity that files past failures under "old me" and resets aspiration. Framing the evening around *tomorrow* (rather than "the rest of today") deliberately invokes this landmark, and it matters most precisely when today carried overdue work. "Tomorrow" feels like a clean ledger; "later today" feels like the same losing battle continued.
+
+**Loss aversion and framing** (Kahneman & Tversky, 1979). The same overdue task is a *failure* under one frame and a *starting point* under another. Surfacing overdue work as "your best candidates for tomorrow" activates an approach-toward-gain mindset instead of avoid-the-loss. Identical tasks, opposite emotions — and approach motivation produces action where avoidance produces paralysis.
+
+### How TaskFlow Implements This
+
+After 6pm, the Daily Execution Path stops being a command center and becomes a wind-down surface labeled **"Tonight · set up tomorrow."** Today's tasks soften to ~55% opacity — present as an honest record, not a demand (a glowing red checklist at 10pm is punishment; a dimmed log is information). When nothing is scheduled but a backlog exists, the panel surfaces the top overdue items as **candidates for tomorrow** — ranked by priority and recency, with abandoned tasks (postponed 5+ times) quietly set aside — each one click from scheduled. The same time-awareness governs the postpone flow: the "lighter day" suggestion will never tell you to start *tonight* at 9pm, because the evening is already gone.
+
+---
+
+## 🪞 19. The Edit History — Behavioral Data as a Mirror
+
+> Extends [Section 10 — The Postpone Mirror](#-10-the-postpone-mirror--accountability-without-judgment).
+
+### The Psychology
+
+TaskFlow's quiet edge is that it learns your patterns — but learning only works if the record is **honest**, and honesty rests on two pillars.
+
+**The record must be tamper-resistant.** `edit_history` is **append-only**: entries are written, never modified or deleted. This is deliberate. If a user could quietly erase their own postpone counts or rewrite why a deadline moved, the mirror would distort exactly where the truth is most useful — and most uncomfortable. The Postpone Mirror ([Section 10](#-10-the-postpone-mirror--accountability-without-judgment)) only works because the count is real; the same principle governs every behavioral entry. *A mirror you can edit is not a mirror.*
+
+**The collection must feel chosen, not imposed.** Here Self-Determination Theory (Deci & Ryan, 1985) returns. A tool that silently harvests behavior feels like **surveillance**, and surveillance breeds resistance and gaming — users start curating what they record. A tool whose data collection the user knowingly controls feels like a **personal advisor**, and that breeds the candor the system depends on. TaskFlow therefore gates richer behavioral capture behind an explicit, user-controlled toggle: core operational history (completions, status changes, postpones) is always kept because the tool cannot function without it, but the deeper "why" data is collected only with consent the user can withdraw at any time. The point is not legal compliance — it is that **trust is a prerequisite for honest data**, and honest data is the entire foundation of the future Nova layer.
+
+### How TaskFlow Implements This
+
+Every meaningful change appends a structured entry — `{timestamp, field, old, new, reason_code, reason_text}` — to the task's `edit_history`. Operational transitions are always logged; reasons and richer field edits are logged only when behavioral data is enabled. Nothing is ever overwritten. Over time this becomes the user's own behavioral **reference class** — the raw material the Phase 3 digital twin will reason from.
+
+---
+
 ## 🏗️ Technical Architecture
 
 ```mermaid
 graph TD
-    A["CLI Router (argparse)"] --> B["Command Engine (3200+ lines)"]
+    A["CLI Router (argparse)"] --> B["Command Engine (6k+ lines)"]
     A --> C["Web HUD Server (ThreadingHTTPServer)"]
     
     B --> D["Storage Layer (JSON + Atomic Writes)"]
@@ -637,7 +704,7 @@ graph TD
     B --> E["Focus Manager"]
     E --> F["System Blocker (Hosts + Process Control)"]
     
-    C --> G["Mission Control UI (4500 lines)"]
+    C --> G["Mission Control UI (static CSS + JS)"]
     
     D --> H[("Local Storage (~/.taskflow/)")]
 
@@ -693,6 +760,14 @@ graph TD
 | Agency and Control | Langer, E. & Rodin, J. (1976). *The effects of choice and enhanced personal responsibility* |
 | Self-efficacy | Bandura, A. (1977). *Self-efficacy: Toward a unifying theory* |
 | Psychological Reactance | Brehm, J.W. (1966). *A Theory of Psychological Reactance* |
+| Cognitive Dissonance | Festinger, L. (1957). *A Theory of Cognitive Dissonance* |
+| Self-Justification | Tavris, C. & Aronson, E. (2007). *Mistakes Were Made (But Not by Me)* |
+| Social-Desirability Bias | Edwards, A.L. (1957); Nederhof, A.J. (1985) |
+| Self-Determination Theory | Deci, E.L. & Ryan, R.M. (1985). *Intrinsic Motivation and Self-Determination* |
+| Implementation Intentions (meta-analysis) | Gollwitzer, P.M. & Sheeran, P. (2006). *Implementation intentions and goal achievement* |
+| Fresh Start Effect | Dai, H., Milkman, K.L. & Riis, J. (2014). *The Fresh Start Effect*, Management Science |
+| Bedtime Planning & Sleep Onset | Scullin, M.K. et al. (2018). *J. Experimental Psychology: General* |
+| Loss Aversion & Framing | Kahneman, D. & Tversky, A. (1979). *Prospect Theory* |
 
 ---
 
