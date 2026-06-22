@@ -52,8 +52,12 @@ class SystemDetector:
         
         try:
             if os_type == "windows":
-                if force_gentle or not SystemDetector.is_admin():
-                    # Use absolute import
+                # Only force gentle when explicitly asked (gentle mode). For strict we ALWAYS use
+                # WindowsBlocker, even without admin: its local filter proxy is unprivileged and
+                # blocks browsers; the hosts-level edit is the only admin-gated part and it skips
+                # that gracefully. (Previously non-admin strict fell back to GentleBlocker, so the
+                # proxy never ran.)
+                if force_gentle:
                     from task_manager.blockers.gentle import GentleBlocker
                     return GentleBlocker()
                 else:

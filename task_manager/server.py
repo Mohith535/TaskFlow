@@ -1383,6 +1383,14 @@ if __name__ == "__main__":
         ProxyFilter.rollback_if_stale()
     except Exception:
         pass
+    # Likewise scrub any leftover TaskFlow hosts-file block from a crashed prior session.
+    try:
+        import sys as _sys
+        if _sys.platform == "win32":
+            from task_manager.blockers.windows import clear_stale_taskflow_hosts
+            clear_stale_taskflow_hosts()
+    except Exception:
+        pass
     print(f"\nStarting TaskFlow Web UI Server on port {port}...")
     srv = start_server(port)
     

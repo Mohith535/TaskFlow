@@ -10,6 +10,40 @@ _DOMAIN_RE = _re.compile(r'^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.
 # SEC-04: safe Windows image name for taskkill (no shell metacharacters).
 _APP_RE = _re.compile(r'^[A-Za-z0-9 ._-]{1,64}$')
 
+_HOSTS_MARKER = "# TaskFlow Focus Mode - Blocked Sites"
+
+
+def clear_stale_taskflow_hosts(hosts_path=None):
+    """Remove any leftover TaskFlow block from the hosts file (e.g. after a crash that skipped
+    cleanup). Safe to call at startup: a fresh process means any TaskFlow block is stale. Needs
+    write access to the hosts file (admin) — silently no-ops otherwise."""
+    path = hosts_path or r"C:\Windows\System32\drivers\etc\hosts"
+    try:
+        if not os.path.exists(path):
+            return False
+        with open(path, "r") as f:
+            lines = f.readlines()
+        start = next((i for i, l in enumerate(lines) if _HOSTS_MARKER in l), -1)
+        if start == -1:
+            return False
+        end = start + 1
+        while end < len(lines):
+            s = lines[end].strip()
+            if ("127.0.0.1" in s) or ("::1" in s):
+                end += 1
+            else:
+                break
+        new = lines[:start] + lines[end:]
+        with open(path, "w") as f:
+            f.writelines(new)
+        try:
+            subprocess.run(["ipconfig", "/flushdns"], capture_output=True)
+        except Exception:
+            pass
+        return True
+    except Exception:
+        return False
+
 
 def _sanitize_domain(raw):
     """Reduce a user-supplied site to a bare valid domain, or None (SEC-03).

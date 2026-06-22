@@ -988,26 +988,16 @@ class FocusManager:
         
         try:
             from .system_detector import SystemDetector
-            
-            if mode == "strict":
-                if SystemDetector.get_os() == "windows" and not SystemDetector.is_admin():
-                    print("\n❌ ACCESS DENIED: Strict blocking requires Administrator privileges.")
-                    print("   To fix this:")
-                    print("   1. Close this terminal")
-                    print("   2. Right-click Command Prompt (or PowerShell)")
-                    print("   3. Select 'Run as administrator'")
-                    print("   4. Run the focus command again")
-                    return False
-                
-                self.blocker = SystemDetector.get_distraction_blocker(force_gentle=False)
-            else:
-                self.blocker = SystemDetector.get_distraction_blocker(force_gentle=True)
-            
+            # Strict no longer needs admin to INITIALISE: the local filter proxy (started in
+            # WindowsBlocker.block_websites) is unprivileged. Admin only adds the hosts-level edit,
+            # which block_websites skips gracefully when not elevated. (Previously this bailed out
+            # with ACCESS DENIED for non-admin strict, so the blocker was never created and the
+            # proxy never ran.)
+            force_gentle = (mode != "strict")
+            self.blocker = SystemDetector.get_distraction_blocker(force_gentle=force_gentle)
             return True
         except Exception as e:
             print(f"⚠️  Could not initialize blocker: {e}")
-            import traceback
-            traceback.print_exc()
             return False
     
     def start_focus_session(self, task_id: int, task_title: str, task_notes: str = "",
