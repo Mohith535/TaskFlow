@@ -2267,10 +2267,20 @@ def kill_web_ui():
                 print("✅ No active server processes found.")
                 return True
 
+            failed = []
             for pid in pids:
                 print(f"🛑 Terminating PID {pid}...")
-                subprocess.run(['taskkill', '/F', '/PID', pid], capture_output=True)
-            
+                r = subprocess.run(['taskkill', '/F', '/PID', pid], capture_output=True, text=True)
+                if r.returncode != 0:
+                    failed.append((pid, (r.stderr or r.stdout or '').strip()))
+            if failed:
+                print("⚠️  Could not stop the existing server:")
+                for pid, err in failed:
+                    print(f"     PID {pid}: {err or 'access denied'}")
+                print("   Most likely the old server is running as Administrator and this terminal")
+                print("   is not (or vice-versa). End the dashboard 'python.exe' in Task Manager,")
+                print("   or relaunch from a terminal at the SAME elevation, then try again.")
+
         else:
             # Unix/Mac: Find PID using lsof
             try:
@@ -2288,19 +2298,21 @@ def kill_web_ui():
                 print("✅ No active server processes found.")
                 return True
 
-        # Wait up to 3s for port to be released
+        # Wait up to 3s for the port to actually be released, then report HONESTLY.
         for _ in range(6):
             time.sleep(0.5)
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             is_taken = sock.connect_ex(('127.0.0.1', port)) == 0
             sock.close()
             if not is_taken:
-                break
+                print("✨ Mission Control cleared.")
+                return True
 
-        print("✨ Mission Control cleared.")
-        return True
+        print("⚠️  The old server is still holding the port — it was not stopped.")
+        return False
     except Exception as e:
         print(f"⚠️  Error during cleanup: {e}")
+        return False
 
 def open_web_ui(force=False):
     """Launch the System Control Web Dashboard (Quantum Resolve)."""
@@ -2315,39 +2327,66 @@ def open_web_ui(force=False):
     url = f"http://127.0.0.1:{port}"
     
     if force:
-        kill_web_ui()
-        time.sleep(0.5) # Brief cooldown for port release
+        if not kill_web_ui():
+            # The old (stale-code) server is still up and we couldn't free the port. Spawning a
+            # second server would just fail to bind 18083 and you'd keep hitting the OLD one —
+            # exactly the "I restarted and nothing changed" trap. Stop and explain.
+            print("\n❌ Couldn't free the port, so a fresh server was NOT started.")
+            print("   You're still on the OLD dashboard (old code). Stop the dashboard 'python.exe'")
+            print("   in Task Manager, or in PowerShell run:")
+            print(f"     Get-NetTCPConnection -LocalPort {port} | %{{ Stop-Process -Id $_.OwningProcess -Force }}")
+            print("   then run 'taskflow ui' again.")
+            return
+        time.sleep(0.5)  # brief cooldown for port release
     else:
         # Check if port is taken
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         is_taken = sock.connect_ex(('127.0.0.1', port)) == 0
         sock.close()
-        
+
         if is_taken:
             print(f"📡 Mission Control already active at {url}")
-            print("   (Use 'taskflow ui --restart' to force a fresh session)")
+            print("   NOTE: that may be an OLD server still running previous code.")
+            print("   To load the LATEST code, run:  taskflow ui --restart")
             webbrowser.open(url)
             return
 
     print("⚡ Deploying Mission Control...")
-    # Get server path
     server_path = Path(__file__).parent / "server.py"
-    
+
     try:
-        # Launch server as detached background process
+        # Detached background server — but log its output so a startup crash is VISIBLE
+        # (it used to go to DEVNULL, which is why a failed server looked like "nothing happened").
+        server_log = storage.data_dir / "server.log"
+        logf = open(server_log, "a", buffering=1)
         if sys.platform == "win32":
-            subprocess.Popen([sys.executable, str(server_path)], 
+            subprocess.Popen([sys.executable, str(server_path)],
                              creationflags=subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS,
-                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                             stdout=logf, stderr=logf)
         else:
             subprocess.Popen([sys.executable, str(server_path)],
-                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                             start_new_session=True)
-        
-        # Success delay
-        time.sleep(1.5)
-        webbrowser.open(url)
-        print(f"🌊 Mission Control HUD live → {url}")
+                             stdout=logf, stderr=logf, start_new_session=True)
+
+        # Wait for the server to ACTUALLY bind (don't just sleep and hope).
+        up = False
+        for _ in range(20):
+            time.sleep(0.25)
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            up = s.connect_ex(('127.0.0.1', port)) == 0
+            s.close()
+            if up:
+                break
+
+        if up:
+            webbrowser.open(url)
+            print(f"🌊 Mission Control HUD live → {url}")
+        else:
+            print("❌ The server didn't come up. Last lines of its log:")
+            try:
+                for ln in server_log.read_text(errors='replace').splitlines()[-10:]:
+                    print("   " + ln)
+            except Exception:
+                pass
     except Exception as e:
         print(f"❌ Failed to reach Mission Control: {e}")
 
