@@ -188,7 +188,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 <div class="fs-label">Sites to block</div>
                 <div id="fs-sites" class="fs-sites"></div>
                 <input id="fs-site-input" class="fs-site-input" placeholder="add a site — e.g. youtube.com, then press Enter" autocomplete="off">
-                <div class="fs-note">⚠ Strict mode edits your hosts file and closes apps — it only takes effect when TaskFlow is running as <b>Administrator</b>. Without admin it safely falls back to gentle reminders.</div>
+                <div class="fs-note" id="fs-note">⚠ Strict mode edits your hosts file and closes apps — it only takes effect when TaskFlow is running as <b>Administrator</b>. Checking…</div>
             </div>
 
             <div style="display:flex; gap:12px; margin-top:22px;">

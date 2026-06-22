@@ -3092,6 +3092,21 @@
         const s = (raw || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
         if (s && _focusSetup && !_focusSetup.sites.includes(s)) { _focusSetup.sites.push(s); _renderFsSites(); }
     }
+    async function _fsCheckAdmin() {
+        const note = document.getElementById('fs-note'); if (!note) return;
+        try {
+            const d = await (await fetch('/api/focus/preflight')).json();
+            if (d.is_admin) {
+                note.innerHTML = '✅ Running as Administrator — strict will actually block these sites &amp; apps at the OS level.';
+                note.style.background = 'color-mix(in srgb, var(--accent-success) 8%, transparent)';
+                note.style.borderColor = 'color-mix(in srgb, var(--accent-success) 25%, transparent)';
+            } else {
+                note.innerHTML = "⚠ <b>Not running as Administrator</b> — strict can't block sites/apps this session (editing the hosts file needs elevation). Close TaskFlow and relaunch from an <b>Administrator</b> terminal to enforce blocking. The session still runs; it just won't block.";
+                note.style.background = 'color-mix(in srgb, var(--accent-warning) 8%, transparent)';
+                note.style.borderColor = 'color-mix(in srgb, var(--accent-warning) 22%, transparent)';
+            }
+        } catch (e) {}
+    }
     window.beginFocus = async () => {
         if (!_focusSetup) return;
         const { taskId, title, minutes, mode, sites } = _focusSetup;
@@ -3133,6 +3148,7 @@
                 _focusSetup.sites = [..._focusSetup.saved];   // prefill from saved blocklist
                 _renderFsSites();
             }
+            if (strict) _fsCheckAdmin();   // tell the user the truth about whether blocking can engage
         });
         const inp = document.getElementById('fs-site-input');
         if (inp) inp.addEventListener('keydown', e => {

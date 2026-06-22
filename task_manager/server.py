@@ -419,6 +419,16 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
             except Exception:
                 self._send_json(200, {"active": False, "task_id": None, "ends_at": None, "queued_count": 0})
 
+        elif path == "/api/focus/preflight":
+            # Honest answer for the Focus Setup modal: can strict blocking actually engage?
+            # (Editing the hosts file / killing apps needs Administrator on Windows.)
+            try:
+                from task_manager.system_detector import SystemDetector
+                self._send_json(200, {"is_admin": bool(SystemDetector.is_admin()),
+                                      "platform": SystemDetector.get_os()})
+            except Exception:
+                self._send_json(200, {"is_admin": False, "platform": "unknown"})
+
         elif path == "/api/blocklist":
             try:
                 from task_manager.blockers.blocklist import blocklist_manager
@@ -573,24 +583,20 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
             return
             
         elif (path == "/api/focus_end" or path == "/api/focus/end") and self.command == 'POST':
+            from task_manager import commands
             try:
-                from task_manager import commands
-                # Forcefully end focus
-                try:
-                    commands.end_focus(force=True)
-                except Exception as ex:
-                    try:
-                        commands.time_tracker.end_focus()
-                        commands.time_tracker._save_state({'active_session': None, 'start_time': None})
-                    except: pass
-                self.send_response(200)
-                self.end_headers_json()
-                self.wfile.write(json.dumps({"success": True}).encode('utf-8'))
-            except Exception as e:
-                import traceback; open(r'C:\Users\Admin\Desktop\error_abort.txt', 'w').write(traceback.format_exc())
-                self.send_response(500)
-                self.end_headers_json()
-                self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
+                commands.end_focus(force=True)        # graceful end (blocker cleanup, queue flush)
+            except Exception:
+                pass
+            # GUARANTEE the session is gone in memory AND on disk, regardless of what end_focus
+            # did — otherwise check_focus() reloads the old session and the overlay resurrects.
+            try:
+                commands.time_tracker.active_session = None
+                commands.time_tracker.start_time = None
+                commands.time_tracker._save_state({'active_session': None, 'start_time': None})
+            except Exception:
+                pass
+            self._send_json(200, {"success": True})
             return
 
         elif path == "/api/focus/pause" and self.command == 'POST':
@@ -660,7 +666,6 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
                 response.update(dopamine)
                 self.wfile.write(json.dumps(response).encode('utf-8'))
             except Exception as e:
-                import traceback; traceback.dump(e, open(r'C:\Users\Admin\Desktop\error1.txt', 'w')) if hasattr(traceback, "dump") else open(r'C:\Users\Admin\Desktop\error1.txt', 'w').write(traceback.format_exc())
                 self.send_response(500)
                 self.end_headers_json()
                 self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))

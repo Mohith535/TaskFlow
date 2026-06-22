@@ -62,13 +62,16 @@ class WindowsBlocker(BaseBlocker):
         print(f"\n🚫 WINDOWS STRICT BLOCKING ACTIVATED")
         print(f"   Blocking {len(sites)} websites...")
         
-        # ADD CONFIRMATION FOR STRICT MODE
-        from task_manager.commands import confirm_action
-        if not confirm_action("\n⚠️ WARNING: Strict mode modifies system files (hosts)."
-                              "\nAre you sure you want to block these sites?"):
-            print("   Strict blocking cancelled. Proceeding with gentle reminders.")
-            self.is_gentle_mode = True
-            return self._gentle_block_websites(sites)
+        # Confirm before touching system files — but ONLY when interactive. From the web/server
+        # (interactive=False) the user already chose strict in the UI; prompting here would block
+        # the request thread on stdin forever (the strict-from-web hang).
+        if getattr(self, "interactive", True):
+            from task_manager.commands import confirm_action
+            if not confirm_action("\n⚠️ WARNING: Strict mode modifies system files (hosts)."
+                                  "\nAre you sure you want to block these sites?"):
+                print("   Strict blocking cancelled. Proceeding with gentle reminders.")
+                self.is_gentle_mode = True
+                return self._gentle_block_websites(sites)
         
         try:
             # Read current hosts file
@@ -122,10 +125,13 @@ class WindowsBlocker(BaseBlocker):
                 text=True
             )
             
-            # AGGRESSIVE BROWSER KILL FEATURE
+            # AGGRESSIVE BROWSER KILL FEATURE — interactive only. Never force-close the user's
+            # browsers from a web click (it would destroy their open tabs without real consent);
+            # the web path just blocks + tells them to refresh.
             print(f"\n🎯 Strict blocking active for {len(sites)} websites")
-            if confirm_action("\n⚠️ Browsers keep existing connections alive bypassing blocks."
-                              "\nForce close all browsers now to ensure blocks apply? (y/N)"):
+            if getattr(self, "interactive", True) and confirm_action(
+                    "\n⚠️ Browsers keep existing connections alive bypassing blocks."
+                    "\nForce close all browsers now to ensure blocks apply? (y/N)"):
                 browsers = ["chrome.exe", "msedge.exe", "firefox.exe", "brave.exe", "opera.exe"]
                 killed = 0
                 print("   🧹 Closing browsers...")

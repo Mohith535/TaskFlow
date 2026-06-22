@@ -1010,10 +1010,14 @@ class FocusManager:
             traceback.print_exc()
             return False
     
-    def start_focus_session(self, task_id: int, task_title: str, task_notes: str = "", 
-                            priority: str = "medium", minutes: int = 25, 
-                           sites=None, apps=None, mode="gentle"):
-        """Start a focus session with optional blocking."""
+    def start_focus_session(self, task_id: int, task_title: str, task_notes: str = "",
+                            priority: str = "medium", minutes: int = 25,
+                           sites=None, apps=None, mode="gentle", interactive: bool = True):
+        """Start a focus session with optional blocking.
+
+        interactive=False (web/server) flows down to the blocker so strict mode never prompts
+        on stdin (which would hang the request thread).
+        """
         
         # Initialize blocker
         if not self.init_blocker(mode):
@@ -1051,7 +1055,7 @@ class FocusManager:
             
             # Actually block
             gentle_mode = (mode == "gentle")
-            self.blocker.start_focus(sites, apps, gentle_mode=gentle_mode)
+            self.blocker.start_focus(sites, apps, gentle_mode=gentle_mode, interactive=interactive)
             
             if mode == "strict" and not SystemDetector.is_admin():
                 print("\n⚠️  Note: For strict blocking, run TaskFlow as Administrator")
@@ -1381,32 +1385,39 @@ class TimeTracker:
         }
     
     def end_focus(self, completed: bool = False):
-        """End current focus session."""
+        """End current focus session.
+
+        Clears + persists the inactive state FIRST. A failure in stats logging or messaging must
+        never be able to leave the session 'active' on disk — otherwise check_focus() reloads it
+        and the UI resurrects the overlay (the abort-doesn't-stick bug).
+        """
         if not self.active_session:
             Messenger.note("No active focus session to end.")
             return
-        
-        session_minutes = self.active_session.get('minutes', 25)
-        task_title = self.active_session.get('task_title', 'Task')
-        try:
-            from task_manager.storage import storage
-            tasks = storage.load_tasks()
-            
-            for task in tasks:
-                if task.id == self.active_session.get('task_id'):
-                    task.add_focus_minutes(session_minutes)
-                    storage.save_tasks(tasks)
-                    break
-        except Exception:
-            pass
-            
-        if completed:
-            self.increment_cycle()
-        
-        Messenger.focus_complete(task_title, session_minutes)
+
+        session = self.active_session
+        session_minutes = session.get('minutes', 25)
+        task_title = session.get('task_title', 'Task')
+
+        # 1) Authoritatively end the session — in memory AND on disk — before anything that can throw.
         self.active_session = None
         self.start_time = None
         self._save_state({'active_session': None, 'start_time': None})
+
+        # 2) Best-effort bookkeeping (never blocks the end).
+        try:
+            from task_manager.storage import storage
+            tasks = storage.load_tasks()
+            for task in tasks:
+                if task.id == session.get('task_id'):
+                    task.add_focus_minutes(session_minutes)
+                    storage.save_tasks(tasks)
+                    break
+            if completed:
+                self.increment_cycle()
+            Messenger.focus_complete(task_title, session_minutes)
+        except Exception:
+            pass
         print("🧹 Focus session cleared from memory.")
 
 
@@ -3849,9 +3860,10 @@ def focus_task(task_id: int, minutes: int = 25,
                         print("   ✅ Saved to blocklist.")
             # -----------------------------
             
-            # Start focus with blocking
+            # Start focus with blocking (interactive=False when force/server-driven → no stdin prompts)
             success = focus_manager.start_focus_session(
-                task_id, task.title, 
+                task_id, task.title,
+                interactive=not force,
                 task_notes=task.notes or "",
                 priority=task.priority or "medium",
                 minutes=minutes, 

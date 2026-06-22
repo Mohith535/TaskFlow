@@ -35,7 +35,8 @@ class BaseBlocker(ABC):
         self.start_time = None
         self.stop_reminders = False
         self.reminder_thread = None
-    
+        self.interactive = True  # False when driven by the web/server: suppress stdin prompts
+
     @abstractmethod
     def block_websites(self, sites):
         """Block specific websites."""
@@ -98,11 +99,16 @@ class BaseBlocker(ABC):
         if self.reminder_thread and self.reminder_thread.is_alive():
             self.reminder_thread.join(timeout=2)
     
-    def start_focus(self, sites=None, apps=None, gentle_mode=True):
-        """Start focus session with blocking."""
+    def start_focus(self, sites=None, apps=None, gentle_mode=True, interactive=True):
+        """Start focus session with blocking.
+
+        interactive=False (web/server) tells strict blockers to skip their confirm_action()
+        prompts, which would otherwise block the request thread on stdin forever.
+        """
         self.start_time = datetime.now()
         self.is_active = True
         self.is_gentle_mode = gentle_mode  # FIXED: Track the mode explicitly
+        self.interactive = interactive
         
         if sites:
             self.blocked_sites = sites
