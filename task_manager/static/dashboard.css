@@ -71,14 +71,15 @@
             --particle-color: rgba(0,255,156,0.3);
         }
         [data-theme="paper"] {
-            --bg-deep:#EDEBE7; --bg-base:#F6F5F2; --bg-surface:#FFFFFF; --bg-surface-raised:#FBFAF8;
-            --bg-overlay: rgba(246,245,242,0.92);
-            --border-default:#E0DDD7; --border-muted:#D1CDC5; --border-subtle:#E0DDD7;
-            --text-primary:#1C1C1E; --text-body:#2C2C2E; --text-secondary:#6B6B6F; --text-tertiary:#8A8A8E; --text-disabled:#A0A0A4;
-            --accent-info:#0066CC; --accent-info-strong:#004C99; --accent-info-mid:#0059B3;
-            --accent-success:#1A7F37; --accent-warning:#9A6700; --accent-danger:#CF222E;
-            --accent-ai:#8250DF; --accent-ai-strong:#6639B6; --accent-emerald:#1A7F37;
-            --particle-color: rgba(0,0,0,0.12);
+            /* Comfort-tuned: warm soft off-whites (no pure #FFF glare), AA-contrast text, visible borders. */
+            --bg-deep:#E7E4DD; --bg-base:#EFEDE7; --bg-surface:#FAF9F6; --bg-surface-raised:#F4F2EC;
+            --bg-overlay: rgba(239,237,231,0.92);
+            --border-default:#D8D4CB; --border-muted:#C7C2B7; --border-subtle:#DEDAD2;
+            --text-primary:#1B1B1D; --text-body:#33333A; --text-secondary:#57575B; --text-tertiary:#6E6E73; --text-disabled:#86868B;
+            --accent-info:#0B5FCC; --accent-info-strong:#004C99; --accent-info-mid:#0959BD;
+            --accent-success:#1A7F37; --accent-warning:#8A5A00; --accent-danger:#C7212C;
+            --accent-ai:#7A45D6; --accent-ai-strong:#6132B0; --accent-emerald:#1A7F37;
+            --particle-color: rgba(0,0,0,0.10);
         }
         [data-theme="slate"] {
             --bg-deep:#14171C; --bg-base:#1A1D23; --bg-surface:#22262E; --bg-surface-raised:#292D37;
@@ -355,7 +356,7 @@
             border-radius: 16px; padding: 24px; margin-bottom: 32px;
         }
         .section-label { 
-            font-size: 11px; font-weight: 700; color: var(--text-disabled); 
+            font-size: 11px; font-weight: 700; color: var(--text-secondary);
             letter-spacing: 2.5px; margin-bottom: 16px; text-transform: uppercase;
         }
         .flex-row { display: flex; gap: 16px; }
@@ -417,7 +418,7 @@
 
         /* Create Mission = right side panel, never overflows the viewport */
         .deploy-modal {
-            background: linear-gradient(180deg, var(--bg-primary), #0A0E13);
+            background: linear-gradient(180deg, var(--bg-surface), var(--bg-base));
             box-sizing: border-box;
             border-left: 1px solid var(--border-subtle);
             box-shadow: -24px 0 64px rgba(0, 0, 0, 0.6);
@@ -1827,7 +1828,7 @@
 
         /* ─── MISSION TYPE SWITCHER ──────────── */
         .mission-type-switcher {
-            display: flex; background: rgba(0,0,0,0.3); border-radius: 12px;
+            display: flex; background: color-mix(in srgb, var(--text-primary) 6%, transparent); border-radius: 12px;
             padding: 4px; margin-bottom: 24px; border: 1px solid color-mix(in srgb, var(--text-primary) 5%, transparent);
         }
         .type-btn {
