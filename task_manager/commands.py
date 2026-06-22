@@ -1198,8 +1198,8 @@ class TimeTracker:
         self.active_session = None
         self.start_time = None
         self.on_session_expired = None
-        self._load_state()
-    
+        self._load_state(quiet=True)   # silent at import — never print/crash on a stale session
+
     def _load_state(self, quiet: bool = False):
         """Load saved focus state from disk."""
         try:
@@ -1234,14 +1234,17 @@ class TimeTracker:
                         self.active_session = state['active_session']
                         self.start_time = time.time() - elapsed
                     else:
+                        # The session finished while the app was closed. Clear it. Only credit the
+                        # cycle / announce on a non-quiet (interactive) load — and never let a
+                        # bookkeeping helper crash a load that happens at import time.
                         if not quiet:
-                            print(f"⏰ Previous focus session expired.")
-                        
-                        # Increment cycle since it completed naturally while CLI was closed
-                        self.increment_cycle()
-                        
+                            print("⏰ Previous focus session expired.")
+                            try:
+                                self.increment_cycle()
+                            except Exception:
+                                pass
                         self._save_state({'active_session': None, 'start_time': None})
-                        if hasattr(self, 'on_session_expired') and self.on_session_expired:
+                        if getattr(self, 'on_session_expired', None):
                             self.on_session_expired()
                 else:
                     self.active_session = None
@@ -1290,9 +1293,12 @@ class TimeTracker:
         return 0
         
     def increment_cycle(self):
-        # We now use the unified _generate_dopamine for tracking
-        dopa = _generate_dopamine()
-        return dopa
+        # Unified dopamine tracking. Guarded: _generate_dopamine is defined later in the module,
+        # so any load triggered at import time must never crash here.
+        try:
+            return _generate_dopamine()
+        except Exception:
+            return {}
     
     def start_focus(self, task_id: int, task_title: str, task_notes: str = "", 
                     priority: str = "medium", minutes: int = 25, 
