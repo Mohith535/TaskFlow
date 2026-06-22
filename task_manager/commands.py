@@ -3490,6 +3490,66 @@ def reset_tasks() -> bool:
     return True
 
 
+def command_fresh_start(scope: str = "red") -> bool:
+    """A humane reset for 'I want to start again'.
+
+    Two intents, two very different psychological needs:
+      • scope='red' (default) — the user is overwhelmed by a wall of overdue red and wants the
+        WEIGHT gone, not the work. We clear the past-due deadline on every incomplete overdue
+        task: the board stops screaming, each task becomes a calm, undated 'someday' they
+        re-decide. Nothing is deleted; storage auto-backs up first; each change is logged to
+        edit_history (the mirror stays honest). Grounded in the Fresh Start Effect (Dai,
+        Milkman & Riis, 2014) + 'rescue, not punishment' — a clean slate motivates; a red wall
+        shames and breeds avoidance.
+      • scope='all' — a genuine clean sweep; routes to reset_tasks() (type-RESET confirmation).
+    """
+    R = Style.RESET_ALL
+    if scope == "all":
+        return reset_tasks()
+
+    tasks = storage.load_tasks()
+    now = datetime.now()
+    overdue = []
+    for t in tasks:
+        if t.completed or getattr(t, 'dropped_at', None) or getattr(t, 'offloaded_at', None):
+            continue
+        d = _parse_dt_any(getattr(t, 'deadline', None))
+        if not d:
+            continue
+        if d.tzinfo is not None:
+            d = d.replace(tzinfo=None)
+        if d < now:
+            overdue.append(t)
+
+    if not overdue:
+        Messenger.note("Nothing overdue — your board is already calm. Clean slate; start with one thing.")
+        return False
+
+    bar = Fore.CYAN + ("━" * 52) + R
+    print("\n" + bar)
+    print(f"{Fore.WHITE + Style.BRIGHT}  Fresh start — lift the weight, keep the work{R}")
+    print(bar)
+    print(f"  {Fore.WHITE}{len(overdue)} mission(s) are glowing red as overdue.{R}")
+    print(f"  {Fore.WHITE + Style.DIM}This clears their past-due deadlines so nothing shames you — the")
+    print(f"  tasks stay, undated, for you to re-decide when you're ready.{R}")
+    print(f"  {Fore.WHITE + Style.DIM}(Auto-backed up first. Nothing is deleted.){R}\n")
+    if get_valid_input(f"  Lift the red on {len(overdue)} task(s)? [y/N]: ", "").strip().lower() != 'y':
+        Messenger.info("Left exactly as it was. No changes.")
+        return False
+
+    for t in overdue:
+        old = t.deadline
+        t.deadline = None
+        t.deadline_type = None
+        t.reminder_time = None
+        t.reminder_time_2 = None
+        _record_edit(t, "deadline", old, None, reason_text="fresh start — lifted overdue", always=True)
+    storage.save_tasks(tasks)
+    Messenger.success(f"Cleared the red on {len(overdue)} task(s). The board is calm.")
+    Messenger.note("They're still here when you want them — just no longer overdue. Pick one to begin.")
+    return True
+
+
 def view_task(task_id: int) -> None:
     """View detailed MISSION BRIEF for a task with enrichment (E4)."""
     tasks = storage.load_tasks()

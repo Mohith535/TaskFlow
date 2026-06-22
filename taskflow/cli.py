@@ -60,6 +60,7 @@ from task_manager.commands import (
     clear_completed_tasks,
     summary,
     reset_tasks,
+    command_fresh_start,
     view_task,
     set_prime_target,
     render_timeline,
@@ -582,6 +583,10 @@ Examples:
                               help='Item number to toggle directly (skips the interactive menu)')
     
     # Doctor
+    fresh_parser = subparsers.add_parser('freshstart',
+        help='Calm the board: lift overdue red, keep the tasks. Use --all for a full wipe.')
+    fresh_parser.add_argument('--all', action='store_true',
+        help='Hard reset — delete ALL tasks (asks you to type RESET).')
     doctor_parser = subparsers.add_parser('doctor', help='Check system health')
     doctor_parser.add_argument('--repair', action='store_true',
                                help='Fix non-standard durations + offer to remove orphan files (backs up tasks first)')
@@ -848,6 +853,9 @@ def main():
         
         elif args.command == 'reset':
             reset_tasks()
+
+        elif args.command == 'freshstart':
+            command_fresh_start('all' if getattr(args, 'all', False) else 'red')
         
         elif args.command == 'summary':
             summary()
