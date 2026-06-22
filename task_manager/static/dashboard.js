@@ -3097,17 +3097,17 @@
         try {
             const d = await (await fetch('/api/focus/preflight')).json();
             if (d.is_admin) {
-                note.innerHTML = '✅ Running as Administrator — strict writes the Windows hosts file. '
-                    + 'If a site still opens, it\'s the <b>browser</b>, not TaskFlow — two fixes: '
-                    + '(1) fully <b>quit &amp; reopen your browser</b> (open tabs reuse cached connections); '
-                    + '(2) turn <b>OFF Secure DNS / DoH</b> in the browser (it bypasses the hosts file). '
-                    + 'Proof the block is live: run <code>ping youtube.com</code> — it should reply from <b>127.0.0.1</b>.';
+                note.innerHTML = '✅ Running as Administrator — full strict: a local filter proxy blocks '
+                    + 'these sites in <b>every browser</b> (works even with Secure DNS — no settings to change), '
+                    + 'plus hosts-level + app blocking. If a site was already open, just refresh the tab.';
                 note.style.background = 'color-mix(in srgb, var(--accent-success) 8%, transparent)';
                 note.style.borderColor = 'color-mix(in srgb, var(--accent-success) 25%, transparent)';
             } else {
-                note.innerHTML = "⚠ <b>Not running as Administrator</b> — strict can't block sites/apps this session (editing the hosts file needs elevation). Close TaskFlow and relaunch from an <b>Administrator</b> terminal to enforce blocking. The session still runs; it just won't block.";
-                note.style.background = 'color-mix(in srgb, var(--accent-warning) 8%, transparent)';
-                note.style.borderColor = 'color-mix(in srgb, var(--accent-warning) 22%, transparent)';
+                note.innerHTML = "ℹ️ Site blocking works <b>without admin</b> — TaskFlow routes your browser through a "
+                    + "local filter for the session (no DNS settings to touch). Running as <b>Administrator</b> additionally "
+                    + "lets it close distracting <b>desktop apps</b>. If a site was already open, refresh the tab.";
+                note.style.background = 'color-mix(in srgb, var(--accent-info) 8%, transparent)';
+                note.style.borderColor = 'color-mix(in srgb, var(--accent-info) 22%, transparent)';
             }
         } catch (e) {}
     }
@@ -3125,7 +3125,7 @@
                                     blocked_items: (mode === 'strict' && sites.length) ? { sites } : null });
                 if (typeof startSimulation === 'function') startSimulation('focus');
                 if (mode === 'strict')
-                    showToast("Strict armed. If a site still loads: fully reopen your browser + turn off Secure DNS (DoH). Verify with: ping youtube.com → 127.0.0.1", "var(--amber)");
+                    showToast("Strict armed — sites are filtered in every browser (no DNS setup needed). If one was already open, refresh the tab.", "var(--blue)");
                 else
                     showToast(`Focus initiated · ${minutes}m.`, "var(--blue)");
             } else {

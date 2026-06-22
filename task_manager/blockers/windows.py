@@ -48,20 +48,42 @@ class WindowsBlocker(BaseBlocker):
             return False
     
     def block_websites(self, sites):
-        """Actually block websites on Windows using hosts file."""
+        """Block websites — primarily via a local filtering proxy (DoH-proof, no admin), and
+        additionally via the hosts file when elevated (covers non-proxy-aware apps)."""
         if not sites:
             return True
-        
-        # If not admin, fall back to gentle mode
+
+        # 1) LOCAL FILTERING PROXY — the reliable browser block. Needs no admin and isn't
+        #    bypassed by Secure DNS / DoH (it matches on the destination hostname, not DNS).
+        proxy_ok = False
+        try:
+            from .proxy_filter import ProxyFilter
+            if not getattr(self, "_proxy", None):
+                self._proxy = ProxyFilter()
+            proxy_ok = self._proxy.start(sites)
+            if proxy_ok:
+                print(f"   🛰️  Local filter proxy active — blocking {len(sites)} site(s) in all "
+                      f"browsers (works through Secure DNS, no admin needed).")
+        except Exception as e:
+            print(f"   ⚠️  Proxy filter could not start: {e}")
+
+        self.blocked_sites = sites
+        self.is_active = True
+        self.is_gentle_mode = False
+
+        # 2) HOSTS FILE — bonus coverage for apps that ignore the system proxy. Needs admin.
         if not self.is_admin:
-            print("\n⚠️  WINDOWS GENTLE MODE (Admin required for strict blocking)")
-            print("   Showing reminders instead of actual blocking...")
+            if proxy_ok:
+                print("   (OS hosts-level block skipped — needs admin; the proxy already blocks browsers.)")
+                return True
+            # No proxy available (e.g. non-Windows) and no admin → reminders only.
+            print("\n⚠️  WINDOWS GENTLE MODE (Admin required for hosts-level blocking)")
             self.is_gentle_mode = True
             return self._gentle_block_websites(sites)
-        
+
         print(f"\n🚫 WINDOWS STRICT BLOCKING ACTIVATED")
         print(f"   Blocking {len(sites)} websites...")
-        
+
         # Confirm before touching system files — but ONLY when interactive. From the web/server
         # (interactive=False) the user already chose strict in the UI; prompting here would block
         # the request thread on stdin forever (the strict-from-web hang).
@@ -157,7 +179,10 @@ class WindowsBlocker(BaseBlocker):
             return True
             
         except PermissionError:
-            print("❌ Permission denied! Could not write to hosts file.")
+            print("⚠️  Could not write the hosts file (antivirus/permissions).")
+            if proxy_ok:
+                print("   The proxy is still blocking browsers, so strict stays active.")
+                return True
             self.is_gentle_mode = True
             return self._gentle_block_websites(sites)
     
@@ -175,12 +200,20 @@ class WindowsBlocker(BaseBlocker):
         return True
     
     def unblock_websites(self):
-        """Remove our blocking entries from hosts file."""
+        """Stop the filter proxy and remove our hosts-file entries."""
         import shutil
         print("🔄 Removing blocking for all websites...")
-        
+
+        # Always tear down the proxy + restore the system proxy setting first.
+        try:
+            if getattr(self, "_proxy", None):
+                self._proxy.stop()
+                print("   🛰️  Filter proxy stopped; system proxy restored.")
+        except Exception as e:
+            print(f"   ⚠️  Proxy cleanup issue: {e}")
+
         if not self.is_admin:
-            print("⚠️  Not running as admin - limited cleanup capability")
+            print("⚠️  Not running as admin - limited hosts cleanup capability")
             # We continue anyway to see if we can read and clean it if possible
         
         try:

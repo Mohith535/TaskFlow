@@ -1376,6 +1376,13 @@ if __name__ == "__main__":
     import sys
     
     port = 18083
+    # Safety net: if a previous run died (taskkill/crash) with the Windows system proxy still
+    # pointed at our now-dead local filter, restore the user's original proxy before doing anything.
+    try:
+        from task_manager.blockers.proxy_filter import ProxyFilter
+        ProxyFilter.rollback_if_stale()
+    except Exception:
+        pass
     print(f"\nStarting TaskFlow Web UI Server on port {port}...")
     srv = start_server(port)
     
