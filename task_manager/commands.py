@@ -3788,9 +3788,9 @@ def list_ids() -> None:
 # TIME MANAGEMENT COMMANDS (NEW for v2.0)
 # =========================================================
 
-def focus_task(task_id: int, minutes: int = 25, 
+def focus_task(task_id: int, minutes: int = 25,
                block_sites: list = None, block_apps: list = None,
-               mode: str = "gentle", force: bool = False):
+               mode: str = "gentle", force: bool = False, open_ui: bool = True):
     """Start focus on a task with optional distraction blocking.
     
     Args:
@@ -3887,7 +3887,8 @@ def focus_task(task_id: int, minutes: int = 25,
                     except Exception as e:
                         print(f"   ⚠️  Background auto-unblocker failed to start: {e}")
                         
-                open_web_ui(force=False)
+                if open_ui:
+                    open_web_ui(force=False)   # CLI path only; the server passes open_ui=False
                 return True
             return False
     

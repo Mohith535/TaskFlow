@@ -846,15 +846,22 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
             mode = data.get("mode", "gentle")
             
             def run_focus():
+                import sys, io
+                # Import locally: other do_POST branches do `from task_manager import commands`,
+                # which makes `commands` a function-local for ALL of do_POST — so the module-level
+                # `commands` is shadowed and unbound on this path. (This was the real focus bug:
+                # focus_task never ran, no session persisted, overlay died at the first poll.)
+                from task_manager import commands as _cmds
+                original = sys.stdout
                 try:
-                    import sys, io
-                    # Mask stdout so it doesn't spam the daemon server logs
-                    original = sys.stdout
-                    sys.stdout = io.StringIO()
-                    commands.focus_task(task_id=task_id, minutes=minutes, mode=mode, force=True)
-                    sys.stdout = original
+                    sys.stdout = io.StringIO()   # keep focus_task's prints out of the server log
+                    # open_ui=False: we ARE the web server — never re-launch the dashboard here.
+                    _cmds.focus_task(task_id=task_id, minutes=minutes, mode=mode,
+                                     force=True, open_ui=False)
                 except Exception as e:
-                    pass
+                    sys.stderr.write(f"[focus/start] {e}\n")
+                finally:
+                    sys.stdout = original        # always restore — never leave server stdout dead
             threading.Thread(target=run_focus, daemon=True).start()
             self.send_response(200)
             self.end_headers_json()

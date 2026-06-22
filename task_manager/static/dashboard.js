@@ -3315,7 +3315,9 @@
     let focusStatusInterval = null;
     let focusDefenseInterval = null;
     let currentFocusMinutesLeft = 0;
+    let currentFocusSecondsLeft = 0;
     let totalFocusSecondsInitial = 0;
+    let focusLocalActive = false;   // this client owns a running countdown (authoritative for the UI)
     let deflections = 0;
     let isPaused = false;
     let activeBlockedSites = [];
@@ -3335,7 +3337,12 @@
                     }
                     activateFocusLock(data);
                 } else {
-                    if (focusTickInterval) deactivateFocusLock();
+                    // Server reports no active session. Do NOT tear down a locally-running
+                    // countdown — that was the bug: the start-race (poll fires before the start
+                    // thread persists) or a transient read killed the overlay ~5s in and it never
+                    // came back. A session ends only via its own timer (completeFocusSession) or
+                    // an explicit abort — both clear focusLocalActive.
+                    if (focusTickInterval && !focusLocalActive) deactivateFocusLock();
                 }
             }
         } catch (e) { console.error("Focus sync error:", e); }
@@ -3393,6 +3400,7 @@
             startDefenseFeed();
 
             document.addEventListener('keydown', focusKeydownHandler);
+            focusLocalActive = true;   // this client now owns the running countdown
         }
     }
 
@@ -3489,6 +3497,7 @@
         if (focusStatusInterval) clearInterval(focusStatusInterval);
         if (focusDefenseInterval) clearInterval(focusDefenseInterval);
         focusTickInterval = null; focusStatusInterval = null; focusDefenseInterval = null;
+        focusLocalActive = false;
         isPaused = false;
         document.getElementById('focus-progress-bar').style.width = '0%';
         document.getElementById('focus-overlay').style.boxShadow = 'none';
@@ -3497,7 +3506,8 @@
     }
 
     function updateFocusTimerDisplay(m, s = 0) {
-        currentFocusMinutesLeft = m; 
+        currentFocusMinutesLeft = m;
+        currentFocusSecondsLeft = s;   // was never set → completion math produced NaN
         const timerEl = document.getElementById('focus-timer');
         if (timerEl) {
             timerEl.innerText = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
