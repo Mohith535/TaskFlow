@@ -588,6 +588,12 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
                 commands.end_focus(force=True)        # graceful end (blocker cleanup, queue flush)
             except Exception:
                 pass
+            # ALWAYS tear down blocking, even if the session was already cleared (expiry/poll race)
+            # so end_focus skipped it — this is what left the proxy/hosts stuck after a focus ended.
+            try:
+                commands.focus_manager.deactivate_blocking()
+            except Exception:
+                pass
             # GUARANTEE the session is gone in memory AND on disk, regardless of what end_focus
             # did — otherwise check_focus() reloads the old session and the overlay resurrects.
             try:
@@ -659,6 +665,11 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
                         commands.time_tracker.end_focus()
                         commands.time_tracker._save_state({'active_session': None, 'start_time': None})
                     except: pass
+                # ALWAYS release blocking on complete, regardless of session state (expiry race).
+                try:
+                    commands.focus_manager.deactivate_blocking()
+                except Exception:
+                    pass
 
                 self.send_response(200)
                 self.end_headers_json()

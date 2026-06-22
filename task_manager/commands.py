@@ -1023,10 +1023,13 @@ class FocusManager:
         self.focus_start_time = datetime.now()
         
         # Start focus timer (sync state to disk)
-        if not time_tracker.start_focus(task_id, task_title, task_notes, 
+        if not time_tracker.start_focus(task_id, task_title, task_notes,
                                         priority, minutes, sites, mode):
             return False
-        
+        # When the timer expires server-side (check_focus clears the session), tear down blocking
+        # too — otherwise the proxy/hosts linger after a session that ran to completion.
+        time_tracker.on_session_expired = self.deactivate_blocking
+
         # Start blocking if requested
         if self.blocker and (sites or apps):
             print(f"\n🎯 Starting Focus Mode: {mode.upper()}")
@@ -1086,7 +1089,24 @@ class FocusManager:
         
         self.focus_start_time = None
         return success
-    
+
+    def deactivate_blocking(self):
+        """Unconditionally tear down ANY active blocking (proxy + hosts), independent of whether
+        time_tracker still has an active session. Idempotent — safe to call from abort, complete,
+        or the timer-expiry hook. This fixes the leak where a session cleared by check_focus()
+        expiry (or a poll) left the proxy/hosts in place because nothing called blocker.end_focus."""
+        try:
+            if self.blocker and hasattr(self.blocker, 'end_focus'):
+                self.blocker.end_focus()
+        except Exception:
+            pass
+        # Belt-and-suspenders: heal a stranded system proxy even if the blocker instance is gone.
+        try:
+            from task_manager.blockers.proxy_filter import ProxyFilter
+            ProxyFilter.rollback_if_stale()
+        except Exception:
+            pass
+
     def get_focus_status(self):
         """Get detailed focus status including blocking."""
         focus_status = time_tracker.check_focus()
@@ -1356,13 +1376,18 @@ class TimeTracker:
         
         if remaining <= 0:
             session = self.active_session.copy()
-            if hasattr(self, 'on_session_expired') and self.on_session_expired:
-                self.on_session_expired()
-            else:
-                self.increment_cycle()
-                self._save_state({'active_session': None, 'start_time': None})
-                self.active_session = None
-                self.start_time = None
+            # Clear the session AND tear down any blocking. Previously this was either/or — when
+            # the expiry hook was set it skipped clearing, so the session lingered; and the plain
+            # path never told the blocker, so the proxy/hosts stayed up after a session ran out.
+            self.increment_cycle()
+            self._save_state({'active_session': None, 'start_time': None})
+            self.active_session = None
+            self.start_time = None
+            if getattr(self, 'on_session_expired', None):
+                try:
+                    self.on_session_expired()
+                except Exception:
+                    pass
             return {'status': 'completed', 'session': session, 'cycles_completed': self.get_cycles()}
 
         return {
