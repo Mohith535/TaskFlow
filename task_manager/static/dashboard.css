@@ -1926,6 +1926,27 @@
         .path-cand-btn:hover { background: color-mix(in srgb, var(--accent-success) 20%, transparent); }
         .path-plan-btn { width: 100%; margin-top: 12px; background: color-mix(in srgb, var(--accent-ai) 10%, transparent); border: 1px solid color-mix(in srgb, var(--accent-ai) 25%, transparent); color: var(--ai-purple); border-radius: 8px; padding: 10px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; transition: background 150ms ease-out; }
         .path-plan-btn:hover { background: color-mix(in srgb, var(--accent-ai) 18%, transparent); }
+
+        /* ── Focus Setup modal (duration · gentle/strict · sites) ── */
+        .fs-label { font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-secondary); margin: 16px 0 8px; font-weight: 600; }
+        .fs-row { display: flex; gap: 8px; flex-wrap: wrap; }
+        .fs-pill { background: transparent; border: 1px solid var(--border-neutral); color: var(--text-muted); border-radius: 8px; padding: 7px 14px; font-size: 13px; cursor: pointer; font-family: var(--font-mono); transition: all .14s; }
+        .fs-pill:hover { border-color: var(--text-disabled); color: var(--text-body); }
+        .fs-pill.selected { background: color-mix(in srgb, var(--accent-info) 12%, transparent); border-color: var(--blue); color: var(--blue); }
+        .fs-modes { display: flex; gap: 10px; }
+        .fs-mode { flex: 1; text-align: left; background: transparent; border: 1px solid var(--border-neutral); border-radius: 10px; padding: 11px 13px; cursor: pointer; transition: all .14s; }
+        .fs-mode b { display: block; color: var(--text-body); font-size: 13px; margin-bottom: 3px; }
+        .fs-mode span { font-size: 11px; color: var(--text-tertiary); line-height: 1.4; }
+        .fs-mode:hover { border-color: var(--text-disabled); }
+        .fs-mode.selected { border-color: var(--blue); background: color-mix(in srgb, var(--accent-info) 8%, transparent); }
+        .fs-mode.selected[data-mode="strict"] { border-color: var(--red); background: color-mix(in srgb, var(--accent-danger) 8%, transparent); }
+        .fs-sites { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+        .fs-sites:empty { display: none; }
+        .fs-chip { display: inline-flex; align-items: center; gap: 6px; background: color-mix(in srgb, var(--accent-danger) 10%, transparent); border: 1px solid color-mix(in srgb, var(--accent-danger) 25%, transparent); color: var(--red); border-radius: 6px; padding: 3px 4px 3px 9px; font-size: 11px; font-family: var(--font-mono); }
+        .fs-chip button { background: none; border: none; color: var(--red); cursor: pointer; font-size: 14px; line-height: 1; padding: 0 3px; }
+        .fs-site-input { width: 100%; background: var(--bg-primary); border: 1px solid var(--border-neutral); border-radius: 8px; padding: 9px 12px; color: var(--text-hero); font-size: 13px; outline: none; }
+        .fs-site-input:focus { border-color: var(--blue); }
+        .fs-note { font-size: 11px; color: var(--text-tertiary); line-height: 1.5; margin-top: 10px; background: color-mix(in srgb, var(--accent-warning) 8%, transparent); border: 1px solid color-mix(in srgb, var(--accent-warning) 22%, transparent); border-radius: 8px; padding: 9px 11px; }
         .dc-dur-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
         .dc-dur { background: var(--bg-surface); border: 1px solid var(--border-subtle); color: var(--text-secondary); border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; font-family: var(--font-mono); }
         .dc-dur:hover { border-color: var(--border-neutral); color: var(--text-primary); }

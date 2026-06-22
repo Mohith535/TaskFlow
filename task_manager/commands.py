@@ -3818,7 +3818,9 @@ def focus_task(task_id: int, minutes: int = 25,
                 storage.save_tasks(tasks)
                 
             # --- BLOCKLIST INTEGRATION ---
-            if (mode in ["strict", "gentle"]) and not block_sites:
+            # `force` = non-interactive (the web server / scripts). NEVER call input() then, or the
+            # request thread blocks on stdin and the session never starts (real bug for web strict).
+            if (mode in ["strict", "gentle"]) and not block_sites and not force:
                 saved_sites = blocklist_manager.load_sites()
                 if saved_sites:
                     print("\n🛡️  Stored Blocklist:")
@@ -3838,7 +3840,7 @@ def focus_task(task_id: int, minutes: int = 25,
                         if selected_indices:
                             block_sites = [saved_sites[i] for i in selected_indices]
             
-            if block_sites:
+            if block_sites and not force:
                 saved_sites = blocklist_manager.load_sites()
                 new_sites = [s for s in block_sites if s not in saved_sites]
                 if new_sites:

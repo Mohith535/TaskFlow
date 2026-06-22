@@ -164,6 +164,40 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         </div>
     </div>
 
+    <!-- Focus Setup Modal (choose duration + gentle/strict + sites) -->
+    <div id="focus-setup-overlay" class="abort-modal">
+        <div class="abort-modal-content" style="max-width:470px; text-align:left;">
+            <h2 style="color:var(--text-hero); font-size:20px; margin-bottom:2px;">Deploy Focus</h2>
+            <div id="fs-task-title" style="color:var(--text-muted); font-size:13px; margin-bottom:18px;">Task</div>
+
+            <div class="fs-label">Duration</div>
+            <div class="fs-row" id="fs-duration">
+                <button type="button" class="fs-pill" data-min="15">15m</button>
+                <button type="button" class="fs-pill selected" data-min="25">25m</button>
+                <button type="button" class="fs-pill" data-min="45">45m</button>
+                <button type="button" class="fs-pill" data-min="60">60m</button>
+            </div>
+
+            <div class="fs-label">Mode</div>
+            <div class="fs-modes" id="fs-modes">
+                <button type="button" class="fs-mode selected" data-mode="gentle"><b>🔔 Gentle</b><span>Visual lockdown + reminders. No system changes.</span></button>
+                <button type="button" class="fs-mode" data-mode="strict"><b>🚫 Strict</b><span>Blocks sites &amp; apps at the OS level.</span></button>
+            </div>
+
+            <div id="fs-strict-panel" style="display:none;">
+                <div class="fs-label">Sites to block</div>
+                <div id="fs-sites" class="fs-sites"></div>
+                <input id="fs-site-input" class="fs-site-input" placeholder="add a site — e.g. youtube.com, then press Enter" autocomplete="off">
+                <div class="fs-note">⚠ Strict mode edits your hosts file and closes apps — it only takes effect when TaskFlow is running as <b>Administrator</b>. Without admin it safely falls back to gentle reminders.</div>
+            </div>
+
+            <div style="display:flex; gap:12px; margin-top:22px;">
+                <button onclick="closeFocusSetup()" class="btn-modal-primary" style="flex:1; background:transparent; border:1px solid var(--border-neutral); color:var(--text-muted);">Cancel</button>
+                <button onclick="beginFocus()" class="btn-modal-primary" style="flex:1;">Begin Focus →</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Abort Modal -->
     <div id="abort-modal" class="abort-modal">
         <div class="abort-modal-content">

@@ -3065,29 +3065,80 @@
         setTimeout(() => startFocus(taskId), 150);
     }
 
+    // startFocus now opens a setup modal (duration · gentle/strict · sites) instead of
+    // hard-launching a gentle 25m session. beginFocus() does the actual launch.
+    let _focusSetup = null;
     async function startFocus(taskId) {
         const task = allTasks.find(t => t.id === taskId);
         if (!task) return;
-        
-        try {
-            const res = await fetch('/api/focus/start', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ task_id: taskId, minutes: 25, mode: 'gentle' })
-            });
-            
-            if (res.ok) {
-                closeModal();
-                setSystemState('deep-work');
-                // Immediate lock for responsiveness
-                activateFocusLock({ focus_active: true, task_title: task.title, remaining_minutes: 25, remaining_seconds: 0 });
-                if (typeof startSimulation === 'function') startSimulation('focus');
-                showToast("Focus sequence initiated.", "var(--blue)");
-            } else {
-                showToast("Failed to initiate focus sequence.", "var(--red)");
-            }
-        } catch(e) { console.error(e); }
+        closeModal();   // close the mission-brief modal if it's open
+        _focusSetup = { taskId, title: task.title, minutes: 25, mode: 'gentle', sites: [], saved: [] };
+        document.getElementById('fs-task-title').innerText = task.title;
+        document.querySelectorAll('#fs-duration .fs-pill').forEach(p => p.classList.toggle('selected', p.dataset.min === '25'));
+        document.querySelectorAll('#fs-modes .fs-mode').forEach(m => m.classList.toggle('selected', m.dataset.mode === 'gentle'));
+        document.getElementById('fs-strict-panel').style.display = 'none';
+        _renderFsSites();
+        try { const d = await (await fetch('/api/blocklist')).json(); _focusSetup.saved = d.blocklist || []; } catch (e) {}
+        document.getElementById('focus-setup-overlay').classList.add('active');
     }
+    window.closeFocusSetup = () => { document.getElementById('focus-setup-overlay').classList.remove('active'); };
+    function _renderFsSites() {
+        const el = document.getElementById('fs-sites'); if (!el || !_focusSetup) return;
+        el.innerHTML = (_focusSetup.sites || []).map((s, i) =>
+            `<span class="fs-chip">${escapeHtml(s)}<button onclick="_fsRemoveSite(${i})" title="remove">×</button></span>`).join('');
+    }
+    window._fsRemoveSite = (i) => { if (_focusSetup) { _focusSetup.sites.splice(i, 1); _renderFsSites(); } };
+    function _fsAddSite(raw) {
+        const s = (raw || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+        if (s && _focusSetup && !_focusSetup.sites.includes(s)) { _focusSetup.sites.push(s); _renderFsSites(); }
+    }
+    window.beginFocus = async () => {
+        if (!_focusSetup) return;
+        const { taskId, title, minutes, mode, sites } = _focusSetup;
+        const body = { task_id: taskId, minutes, mode };
+        if (mode === 'strict' && sites.length) body.block_sites = sites;
+        try {
+            const res = await fetch('/api/focus/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            if (res.ok) {
+                closeFocusSetup();
+                setSystemState('deep-work');
+                activateFocusLock({ focus_active: true, task_title: title, remaining_minutes: minutes, remaining_seconds: 0,
+                                    blocked_items: (mode === 'strict' && sites.length) ? { sites } : null });
+                if (typeof startSimulation === 'function') startSimulation('focus');
+                if (mode === 'strict')
+                    showToast("Strict mode — site/app blocking only applies if TaskFlow runs as Administrator.", "var(--amber)");
+                else
+                    showToast(`Focus initiated · ${minutes}m.`, "var(--blue)");
+            } else {
+                showToast("Failed to initiate focus.", "var(--red)");
+            }
+        } catch (e) { console.error(e); }
+    };
+    // Focus-setup interactions (attached once; the modal markup is static)
+    (function initFocusSetup() {
+        const dur = document.getElementById('fs-duration');
+        if (dur) dur.addEventListener('click', e => {
+            const b = e.target.closest('.fs-pill'); if (!b || !_focusSetup) return;
+            _focusSetup.minutes = parseInt(b.dataset.min, 10) || 25;
+            dur.querySelectorAll('.fs-pill').forEach(p => p.classList.toggle('selected', p === b));
+        });
+        const modes = document.getElementById('fs-modes');
+        if (modes) modes.addEventListener('click', e => {
+            const b = e.target.closest('.fs-mode'); if (!b || !_focusSetup) return;
+            _focusSetup.mode = b.dataset.mode;
+            modes.querySelectorAll('.fs-mode').forEach(m => m.classList.toggle('selected', m === b));
+            const strict = _focusSetup.mode === 'strict';
+            document.getElementById('fs-strict-panel').style.display = strict ? 'block' : 'none';
+            if (strict && !_focusSetup.sites.length && (_focusSetup.saved || []).length) {
+                _focusSetup.sites = [..._focusSetup.saved];   // prefill from saved blocklist
+                _renderFsSites();
+            }
+        });
+        const inp = document.getElementById('fs-site-input');
+        if (inp) inp.addEventListener('keydown', e => {
+            if (e.key === 'Enter') { e.preventDefault(); _fsAddSite(inp.value); inp.value = ''; }
+        });
+    })();
 
     function endFocus(taskId) {
         document.getElementById('focus-overlay').classList.remove('active');

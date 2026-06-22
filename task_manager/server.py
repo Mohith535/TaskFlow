@@ -844,7 +844,9 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
                 
             minutes = int(data.get("minutes", 25))
             mode = data.get("mode", "gentle")
-            
+            block_sites = data.get("block_sites") or None      # strict-mode site list from the UI
+            block_apps = data.get("block_apps") or None
+
             def run_focus():
                 import sys, io
                 # Import locally: other do_POST branches do `from task_manager import commands`,
@@ -857,6 +859,7 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
                     sys.stdout = io.StringIO()   # keep focus_task's prints out of the server log
                     # open_ui=False: we ARE the web server — never re-launch the dashboard here.
                     _cmds.focus_task(task_id=task_id, minutes=minutes, mode=mode,
+                                     block_sites=block_sites, block_apps=block_apps,
                                      force=True, open_ui=False)
                 except Exception as e:
                     sys.stderr.write(f"[focus/start] {e}\n")
