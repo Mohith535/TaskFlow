@@ -2288,6 +2288,21 @@ def kill_web_ui():
                 print("✅ No active server processes found.")
                 return True
 
+        # We just killed whatever held the port. If that server had set the system proxy / hosts
+        # for a focus session, it died without cleanup (taskkill skips atexit) — so heal both NOW,
+        # otherwise the user's browsing stays broken until the next launch.
+        try:
+            from task_manager.blockers.proxy_filter import ProxyFilter
+            ProxyFilter.rollback_if_stale()
+        except Exception:
+            pass
+        try:
+            if sys.platform == "win32":
+                from task_manager.blockers.windows import clear_stale_taskflow_hosts
+                clear_stale_taskflow_hosts()
+        except Exception:
+            pass
+
         # Wait up to 3s for the port to actually be released, then report HONESTLY.
         for _ in range(6):
             time.sleep(0.5)
