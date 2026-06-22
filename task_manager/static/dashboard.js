@@ -3097,7 +3097,11 @@
         try {
             const d = await (await fetch('/api/focus/preflight')).json();
             if (d.is_admin) {
-                note.innerHTML = '✅ Running as Administrator — strict will actually block these sites &amp; apps at the OS level.';
+                note.innerHTML = '✅ Running as Administrator — strict writes the Windows hosts file. '
+                    + 'If a site still opens, it\'s the <b>browser</b>, not TaskFlow — two fixes: '
+                    + '(1) fully <b>quit &amp; reopen your browser</b> (open tabs reuse cached connections); '
+                    + '(2) turn <b>OFF Secure DNS / DoH</b> in the browser (it bypasses the hosts file). '
+                    + 'Proof the block is live: run <code>ping youtube.com</code> — it should reply from <b>127.0.0.1</b>.';
                 note.style.background = 'color-mix(in srgb, var(--accent-success) 8%, transparent)';
                 note.style.borderColor = 'color-mix(in srgb, var(--accent-success) 25%, transparent)';
             } else {
@@ -3121,7 +3125,7 @@
                                     blocked_items: (mode === 'strict' && sites.length) ? { sites } : null });
                 if (typeof startSimulation === 'function') startSimulation('focus');
                 if (mode === 'strict')
-                    showToast("Strict mode — site/app blocking only applies if TaskFlow runs as Administrator.", "var(--amber)");
+                    showToast("Strict armed. If a site still loads: fully reopen your browser + turn off Secure DNS (DoH). Verify with: ping youtube.com → 127.0.0.1", "var(--amber)");
                 else
                     showToast(`Focus initiated · ${minutes}m.`, "var(--blue)");
             } else {
