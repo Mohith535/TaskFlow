@@ -442,13 +442,17 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         <div id="view-dashboard" class="view-content">
             <div style="max-width: 800px; margin: 0 auto; width: 100%;">
                 
-                <!-- 1. AI INPUT -->
-                <div class="ai-zone" style="margin-top: 24px; text-align: center; border: 1px solid color-mix(in srgb, var(--accent-ai) 30%, transparent); box-shadow: 0 0 40px color-mix(in srgb, var(--accent-ai) 10%, transparent);">
-                    <div style="font-size: 12px; font-weight: 700; color: var(--ai-purple); margin-bottom: 20px; letter-spacing: 2px;">INTELLIGENCE PROTOCOL</div>
-                    <div class="ai-input-wrap" style="background: rgba(0,0,0,0.2); justify-content: center; padding: 4px 16px;">
-                        <span style="color:var(--ai-purple); font-size:20px;">✦</span>
-                        <input type="text" id="ai-input" class="ai-input" placeholder="What's the next objective?" style="text-align: center; font-size: 16px; padding: 12px;">
-                        <button class="btn-execute" id="btn-execute" style="background: color-mix(in srgb, var(--accent-ai) 10%, transparent); color: var(--ai-purple); border-color: color-mix(in srgb, var(--accent-ai) 30%, transparent);">SYNTHESIZE</button>
+                <!-- INTELLIGENCE SNAPSHOT — live behavioral signal, zero LLM required -->
+                <div class="ai-zone" style="margin-top: 24px; border: 1px solid color-mix(in srgb, var(--accent-ai) 30%, transparent); box-shadow: 0 0 40px color-mix(in srgb, var(--accent-ai) 10%, transparent);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+                        <div style="font-size:12px; font-weight:700; color:var(--ai-purple); letter-spacing:2px;">✦ INTELLIGENCE SNAPSHOT</div>
+                        <button onclick="switchView('ai'); loadIntelligence().catch(console.error);"
+                            style="background:transparent; border:none; color:var(--ai-purple); font-size:11px; cursor:pointer; opacity:0.7; letter-spacing:1px; font-family:'DM Mono',monospace; padding:4px 8px;">
+                            → FULL FEED
+                        </button>
+                    </div>
+                    <div id="cc-intel-snapshot" style="font-size:13px; color:var(--text-muted); line-height:1.6;">
+                        <span style="color:var(--ai-purple); opacity:0.4;">Analyzing behavioral patterns…</span>
                     </div>
                 </div>
 
@@ -514,7 +518,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                             </div>
                             <div style="text-align: right;">
                                 <div style="font-size: 10px; color: var(--text-disabled); margin-bottom: 8px;">FOCUS HRS</div>
-                                <div style="font-size: 20px; font-weight: 700; color: var(--blue); font-family: var(--font-mono); line-height: 1;">0</div>
+                                <div id="cc-focus-hrs" style="font-size: 20px; font-weight: 700; color: var(--blue); font-family: var(--font-mono); line-height: 1;">—</div>
                             </div>
                         </div>
                         <!-- Phase 1: Overdue + Deferred row -->

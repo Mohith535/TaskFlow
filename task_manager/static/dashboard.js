@@ -575,6 +575,7 @@
             updateControlCenter();
             renderTaskList();
             renderTimeline();
+            loadDashboardIntelligence().catch(console.error);
         } catch(e) {
             console.error("Critical: Task Cascade Engine Failed", e);
             showToast('Cascade Error: ' + e.message, 'var(--red)');
@@ -984,11 +985,48 @@
         const highPriority = activeTasks.filter(t => normalizePriority(t.priority) === 'high');
         const insight = document.getElementById('cc-insight');
         if (insight && highPriority.length > 0) {
-            insight.textContent = `CRITICAL: ${highPriority.length} high-threat missions require immediate execution.`;
+            insight.textContent = `CRITICAL: ${highPriority.length} high-priority missions require immediate execution.`;
             insight.style.color = "var(--red)";
         } else if (insight) {
             insight.textContent = "System stable. High-priority execution recommended to maintain optimal momentum.";
             insight.style.color = "var(--text-body)";
+        }
+
+        // ── FOCUS HRS (sum focus_total_minutes from all tasks) ──
+        const focusEl = document.getElementById('cc-focus-hrs');
+        if (focusEl) {
+            const totalMins = allTasks.reduce((s, t) => s + (t.focus_total_minutes || 0), 0);
+            if (totalMins === 0) focusEl.textContent = '—';
+            else if (totalMins < 60) focusEl.textContent = `${totalMins}m`;
+            else focusEl.textContent = `${(totalMins / 60).toFixed(1)}h`;
+        }
+    }
+
+    async function loadDashboardIntelligence() {
+        const snap = document.getElementById('cc-intel-snapshot');
+        const insightEl = document.getElementById('cc-insight');
+        try {
+            const d = await (await fetch('/api/intelligence')).json();
+            const items = (d.insights || []).filter(it => it && it.text);
+            if (!items.length) {
+                if (snap) snap.innerHTML = `<span style="color:var(--text-disabled); font-size:12px;">Complete a few sessions and tasks — behavioral patterns will surface here automatically.</span>`;
+                return;
+            }
+            const colors = { pattern: 'var(--amber)', estimate: 'var(--blue)', rhythm: 'var(--ai-purple)', momentum: 'var(--green)', nudge: 'var(--text-disabled)' };
+            const top = items[0];
+            const c = colors[top.kind] || 'var(--ai-purple)';
+            if (snap) snap.innerHTML = items.slice(0, 2).map(it => {
+                const ic = colors[it.kind] || 'var(--ai-purple)';
+                return `<div style="padding:10px 14px; border-left:2px solid ${ic}; background:color-mix(in srgb, var(--text-primary) 2%, transparent); border-radius:0 8px 8px 0; margin-bottom:8px; font-size:12px; color:var(--text-body); line-height:1.55;">${escapeHtml(it.text)}</div>`;
+            }).join('');
+            // also update the right-column INTELLIGENCE INSIGHT if no high-pri override
+            const highPri = allTasks.filter(t => normalizePriority(t.priority) === 'high');
+            if (insightEl && highPri.length === 0) {
+                insightEl.textContent = top.text;
+                insightEl.style.color = c;
+            }
+        } catch (e) {
+            if (snap) snap.innerHTML = `<span style="color:var(--text-disabled); font-size:12px;">Intelligence feed offline — start the server to enable.</span>`;
         }
     }
 
@@ -2273,7 +2311,16 @@
             const colors = { pattern: 'var(--amber)', estimate: 'var(--blue)', rhythm: 'var(--ai-purple)', momentum: 'var(--green)', nudge: 'var(--text-disabled)' };
             const labels = { pattern: 'PATTERN', estimate: 'ESTIMATE', rhythm: 'RHYTHM', momentum: 'MOMENTUM', nudge: 'NEXT' };
             const items = d.insights || [];
-            if (!items.length) return;
+            if (!items.length) {
+                box.innerHTML = `
+                    <div style="padding:16px 14px; border-left:2px solid var(--border-neutral); background:color-mix(in srgb, var(--text-primary) 2%, transparent); border-radius:0 8px 8px 0; font-size:13px; color:var(--text-muted); line-height:1.6;">
+                        Behavioral patterns build from usage. Complete a few focus sessions and tasks — your peak hour, start-time drift, and friction patterns will surface here automatically.
+                    </div>
+                    <div style="padding:12px 14px; border-left:2px solid var(--blue); background:color-mix(in srgb, var(--text-primary) 2%, transparent); border-radius:0 8px 8px 0; font-size:12px; color:var(--text-muted); margin-top:8px;">
+                        CLI shortcuts: <code>taskflow stats</code> · <code>taskflow heatmap</code> · <code>taskflow path</code>
+                    </div>`;
+                return;
+            }
             box.innerHTML = items.map(it => {
                 const c = colors[it.kind] || 'var(--blue)';
                 return `<div style="padding:12px 14px; border-left:3px solid ${c}; background:color-mix(in srgb, var(--text-primary) 2%, transparent); border-radius:0 8px 8px 0;">

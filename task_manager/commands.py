@@ -4154,35 +4154,29 @@ def command_ai(goal: str, auto_confirm: bool = False) -> None:
         print(f"{Fore.WHITE}{Style.DIM}Cancelled — nothing was created.{Style.RESET_ALL}")
         return
 
-    # ── Commit: create tasks via existing add path ─────────────────────────
+    # ── Commit: load once, build new tasks, save once ──────────────────────
     created = 0
+    existing = storage.load_tasks()
+    new_tasks: list = []
     for t in tasks:
         try:
-            new_task = storage.create_task(
+            new_id = max((x.id for x in existing + new_tasks), default=0) + 1
+            new_t = Task(
+                id=new_id,
                 title=t['title'],
                 priority=normalize_priority(t.get('priority', 'strategic')),
                 duration=normalize_duration(t.get('duration')),
-                deadline=t.get('deadline'),
-                notes=t.get('notes'),
             )
+            if t.get('deadline'):
+                new_t.deadline = t['deadline']
+            if t.get('notes'):
+                new_t.description = t['notes']
+            new_tasks.append(new_t)
             created += 1
         except Exception:
-            try:
-                # Fallback: minimal add
-                all_tasks = storage.load_tasks()
-                from task_manager.models import Task
-                new_t = Task(
-                    id=max((x.id for x in all_tasks), default=0) + 1,
-                    title=t['title'],
-                    priority=normalize_priority(t.get('priority', 'strategic')),
-                )
-                if t.get('deadline'):
-                    new_t.deadline = t['deadline']
-                all_tasks.append(new_t)
-                storage.save_tasks(all_tasks)
-                created += 1
-            except Exception:
-                pass
+            pass
+    if new_tasks:
+        storage.save_tasks(existing + new_tasks)
 
     Messenger.success(f"Created {created}/{len(tasks)} tasks. Run 'taskflow today' to see them.")
 

@@ -284,7 +284,10 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
             total = len(tasks)
             completed = sum(1 for t in tasks if t.completed)
             rate = (completed / total * 100) if total > 0 else 0
-            cfg = storage.load_config()
+            try:
+                cfg = storage.storage.load_config()
+            except Exception:
+                cfg = {}
             streak = cfg.get('execution_streak', 0)
             self.send_response(200)
             self.end_headers_json()
