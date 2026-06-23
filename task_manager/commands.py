@@ -1128,6 +1128,7 @@ class FocusManager:
             "remaining_seconds": focus_status.get("remaining_seconds"),
             "awaiting_decision": focus_status.get("awaiting_decision", False),  # timer hit 0, holding for "done/more?"
             "avg_focus_span": get_avg_focus_span(),                             # learned concentration span (min)
+            "focus_blocks_today": get_focus_blocks_today(),                     # deep blocks done today (fatigue guard)
             "paused": focus_status.get("paused", False),
             "cycles_completed": focus_status.get("cycles_completed", 0),
             "blocking_active": False,
@@ -1574,10 +1575,30 @@ def _record_focus_span(minutes) -> None:
         spans = stats.get('focus_spans', [])
         spans.append(m)
         stats['focus_spans'] = spans[-20:]
+        # Count deep blocks completed TODAY (fatigue guard — willpower is finite/ego depletion).
+        today = datetime.now().strftime('%Y-%m-%d')
+        if stats.get('focus_blocks_date') != today:
+            stats['focus_blocks_today'] = 0
+            stats['focus_blocks_date'] = today
+        stats['focus_blocks_today'] = stats.get('focus_blocks_today', 0) + 1
         with open(stats_file, 'w') as f:
             json.dump(stats, f)
     except Exception:
         pass
+
+
+def get_focus_blocks_today() -> int:
+    """How many deep focus blocks completed today (resets daily). Drives the fatigue guard."""
+    try:
+        stats_file = storage.data_dir / "user_stats.json"
+        if stats_file.exists():
+            with open(stats_file, 'r') as f:
+                stats = json.load(f)
+            if stats.get('focus_blocks_date') == datetime.now().strftime('%Y-%m-%d'):
+                return int(stats.get('focus_blocks_today', 0))
+    except Exception:
+        pass
+    return 0
 
 
 def get_avg_focus_span(default: int = 25) -> int:

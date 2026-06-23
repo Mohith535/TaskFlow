@@ -227,6 +227,20 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         </div>
     </div>
 
+    <!-- Timed break (real rest, not just pause) -->
+    <div id="focus-break-modal" class="abort-modal">
+        <div class="abort-modal-content" style="max-width:440px;">
+            <div style="font-size:38px; margin-bottom:8px;">🌿</div>
+            <h2 style="color:var(--text-hero); font-size:22px; margin-bottom:6px;">Breather</h2>
+            <p id="break-sub" style="color:var(--text-muted); margin-bottom:16px; line-height:1.5;">Look away from the screen. Stand up. Roll your shoulders.</p>
+            <div id="break-timer" style="font-size:54px; font-family:var(--font-mono); font-weight:700; color:var(--green); line-height:1; margin-bottom:22px;">05:00</div>
+            <div style="display:flex; flex-direction:column; gap:10px;">
+                <button onclick="endBreakResume()" class="btn-modal-primary">I'm back — resume</button>
+                <button onclick="endBreakStop()" style="background:transparent; border:1px solid var(--border-neutral); color:var(--text-muted); border-radius:10px; padding:10px; cursor:pointer; font-size:13px;">End the session instead</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Abort Modal -->
     <div id="abort-modal" class="abort-modal">
         <div class="abort-modal-content">

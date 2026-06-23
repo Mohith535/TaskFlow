@@ -3477,6 +3477,7 @@
             updateFocusTimerDisplay(currentFocusMinutesLeft, currentSecs);
 
             window.tfAvgFocusSpan = data.avg_focus_span || 25;
+            window.tfFocusBlocksToday = data.focus_blocks_today || 0;
             tfStartCountdown(totalFocusSecondsInitial);
             // Mid-session check-in at the user's LEARNED attention span (capped to the session).
             tfScheduleCheckin(Math.min(currentFocusMinutesLeft || 25, window.tfAvgFocusSpan) * 60);
@@ -3625,12 +3626,16 @@
         const titleEl = document.getElementById('focus-task-title');
         const task = titleEl ? titleEl.innerText : 'this mission';
         const evening = (new Date()).getHours() >= 18;
+        const fatigued = (window.tfFocusBlocksToday || 0) >= 4;   // ego depletion — willpower is finite
         const head = document.getElementById('se-head');
         const sub = document.getElementById('se-sub');
-        if (head) head.innerText = evening ? "Time's up — and the day's winding down." : "Time's up. Where are you?";
-        if (sub) sub.innerText = evening
-            ? `No pressure. Finish “${task}”, give it a little more, or call it a good stop for today.`
-            : `Not everything fits one block — that's normal. Done with “${task}”, or want a bit more time?`;
+        if (head) head.innerText = fatigued ? "That's serious focus today."
+            : (evening ? "Time's up — and the day's winding down." : "Time's up. Where are you?");
+        if (sub) sub.innerText = fatigued
+            ? `That's ${window.tfFocusBlocksToday} deep blocks today — real work. Focus sharpens with rest, so wrapping up here is the strong move. Push on only if you're genuinely in flow.`
+            : (evening
+                ? `No pressure. Finish “${task}”, give it a little more, or call it a good stop for today.`
+                : `Not everything fits one block — that's normal. Done with “${task}”, or want a bit more time?`);
         document.getElementById('focus-overlay').classList.add('blur-heavy');
         const m = document.getElementById('session-end-modal'); if (m) m.classList.add('active');
     }
@@ -3674,8 +3679,55 @@
     }
     window.tfHideCheckin = function () { const el = document.getElementById('focus-checkin'); if (el) el.classList.remove('show'); };
     window.checkinKeepGoing = () => { tfHideCheckin(); tfScheduleCheckin((window.tfAvgFocusSpan || 25) * 60); showToast("Locked in. ✦", "var(--green)"); };
-    window.checkinBreak = () => { tfHideCheckin(); try { window.togglePauseFocus(); } catch (e) {} showToast("Breather. Stand up, look away — resume when you're ready.", "var(--blue)"); };
+    window.checkinBreak = () => { tfHideCheckin(); const fatigued = (window.tfFocusBlocksToday || 0) >= 4; startBreak(fatigued ? 15 : 5); };
     window.checkinWrap = () => { tfHideCheckin(); showSessionEndDecision(); };
+
+    // ── Real timed break (pauses the clock so rest doesn't eat your session) ──
+    let breakInterval = null, breakSecs = 0;
+    function updateBreakTimer() {
+        const t = document.getElementById('break-timer');
+        if (t) { const m = Math.floor(breakSecs / 60), s = breakSecs % 60; t.innerText = `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`; }
+    }
+    window.startBreak = async (mins) => {
+        isPaused = true;                                  // freeze the focus clock
+        try { await fetch('/api/focus/pause', { method: 'POST' }); } catch (e) {}
+        tfHideCheckin();
+        if (focusCheckinTimer) { clearTimeout(focusCheckinTimer); focusCheckinTimer = null; }
+        breakSecs = (mins || 5) * 60;
+        const sub = document.getElementById('break-sub');
+        if (sub) sub.innerText = (mins >= 15)
+            ? "You've put in real work today — take a proper one. Water, a walk, the window."
+            : "Look away from the screen. Stand up. Roll your shoulders. Breathe.";
+        updateBreakTimer();
+        document.getElementById('focus-overlay').classList.add('blur-heavy');
+        document.getElementById('focus-break-modal').classList.add('active');
+        if (breakInterval) clearInterval(breakInterval);
+        breakInterval = setInterval(() => {
+            if (breakSecs > 0) { breakSecs--; updateBreakTimer(); }
+            else {
+                clearInterval(breakInterval); breakInterval = null;
+                const t = document.getElementById('break-timer'); if (t) t.innerText = "Ready";
+                if (sub) sub.innerText = "Break's over — resume whenever you're ready. No rush.";
+            }
+        }, 1000);
+    };
+    window.endBreakResume = async () => {
+        if (breakInterval) { clearInterval(breakInterval); breakInterval = null; }
+        document.getElementById('focus-break-modal').classList.remove('active');
+        document.getElementById('focus-overlay').classList.remove('blur-heavy');
+        isPaused = false;
+        try { await fetch('/api/focus/resume', { method: 'POST' }); } catch (e) {}
+        tfScheduleCheckin((window.tfAvgFocusSpan || 25) * 60);
+        showToast("Back in. ✦", "var(--green)");
+    };
+    window.endBreakStop = async () => {
+        if (breakInterval) { clearInterval(breakInterval); breakInterval = null; }
+        document.getElementById('focus-break-modal').classList.remove('active');
+        try { await fetch('/api/focus_end', { method: 'POST' }); } catch (e) {}
+        deactivateFocusLock();
+        showToast("Good stop. Saved exactly where you left it.", "var(--blue)");
+        try { loadTasks(); } catch (e) {}
+    };
 
     function updateFocusTimerDisplay(m, s = 0) {
         currentFocusMinutesLeft = m;
