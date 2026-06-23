@@ -17,6 +17,8 @@
 
     // CODE-HEALTH: single TIS→colour threshold (was duplicated across loadStats + loadDayOfWeek)
     function tfScoreColor(s) { return s >= 80 ? 'var(--viz-high)' : (s >= 60 ? 'var(--viz-medium)' : 'var(--viz-low)'); }
+    // Bar colour: graduated blue — height already communicates score; colour communicates category, not shame
+    function tfBarColor(s) { return s >= 70 ? 'var(--accent-info)' : (s >= 40 ? 'color-mix(in srgb, var(--accent-info) 55%, var(--border-muted))' : 'color-mix(in srgb, var(--accent-info) 28%, var(--border-muted))'); }
 
     // ── PHASE 1 UTILITIES ─────────────────────────────────────────────
     function escapeHtml(s) {
@@ -569,6 +571,7 @@
             } catch(e) { console.error("Timeline API fail", e); }
             allTasks = tasksData.tasks || [];
             updateIntegrityMeter(statsData);
+            updateStreakDisplay(statsData);
             updateControlCenter();
             renderTaskList();
             renderTimeline();
@@ -986,6 +989,21 @@
         } else if (insight) {
             insight.textContent = "System stable. High-priority execution recommended to maintain optimal momentum.";
             insight.style.color = "var(--text-body)";
+        }
+    }
+
+    function updateStreakDisplay(statsData) {
+        const streak = (statsData && statsData.execution_streak) || 0;
+        const el = document.getElementById('sidebar-streak');
+        const num = document.getElementById('streak-count');
+        const lbl = document.getElementById('streak-label');
+        if (!el) return;
+        if (streak >= 1) {
+            if (num) num.textContent = streak;
+            if (lbl) lbl.textContent = streak === 1 ? 'day streak' : 'day streak';
+            el.style.display = 'block';
+        } else {
+            el.style.display = 'none';
         }
     }
 
@@ -2216,11 +2234,11 @@
                     const tis = row.avg_tis;
                     const has = row.sample_size >= 2 && tis != null;
                     const w = has ? Math.max(2, Math.round(tis)) : 0;
-                    const bar = has ? `<div style="height:8px;width:${w}%;background:${color(tis)};border-radius:4px;"></div>` : '';
+                    const bar = has ? `<div style="height:8px;width:${w}%;background:${tfBarColor(tis)};border-radius:4px;"></div>` : '';
                     return `<div style="display:flex;align-items:center;gap:10px;">
                         <div style="width:32px;color:var(--text-muted);font-size:11px;">${nm}</div>
                         <div style="flex:1;height:8px;background:var(--border-subtle);border-radius:4px;overflow:hidden;">${bar}</div>
-                        <div style="width:28px;text-align:right;font-family:'DM Mono',monospace;font-size:11px;color:${has ? color(tis) : 'var(--text-disabled)'};">${has ? tis : '—'}</div>
+                        <div style="width:28px;text-align:right;font-family:'DM Mono',monospace;font-size:11px;color:${has ? tfScoreColor(tis) : 'var(--text-disabled)'};">${has ? tis : '—'}</div>
                     </div>`;
                 }).join('');
             }
@@ -2235,10 +2253,10 @@
                     </div>`;
                 }
                 if (d && d.worst_day_name && d.worst_day_avg_tis != null && d.worst_day_avg_tis < 65 && d.worst_day_name !== d.best_day_name) {
-                    chips += `<div style="flex:1;background:color-mix(in srgb, var(--accent-warning) 8%, transparent);border:1px solid color-mix(in srgb, var(--accent-warning) 15%, transparent);border-radius:8px;padding:8px 12px;">
-                        <div style="color:var(--text-disabled);font-size:9px;text-transform:uppercase;letter-spacing:1px;">WATCH OUT</div>
-                        <div style="color:var(--amber);font-size:14px;font-weight:500;">${d.worst_day_name}</div>
-                        <div style="color:var(--text-muted);font-size:11px;">avg ${d.worst_day_avg_tis} TIS</div>
+                    chips += `<div style="flex:1;background:color-mix(in srgb, var(--accent-info) 8%, transparent);border:1px solid color-mix(in srgb, var(--accent-info) 15%, transparent);border-radius:8px;padding:8px 12px;">
+                        <div style="color:var(--text-disabled);font-size:9px;text-transform:uppercase;letter-spacing:1px;">BUILD ON</div>
+                        <div style="color:var(--accent-info);font-size:14px;font-weight:500;">${d.worst_day_name}</div>
+                        <div style="color:var(--text-muted);font-size:11px;">start earlier · avg ${d.worst_day_avg_tis} TIS</div>
                     </div>`;
                 }
                 if (!chips) chips = `<div style="color:var(--text-disabled);font-size:11px;">Building pattern… complete tasks across more days for day-of-week insights.</div>`;
@@ -2293,7 +2311,7 @@
             if (ring) { ring.setAttribute('stroke-dasharray', CIRC.toFixed(1)); ring.setAttribute('stroke-dashoffset', (CIRC * (1 - avg / 100)).toFixed(1)); ring.setAttribute('stroke', color(avg)); }
             const num = document.getElementById('tis-num'); if (num) { num.textContent = avg; num.setAttribute('fill', color(avg)); }
             const trend = document.getElementById('tis-trend');
-            if (trend) { const t = w.trend || 'stable'; const tc = t === 'improving' ? 'var(--green)' : (t === 'declining' ? 'var(--red)' : 'var(--amber)'); const ar = t === 'improving' ? '↑' : (t === 'declining' ? '↓' : '→'); trend.innerHTML = `<span style="color:${tc};">${ar} ${t}</span> · 7-day average`; }
+            if (trend) { const t = w.trend || 'stable'; const tc = t === 'improving' ? 'var(--green)' : (t === 'declining' ? 'var(--amber)' : 'var(--accent-info)'); const ar = t === 'improving' ? '↑' : '→'; const lbl = t === 'improving' ? 'on track' : (t === 'declining' ? 'lighter week' : 'holding steady'); trend.innerHTML = `<span style="color:${tc};">${ar} ${lbl}</span> · 7-day average`; }
             const bw = document.getElementById('tis-bestworst');
             if (bw && w.best_day && w.worst_day) bw.textContent = `Best ${_statsDow(w.best_day.date)} (${w.best_day.score}) · Watch ${_statsDow(w.worst_day.date)} (${w.worst_day.score})`;
 
@@ -2306,7 +2324,7 @@
                     const h = Math.max(4, Math.round(sc / 100 * 150));
                     const isToday = dd.date === today;
                     return `<div title="${_statsDow(dd.date)}: ${sc} · ${dd.tasks_completed || 0} done" style="flex:1; display:flex; flex-direction:column; align-items:center; gap:6px;">
-                        <div style="width:100%; height:${h}px; background:${color(sc)}; border-radius:4px 4px 0 0; ${isToday ? 'outline:2px solid var(--text-hero); outline-offset:1px;' : ''}"></div>
+                        <div style="width:100%; height:${h}px; background:${tfBarColor(sc)}; border-radius:4px 4px 0 0; ${isToday ? 'outline:2px solid var(--text-hero); outline-offset:1px;' : ''}"></div>
                         <div style="font-size:9px; color:var(--text-disabled);">${_statsDow(dd.date).slice(0, 3)}</div>
                     </div>`;
                 }).join('');
@@ -2316,7 +2334,7 @@
             const sum = k => days.reduce((a, x) => a + (x[k] || 0), 0);
             const chips = [
                 ['Completed', sum('tasks_completed'), 'var(--green)'],
-                ['Missed', sum('tasks_missed'), 'var(--red)'],
+                ['Carried Over', sum('tasks_missed'), 'var(--amber)'],
                 ['Postponed', sum('tasks_postponed'), 'var(--amber)'],
                 ['Dropped', sum('tasks_dropped'), 'var(--text-muted)'],
                 ['Focus sessions', sum('focus_sessions'), 'var(--blue)'],
@@ -2342,6 +2360,13 @@
                     <div>MOST AVOIDED <span style="float:right; color:var(--amber);">${w.most_avoided_tag ? ('#' + w.most_avoided_tag) : '—'}</span></div>
                     <div>AVG START DRIFT <span style="float:right; color:${driftColor}; font-family:'DM Mono',monospace;">${driftStr}</span></div>
                     <div>RECOVERY (week) <span style="float:right; color:var(--text-hero); font-family:'DM Mono',monospace;">${w.recovery_sessions || 0}</span></div>`;
+            }
+
+            // Weekly insight — one specific, forward-looking finding
+            const insightEl = document.getElementById('stats-weekly-insight');
+            if (insightEl && w.weekly_insight) {
+                insightEl.style.display = 'block';
+                insightEl.querySelector('.wi-text').textContent = w.weekly_insight;
             }
 
             // Section 5 — recovery history
@@ -3102,13 +3127,20 @@
     // startFocus now opens a setup modal (duration · gentle/strict · sites) instead of
     // hard-launching a gentle 25m session. beginFocus() does the actual launch.
     let _focusSetup = null;
+    const _FS_PILLS = [15, 25, 45, 60];
+    function _nearestPill(min) { return _FS_PILLS.reduce((a, b) => Math.abs(b - min) < Math.abs(a - min) ? b : a); }
     async function startFocus(taskId) {
         const task = allTasks.find(t => t.id === taskId);
         if (!task) return;
         closeModal();   // close the mission-brief modal if it's open
-        _focusSetup = { taskId, title: task.title, minutes: 25, mode: 'gentle', sites: [], saved: [] };
+        // Pre-fill duration from learned attention span (min 5m to be real data)
+        const learnedMin = (window.tfAvgFocusSpan && window.tfAvgFocusSpan >= 5) ? Math.round(window.tfAvgFocusSpan) : null;
+        const defaultMin = learnedMin ? _nearestPill(learnedMin) : 25;
+        _focusSetup = { taskId, title: task.title, minutes: defaultMin, mode: 'gentle', sites: [], saved: [] };
         document.getElementById('fs-task-title').innerText = task.title;
-        document.querySelectorAll('#fs-duration .fs-pill').forEach(p => p.classList.toggle('selected', p.dataset.min === '25'));
+        document.querySelectorAll('#fs-duration .fs-pill').forEach(p => p.classList.toggle('selected', parseInt(p.dataset.min) === defaultMin));
+        const hint = document.getElementById('fs-span-hint');
+        if (hint) hint.textContent = (learnedMin && learnedMin !== 25) ? `Your sessions typically run ${learnedMin}m — pre-selected.` : '';
         document.querySelectorAll('#fs-modes .fs-mode').forEach(m => m.classList.toggle('selected', m.dataset.mode === 'gentle'));
         document.getElementById('fs-strict-panel').style.display = 'none';
         _renderFsSites();
@@ -3835,6 +3867,29 @@
         } catch(e) { console.error(e); }
     };
 
+    function _sessionInsight(planned, actual, learned) {
+        const over = actual - planned;
+        const pct = planned > 0 ? Math.round(Math.abs(over) / planned * 100) : 0;
+        if (over < -3) return `Finished ${Math.abs(over)}m early — your estimate was well-calibrated. Solid.`;
+        if (Math.abs(over) <= 3) return `Right on target. Your estimation is dialled in.`;
+        if (pct < 25) return `${over}m over — minor drift. Well within normal range.`;
+        const span = learned && learned >= 5 ? Math.round(learned) : null;
+        const sugg = span ? `Your sessions typically run ${span}m — try the ${_nearestPill ? _nearestPill(span + 8) : span + 10}m block next time.` : 'Consider adding a buffer when you plan.';
+        return `Ran ${pct}% over estimate. ${sugg}`;
+    }
+    function showSessionReport(plannedMins, actualMins, learnedSpan) {
+        const card = document.getElementById('session-report-card'); if (!card) return;
+        const over = actualMins - plannedMins;
+        const gapColor = over < -3 ? 'var(--green)' : (Math.abs(over) <= 3 ? 'var(--blue)' : (over < plannedMins * 0.5 ? 'var(--amber)' : 'var(--amber)'));
+        const gapText = over === 0 ? '±0m' : (over > 0 ? `+${over}m` : `${over}m`);
+        document.getElementById('sr-planned').textContent = `${plannedMins}m`;
+        document.getElementById('sr-actual').textContent = `${actualMins}m`;
+        const gapEl = document.getElementById('sr-gap');
+        gapEl.textContent = gapText; gapEl.style.color = gapColor;
+        document.getElementById('sr-insight').textContent = _sessionInsight(plannedMins, actualMins, learnedSpan);
+        card.style.display = 'block';
+    }
+
     async function openMomentumDeployment(usedMins, savedMins, effScore, cycleText) {
         // Set stats in unified modal
         document.getElementById('momentum-cycle-text').innerText = cycleText;
@@ -3845,6 +3900,10 @@
         } else {
             effEl.innerHTML = `Execution Efficiency <span style="color:var(--emerald);">Validated</span>`;
         }
+
+        // Session report card: planned vs actual vs learned span
+        const plannedMins = totalFocusSecondsInitial > 0 ? Math.floor(totalFocusSecondsInitial / 60) : 0;
+        if (plannedMins > 0) showSessionReport(plannedMins, usedMins, window.tfAvgFocusSpan);
 
         try {
             const res = await fetch('/api/focus/next');
@@ -3893,6 +3952,7 @@
     window.hideMomentumModal = () => {
         document.getElementById('momentum-modal').classList.remove('active');
         document.body.classList.remove('state-deep-work');
+        const rc = document.getElementById('session-report-card'); if (rc) rc.style.display = 'none';
     };
 
     window.togglePauseFocus = async () => {

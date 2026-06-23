@@ -177,6 +177,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 <button type="button" class="fs-pill" data-min="45">45m</button>
                 <button type="button" class="fs-pill" data-min="60">60m</button>
             </div>
+            <div id="fs-span-hint" style="font-size:11px; color:var(--text-muted); margin-top:5px; min-height:16px;"></div>
 
             <div class="fs-label">Mode</div>
             <div class="fs-modes" id="fs-modes">
@@ -280,6 +281,24 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     <div style="color:var(--ai-purple); font-weight:700;">System Stability: OPTIMAL</div>
                 </div>
 
+                <!-- Session report card — filled by JS after session ends -->
+                <div id="session-report-card" style="display:none; background:color-mix(in srgb, var(--text-primary) 3%, transparent); border:1px solid var(--border-subtle); border-radius:12px; padding:14px 18px; margin:0 0 20px; text-align:left; font-size:12px;">
+                    <div style="font-size:9px; letter-spacing:2px; color:var(--text-disabled); margin-bottom:10px; font-weight:700;">SESSION REPORT</div>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+                        <span style="color:var(--text-muted);">Planned</span>
+                        <span id="sr-planned" style="font-family:'DM Mono',monospace; color:var(--text-body);">—</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+                        <span style="color:var(--text-muted);">Actual</span>
+                        <span id="sr-actual" style="font-family:'DM Mono',monospace; color:var(--text-body);">—</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+                        <span style="color:var(--text-muted);">Gap</span>
+                        <span id="sr-gap" style="font-family:'DM Mono',monospace;">—</span>
+                    </div>
+                    <div id="sr-insight" style="font-size:11px; color:var(--text-muted); line-height:1.5; border-top:1px solid var(--border-subtle); padding-top:8px;"></div>
+                </div>
+
                 <div style="width: 50px; height: 2px; background: color-mix(in srgb, var(--text-primary) 10%, transparent); margin: 0 auto 25px;"></div>
 
                 <div style="font-size: 32px; color: var(--blue); margin-bottom: 10px; animation: glowPulse 2s infinite;">⚡</div>
@@ -355,6 +374,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             <div class="nav-section-label">SYSTEM</div>
             <div class="nav-item" id="nav-stats"><span class="nav-icon">📊</span> Analytics</div>
         </nav>
+        <div id="sidebar-streak" style="display:none; padding:10px 16px 0;">
+            <div style="background:color-mix(in srgb, var(--accent-success) 8%, transparent); border:1px solid color-mix(in srgb, var(--accent-success) 18%, transparent); border-radius:10px; padding:10px 14px; display:flex; align-items:center; gap:10px;">
+                <div style="font-size:20px; font-family:'DM Mono',monospace; font-weight:700; color:var(--green);" id="streak-count">0</div>
+                <div>
+                    <div style="font-size:10px; font-weight:600; color:var(--green);" id="streak-label">day streak</div>
+                    <div style="font-size:9px; color:var(--text-disabled); letter-spacing:1px;">CONSECUTIVE DAYS</div>
+                </div>
+            </div>
+        </div>
         <div id="operator-bar" onclick="tfToggleOperatorPanel(event)" style="margin-top:auto; padding-top:24px; border-top:1px solid var(--border-subtle); display:flex; align-items:center; gap:12px; position:relative; cursor:pointer;">
             <div style="width:32px; height:32px; background:var(--bg-surface); border-radius:50%; display:flex; align-items:center; justify-content:center;">👨‍💻</div>
             <div style="font-size:12px; font-weight:600; color:var(--text-hero);">OPERATOR M</div>
@@ -689,7 +717,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     </div>
 
                     <!-- Section 4: PATTERNS + Section 5: RECOVERY HISTORY -->
-                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:24px;">
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:24px; margin-bottom:24px;">
                         <div class="mission-panel" style="padding:24px;">
                             <div class="section-label" style="margin:0 0 16px;">PATTERNS</div>
                             <div id="stats-patterns" style="font-size:13px; color:var(--text-body); display:flex; flex-direction:column; gap:12px;"></div>
@@ -697,6 +725,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                         <div class="mission-panel" style="padding:24px;">
                             <div class="section-label" style="margin:0 0 16px;">RECOVERY HISTORY</div>
                             <div id="stats-recovery" style="font-size:12px; color:var(--text-muted); display:flex; flex-direction:column; gap:8px;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Section 6: WEEKLY INSIGHT — one specific, forward-looking behavioral finding -->
+                    <div id="stats-weekly-insight" style="display:none; margin-bottom:24px;">
+                        <div class="mission-panel" style="padding:20px 24px; border-left:3px solid var(--accent-ai);">
+                            <div class="section-label" style="margin:0 0 8px; color:var(--accent-ai);">THIS WEEK'S SIGNAL</div>
+                            <div class="wi-text" style="font-size:14px; color:var(--text-body); line-height:1.65;"></div>
                         </div>
                     </div>
                 </div>

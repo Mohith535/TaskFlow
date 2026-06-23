@@ -284,10 +284,16 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
             total = len(tasks)
             completed = sum(1 for t in tasks if t.completed)
             rate = (completed / total * 100) if total > 0 else 0
-            
+            cfg = storage.load_config()
+            streak = cfg.get('execution_streak', 0)
             self.send_response(200)
             self.end_headers_json()
-            self.wfile.write(json.dumps({"completion_rate": round(rate, 1), "total": total, "completed": completed}).encode('utf-8'))
+            self.wfile.write(json.dumps({
+                "completion_rate": round(rate, 1),
+                "total": total,
+                "completed": completed,
+                "execution_streak": streak,
+            }).encode('utf-8'))
             
         elif path == "/api/timeline":
             mapping = storage.load_timeline()

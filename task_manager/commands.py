@@ -3833,6 +3833,360 @@ def command_fresh_start(scope: str = "red") -> bool:
     return True
 
 
+def command_generate_report(output_path: str = None) -> str:
+    """Generate a self-contained HTML behavioral twin snapshot — no external deps, opens in any browser."""
+    from datetime import datetime as _dt
+    import json as _json
+
+    now = _dt.now()
+    date_str = now.strftime("%Y-%m-%d")
+
+    # ── Gather data ──────────────────────────────────────────────────────────
+    tasks = []
+    try:
+        tasks = storage.load_tasks()
+    except Exception:
+        pass
+    total = len(tasks)
+    completed = [t for t in tasks if getattr(t, 'completed', False)]
+    active = [t for t in tasks if not getattr(t, 'completed', False)
+              and not getattr(t, 'dropped_at', None) and not getattr(t, 'offloaded_at', None)]
+    comp_rate = round(len(completed) / total * 100) if total else 0
+
+    cfg = {}
+    try:
+        cfg = storage.load_config()
+    except Exception:
+        pass
+    streak = cfg.get('execution_streak', 0)
+
+    spans = []
+    try:
+        sf = storage.data_dir / "user_stats.json"
+        if sf.exists():
+            spans = _json.loads(sf.read_text()).get('focus_spans', [])
+    except Exception:
+        pass
+    avg_span = round(sum(spans) / len(spans)) if len(spans) >= 3 else None
+
+    summaries = []
+    try:
+        ensure_daily_summaries()
+        summaries = storage.load_daily_summaries()
+        summaries = sorted(summaries, key=lambda d: d.get('date', ''))[-7:]
+    except Exception:
+        pass
+
+    # Duration accuracy
+    ratios = []
+    for t in completed:
+        planned = _duration_minutes(t, 0)
+        actual = getattr(t, 'focus_minutes_spent', 0) or 0
+        if planned and actual:
+            ratios.append(actual / planned)
+    acc_ratio = round(sum(ratios) / len(ratios), 2) if len(ratios) >= 3 else None
+
+    # Most postponed active tasks
+    postponed = sorted([t for t in active if (t.postpone_count or 0) >= 2],
+                       key=lambda t: t.postpone_count, reverse=True)[:5]
+
+    # Intelligence insights
+    insights_data = {}
+    try:
+        insights_data = get_intelligence_insights()
+    except Exception:
+        pass
+    insights = insights_data.get('insights', [])
+
+    # Completion by priority
+    pri_counts = {}
+    for t in completed:
+        p = (t.priority or 'unknown').lower()
+        pri_counts[p] = pri_counts.get(p, 0) + 1
+
+    # ── HTML generation ──────────────────────────────────────────────────────
+    def _bar_color(s):
+        if s >= 70:
+            return '#58A6FF'
+        if s >= 40:
+            return '#388BFD80'
+        return '#388BFD40'
+
+    bars_html = ''
+    if summaries:
+        for d in summaries:
+            sc = d.get('time_integrity_score', 0) or 0
+            h = max(8, round(sc / 100 * 80))
+            day = d.get('date', '')
+            dow = ''
+            try:
+                dow = _dt.strptime(day, '%Y-%m-%d').strftime('%a')
+            except Exception:
+                dow = day[-5:] if day else '?'
+            done = d.get('tasks_completed', 0)
+            bars_html += (
+                f'<div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex:1;">'
+                f'<div title="{day}: TIS {sc} · {done} done" style="width:100%;height:{h}px;'
+                f'background:{_bar_color(sc)};border-radius:4px 4px 0 0;"></div>'
+                f'<div style="font-size:9px;color:#6E7681;">{dow}</div>'
+                f'<div style="font-family:monospace;font-size:10px;color:#8B949E;">{sc}</div>'
+                f'</div>'
+            )
+
+    postponed_html = ''
+    for t in postponed:
+        postponed_html += (
+            f'<div style="display:flex;justify-content:space-between;padding:8px 0;'
+            f'border-bottom:1px solid #21262D;font-size:13px;">'
+            f'<span style="color:#E6EDF3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:75%;">'
+            f'{t.title}</span>'
+            f'<span style="color:#D29922;font-family:monospace;">×{t.postpone_count}</span>'
+            f'</div>'
+        )
+    if not postponed_html:
+        postponed_html = '<div style="color:#6E7681;font-size:13px;">No tasks with 2+ postpones — impressive.</div>'
+
+    insight_html = ''
+    kind_colors = {'pattern': '#D29922', 'estimate': '#58A6FF', 'rhythm': '#A371F7', 'momentum': '#3FB950', 'nudge': '#6E7681'}
+    for ins in insights:
+        c = kind_colors.get(ins.get('kind', ''), '#58A6FF')
+        insight_html += (
+            f'<div style="border-left:3px solid {c};padding:10px 14px;margin-bottom:10px;'
+            f'background:rgba(255,255,255,0.02);border-radius:0 8px 8px 0;">'
+            f'<div style="font-size:9px;letter-spacing:1.5px;color:{c};margin-bottom:4px;font-weight:700;">'
+            f'{ins.get("kind","").upper()}</div>'
+            f'<div style="font-size:13px;line-height:1.55;color:#8B949E;">{ins.get("text","")}</div>'
+            f'</div>'
+        )
+    if not insight_html:
+        insight_html = '<div style="color:#6E7681;font-size:13px;">Keep using TaskFlow — insights build from your data.</div>'
+
+    acc_html = ''
+    if acc_ratio is not None:
+        over_pct = round((acc_ratio - 1) * 100)
+        if over_pct > 0:
+            acc_html = f'<span style="color:#D29922">+{over_pct}% over estimate</span> — tasks run longer than planned.'
+        elif over_pct < 0:
+            acc_html = f'<span style="color:#3FB950">{over_pct}% under estimate</span> — you finish faster than you think.'
+        else:
+            acc_html = '<span style="color:#3FB950">Right on target.</span> Rare calibration.'
+        acc_html = f'<div style="font-size:14px;line-height:1.6;color:#8B949E;margin-top:8px;">{acc_html}</div>'
+    else:
+        acc_html = '<div style="color:#6E7681;font-size:13px;">Complete 3+ tasks with focus sessions to unlock this insight.</div>'
+
+    span_html = (f'<span style="font-family:monospace;font-size:28px;color:#58A6FF;">{avg_span}m</span>'
+                 if avg_span else '<span style="color:#6E7681;font-size:13px;">3+ sessions needed</span>')
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TaskFlow · Behavioral Twin · {date_str}</title>
+<style>
+*{{box-sizing:border-box;margin:0;padding:0}}
+body{{background:#0D1117;color:#E6EDF3;font-family:'Inter',system-ui,sans-serif;font-size:15px;-webkit-font-smoothing:antialiased;padding:32px 16px}}
+.container{{max-width:820px;margin:0 auto}}
+h1{{font-size:22px;font-weight:700;color:#fff;letter-spacing:-.5px}}
+.sub{{font-size:12px;color:#6E7681;margin-top:4px;margin-bottom:32px}}
+.tiles{{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:28px}}
+@media(max-width:600px){{.tiles{{grid-template-columns:1fr 1fr}}}}
+.tile{{background:#161B22;border:1px solid #21262D;border-radius:12px;padding:16px}}
+.tile .k{{font-size:10px;letter-spacing:1.2px;text-transform:uppercase;color:#6E7681;margin-bottom:8px}}
+.tile .v{{font-family:'DM Mono',monospace,ui-monospace;font-size:26px;font-weight:500}}
+.tile .s{{font-size:10px;color:#6E7681;margin-top:4px}}
+.card{{background:#161B22;border:1px solid #21262D;border-radius:14px;padding:22px 24px;margin-bottom:20px}}
+.card h2{{font-size:13px;font-weight:600;color:#8B949E;letter-spacing:1px;text-transform:uppercase;margin-bottom:16px}}
+.bars{{display:flex;gap:8px;height:100px;align-items:flex-end}}
+footer{{margin-top:40px;font-size:11px;color:#6E7681;text-align:center;line-height:1.7}}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Behavioral Twin Snapshot</h1>
+  <div class="sub">Generated {now.strftime("%B %d, %Y at %H:%M")} &nbsp;·&nbsp; TaskFlow &nbsp;·&nbsp; All data stays on your machine</div>
+
+  <div class="tiles">
+    <div class="tile">
+      <div class="k">Completion Rate</div>
+      <div class="v" style="color:#3FB950;">{comp_rate}%</div>
+      <div class="s">{len(completed)} of {total} tasks</div>
+    </div>
+    <div class="tile">
+      <div class="k">Avg Focus Span</div>
+      <div class="v">{span_html}</div>
+      <div class="s">{"from " + str(len(spans)) + " sessions" if spans else "no data yet"}</div>
+    </div>
+    <div class="tile">
+      <div class="k">Execution Streak</div>
+      <div class="v" style="color:{'#3FB950' if streak > 0 else '#6E7681'};">{streak}</div>
+      <div class="s">consecutive days</div>
+    </div>
+    <div class="tile">
+      <div class="k">Active Tasks</div>
+      <div class="v" style="color:#58A6FF;">{len(active)}</div>
+      <div class="s">on the board</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>7-Day Execution Score</h2>
+    {"<div class='bars'>" + bars_html + "</div>" if summaries else '<div style="color:#6E7681;font-size:13px;">Complete tasks across more days to unlock the weekly view.</div>'}
+  </div>
+
+  <div class="card">
+    <h2>Planning Accuracy</h2>
+    {acc_html}
+  </div>
+
+  <div class="card">
+    <h2>Tasks With Friction (postponed 2+)</h2>
+    {postponed_html}
+  </div>
+
+  <div class="card">
+    <h2>Behavioral Signals</h2>
+    {insight_html}
+  </div>
+
+  <footer>
+    Private snapshot · 100% offline · no telemetry · no cloud<br>
+    Generated by TaskFlow · your behavioral data is yours
+  </footer>
+</div>
+</body>
+</html>"""
+
+    # ── Write file ───────────────────────────────────────────────────────────
+    if output_path is None:
+        output_path = str(storage.data_dir / f"behavioral_report_{date_str}.html")
+    try:
+        from pathlib import Path
+        Path(output_path).write_text(html, encoding='utf-8')
+    except Exception as e:
+        Messenger.error(f"Could not write report: {e}")
+        return ""
+    return output_path
+
+
+def command_ai(goal: str, auto_confirm: bool = False) -> None:
+    """Natural-language planning via Nova: propose → review → confirm → create.
+
+    Calls the same planner used by the Nova web UI (propose_tasks) and renders
+    the task list in the terminal for the user to review. Requires GEMINI_API_KEY
+    (set in e:\\nova\\.env or as an env var). Falls back to a clear error if missing.
+    """
+    from colorama import Fore, Style
+    goal = (goal or '').strip()
+    if not goal:
+        print("Usage: taskflow ai \"your goal\"")
+        return
+
+    # ── API key check ──────────────────────────────────────────────────────
+    import os
+    api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+    if not api_key:
+        # Try loading from nova .env
+        nova_env = Path(storage.data_dir).parent.parent / "nova" / ".env"
+        for candidate in [nova_env, Path("E:/nova/.env")]:
+            if candidate.exists():
+                for line in candidate.read_text(encoding="utf-8").splitlines():
+                    if line.startswith(("GEMINI_API_KEY=", "GOOGLE_API_KEY=")):
+                        val = line.split("=", 1)[1].strip().strip('"').strip("'")
+                        if val:
+                            os.environ[api_key := "GEMINI_API_KEY"] = val
+                            api_key = val
+                break
+    if not api_key:
+        Messenger.error("GEMINI_API_KEY not found. Set it in E:\\nova\\.env or as an env var.")
+        Messenger.note("Example: GEMINI_API_KEY=AIza... in e:\\nova\\.env")
+        return
+
+    print(f"\n{Fore.CYAN}✦ Nova is planning:{Style.RESET_ALL} {goal}\n")
+
+    # ── Call the same planner as the Nova web UI ───────────────────────────
+    try:
+        # We import lazily to keep startup fast when 'ai' isn't used
+        import sys
+        nova_path = Path("E:/nova")
+        if str(nova_path) not in sys.path:
+            sys.path.insert(0, str(nova_path))
+        from nova.mcp.tools import NovaTools
+        from nova.agents.planner_propose import propose_tasks
+        tools = NovaTools()
+        tasks = propose_tasks(tools, goal)
+    except ImportError:
+        Messenger.error("Nova is not installed at E:\\nova. Cannot use 'taskflow ai'.")
+        Messenger.note("Run: pip install -e E:\\nova")
+        return
+    except Exception as e:
+        Messenger.error(f"Nova planner failed: {e}")
+        return
+
+    if not tasks:
+        Messenger.error("Nova couldn't break that into concrete tasks. Try a more specific goal.")
+        return
+
+    # ── Display proposal ───────────────────────────────────────────────────
+    pri_colors = {'critical': Fore.RED, 'strategic': Fore.CYAN, 'noise': Fore.WHITE}
+    print(f"{Fore.WHITE}{Style.BRIGHT}Proposed plan ({len(tasks)} tasks):{Style.RESET_ALL}")
+    print("─" * 58)
+    for i, t in enumerate(tasks, 1):
+        pri = t.get('priority', 'strategic').lower()
+        pc = pri_colors.get(pri, Fore.WHITE)
+        dur = t.get('duration', '—')
+        dl = f" · due {t['deadline']}" if t.get('deadline') else ''
+        note = f"\n      {Fore.WHITE}{Style.DIM}{t['notes']}{Style.RESET_ALL}" if t.get('notes') else ''
+        print(f"  [{i}] {pc}{t['title']}{Style.RESET_ALL}")
+        print(f"      {Fore.WHITE}{Style.DIM}{pri} · {dur}{dl}{Style.RESET_ALL}{note}")
+    print("─" * 58)
+
+    if auto_confirm:
+        answer = 'y'
+    else:
+        print("\nCreate these tasks in TaskFlow? [y/N] ", end='', flush=True)
+        try:
+            answer = input().strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            answer = 'n'
+
+    if answer != 'y':
+        print(f"{Fore.WHITE}{Style.DIM}Cancelled — nothing was created.{Style.RESET_ALL}")
+        return
+
+    # ── Commit: create tasks via existing add path ─────────────────────────
+    created = 0
+    for t in tasks:
+        try:
+            new_task = storage.create_task(
+                title=t['title'],
+                priority=normalize_priority(t.get('priority', 'strategic')),
+                duration=normalize_duration(t.get('duration')),
+                deadline=t.get('deadline'),
+                notes=t.get('notes'),
+            )
+            created += 1
+        except Exception:
+            try:
+                # Fallback: minimal add
+                all_tasks = storage.load_tasks()
+                from task_manager.models import Task
+                new_t = Task(
+                    id=max((x.id for x in all_tasks), default=0) + 1,
+                    title=t['title'],
+                    priority=normalize_priority(t.get('priority', 'strategic')),
+                )
+                if t.get('deadline'):
+                    new_t.deadline = t['deadline']
+                all_tasks.append(new_t)
+                storage.save_tasks(all_tasks)
+                created += 1
+            except Exception:
+                pass
+
+    Messenger.success(f"Created {created}/{len(tasks)} tasks. Run 'taskflow today' to see them.")
+
+
 def view_task(task_id: int) -> None:
     """View detailed MISSION BRIEF for a task with enrichment (E4)."""
     tasks = storage.load_tasks()
@@ -5903,18 +6257,56 @@ def compute_weekly_stats(daily_summaries) -> dict:
             trend = 'declining'
 
     drifts = [d.get('avg_start_drift_minutes') for d in days if d.get('avg_start_drift_minutes') is not None]
+    avg_drift = round(sum(drifts) / len(drifts), 1) if drifts else None
+    total_completed = sum(d.get('tasks_completed', 0) or 0 for d in days)
+    total_focus_min = sum(d.get('focus_minutes_total', 0) or 0 for d in days)
+    most_avoided = _most_avoided_tag(7)
+    most_prod_hour = _most_productive_hour(7)
+
+    # One specific, forward-looking, surprising insight for the week
+    def _weekly_insight():
+        try:
+            dow_data = compute_day_of_week_stats(daily_summaries)
+        except Exception:
+            dow_data = {}
+        best_name = dow_data.get('best_day_name')
+        best_tis = dow_data.get('best_day_avg_tis')
+        if trend == 'improving':
+            return (f"Three-day upward trend — you're in execution momentum. "
+                    f"Protect the same schedule to compound it.")
+        if trend == 'declining' and best_name and best_tis:
+            return (f"Lighter week overall. Your sharpest day is {best_name} "
+                    f"(avg TIS {best_tis}) — lead with your hardest task there next week.")
+        if avg_drift and avg_drift > 15:
+            return (f"You're starting {int(avg_drift)} min late on average. "
+                    f"A 15-min earlier alarm could unlock your peak execution window.")
+        if most_avoided:
+            return (f"Your #{most_avoided} tasks have the highest friction. "
+                    f"Try blocking just 30 min for one of them tomorrow — starting is the hardest part.")
+        if most_prod_hour is not None:
+            h = most_prod_hour
+            ap = 'am' if h < 12 else 'pm'
+            hh = h % 12 or 12
+            return (f"Your completions cluster around {hh}{ap}. "
+                    f"Stack your strategic tasks in that window next week.")
+        if total_completed > 0:
+            return (f"{total_completed} tasks completed this week. "
+                    f"Consistent input is what drives compound results — keep the board moving.")
+        return "Keep logging — weekly insights build from your behavioral data."
+
     return {
         "avg_score": avg,
         "best_day": {"date": best.get('date'), "score": best.get('time_integrity_score') or 0},
         "worst_day": {"date": worst.get('date'), "score": worst.get('time_integrity_score') or 0},
         "trend": trend,
-        "total_completed": sum(d.get('tasks_completed', 0) or 0 for d in days),
-        "total_focus_minutes": sum(d.get('focus_minutes_total', 0) or 0 for d in days),
-        "avg_start_drift": (round(sum(drifts) / len(drifts), 1) if drifts else None),
-        "most_productive_hour": _most_productive_hour(7),
-        "most_avoided_tag": _most_avoided_tag(7),
+        "total_completed": total_completed,
+        "total_focus_minutes": total_focus_min,
+        "avg_start_drift": avg_drift,
+        "most_productive_hour": most_prod_hour,
+        "most_avoided_tag": most_avoided,
         "recovery_sessions": sum(1 for d in days if d.get('recovery_activated')),
         "hard_deadlines_missed_week": sum(d.get('hard_deadlines_missed', 0) or 0 for d in days),
+        "weekly_insight": _weekly_insight(),
         "days": days,
     }
 

@@ -61,6 +61,8 @@ from task_manager.commands import (
     summary,
     reset_tasks,
     command_fresh_start,
+    command_generate_report,
+    command_ai,
     view_task,
     set_prime_target,
     render_timeline,
@@ -587,6 +589,16 @@ Examples:
         help='Calm the board: lift overdue red, keep the tasks. Use --all for a full wipe.')
     fresh_parser.add_argument('--all', action='store_true',
         help='Hard reset — delete ALL tasks (asks you to type RESET).')
+    report_parser = subparsers.add_parser('report',
+        help='Generate a self-contained HTML behavioral twin snapshot (opens in any browser).')
+    report_parser.add_argument('--out', metavar='PATH', default=None,
+        help='Custom output path (default: ~/.taskflow/behavioral_report_YYYY-MM-DD.html)')
+    ai_parser = subparsers.add_parser('ai',
+        help='Natural-language task planning: describe a goal, Nova proposes, you confirm.')
+    ai_parser.add_argument('goal', nargs='*',
+        help='Goal to break into tasks, e.g. taskflow ai "prepare for ML interview next Friday"')
+    ai_parser.add_argument('--yes', '-y', action='store_true',
+        help='Auto-confirm without the interactive review (skips the approval prompt).')
     doctor_parser = subparsers.add_parser('doctor', help='Check system health')
     doctor_parser.add_argument('--repair', action='store_true',
                                help='Fix non-standard durations + offer to remove orphan files (backs up tasks first)')
@@ -856,7 +868,21 @@ def main():
 
         elif args.command == 'freshstart':
             command_fresh_start('all' if getattr(args, 'all', False) else 'red')
-        
+
+        elif args.command == 'report':
+            path = command_generate_report(getattr(args, 'out', None))
+            if path:
+                print(f"Report saved → {path}")
+                print("Open it in any browser to view your behavioral twin snapshot.")
+
+        elif args.command == 'ai':
+            goal = ' '.join(getattr(args, 'goal', []) or []).strip()
+            if not goal:
+                print("Usage: taskflow ai \"your goal here\"")
+                print("Example: taskflow ai \"prepare for ML interview next Friday\"")
+            else:
+                command_ai(goal, auto_confirm=getattr(args, 'yes', False))
+
         elif args.command == 'summary':
             summary()
         
