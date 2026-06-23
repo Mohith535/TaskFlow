@@ -269,7 +269,13 @@
         p.classList.toggle('active');
         const isOpen = p.classList.contains('active');
         document.body.style.overflow = isOpen ? 'hidden' : '';
-        if (!isOpen) { try { tfExitEditMode(); } catch (e) {} }
+        if (!isOpen) {
+            // Closing without submitting. Persist a genuine CREATE draft (don't clear), but if we
+            // were in EDIT mode, wipe the injected task data so it can't leak into a fresh create.
+            const wasEdit = window.tfEditId != null;
+            try { tfExitEditMode(); } catch (e) {}
+            if (wasEdit) { try { tfClearMissionForm(); } catch (e) {} }
+        }
         if (isOpen) {
             // Reset to Task mode on open
             setMissionType('Task');
@@ -514,16 +520,7 @@
                 });
                 if (res.ok) {
                     if (_focusQueue) { try { showToast('Queued — adds when focus ends', 'var(--blue)'); } catch(e){} try { tfSyncFocusLock(); } catch(e){} }
-                    missionTitle.value = '';
-                    if(document.getElementById('mission-tags')) document.getElementById('mission-tags').value = '';
-                    tfResetEnrichmentPanel();
-                    if(document.getElementById('mission-deadline')) document.getElementById('mission-deadline').value = '';
-                    if(document.getElementById('mission-duration')) document.getElementById('mission-duration').value = '';
-                    btnDeploy.disabled = true;
-                    btnDeploy.classList.remove('active');
-                    parsedDeadlineISO = null; selectedDeadlineType = 'soft';
-                    const dts = document.getElementById('deadline-type-section'); if(dts) dts.style.display='none';
-                    const dp = document.getElementById('deadline-parsed-display'); if(dp){dp.textContent='';dp.classList.remove('visible');}
+                    tfClearMissionForm();   // cleared ONLY on a successful create
                     showToast('Mission deployed.', 'var(--green)');
                     toggleCreateMission();
                     await loadTasks();
@@ -1361,6 +1358,22 @@
         document.querySelectorAll('.enrich-type-btn').forEach(b => b.classList.toggle('active', b.getAttribute('data-ltype') === 'url'));
         tfRenderLinkChips(); tfRenderChecklistBuild();
     };
+    // Wipe the whole Create-Mission form. Called ONLY after a successful submit (create or edit)
+    // and when leaving an edit (so an edited task's data never lingers into a fresh create). A
+    // genuine create draft is never cleared on close — see toggleCreateMission.
+    window.tfClearMissionForm = function() {
+        if (missionTitle) missionTitle.value = '';
+        const tg = document.getElementById('mission-tags'); if (tg) tg.value = '';
+        try { tfResetEnrichmentPanel(); } catch (e) {}
+        const md = document.getElementById('mission-deadline'); if (md) md.value = '';
+        const du = document.getElementById('mission-duration'); if (du) du.value = '';
+        document.querySelectorAll('[data-dur]').forEach(b => b.classList.remove('selected'));
+        if (btnDeploy) { btnDeploy.disabled = true; btnDeploy.classList.remove('active'); }
+        parsedDeadlineISO = null; selectedDeadlineType = 'soft';
+        const dts = document.getElementById('deadline-type-section'); if (dts) dts.style.display = 'none';
+        const dp = document.getElementById('deadline-parsed-display'); if (dp) { dp.textContent = ''; dp.classList.remove('visible'); }
+        document.querySelectorAll('[data-dl-preset]').forEach(b => b.classList.remove('selected'));
+    };
 
     // ── EDIT SYSTEM (Part 5): edit an existing mission via the Create panel ──
     function tfPriorityToTier(p) {
@@ -1480,6 +1493,7 @@
                 if (overlay) overlay.classList.remove('active');
                 document.body.style.overflow = '';
                 tfExitEditMode();
+                tfClearMissionForm();   // cleared on a successful edit too
                 showToast(successMsg || 'Mission updated.', 'var(--green)');
                 await loadTasks();
                 setSystemState('idle');
