@@ -410,7 +410,16 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
                 self.send_response(500)
                 self.end_headers_json()
                 self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
-            
+
+        elif path == "/api/focus/next":
+            # Ranked next-targets for the post-completion momentum modal (Zeigarnik-in-reverse).
+            try:
+                from task_manager import commands
+                limit = int(parse_qs(parsed.query).get('limit', ['3'])[0])
+                self._send_json(200, {"targets": commands.get_momentum_targets(limit=limit)})
+            except Exception as e:
+                self._send_json(500, {"error": str(e)})
+
         elif path == "/api/focus-status":
             # S11-F: focus lock status for the UI (active / task_id / ends_at / queued_count)
             try:
@@ -631,6 +640,17 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
                 self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
             return
 
+        elif path == "/api/focus/extend" and self.command == 'POST':
+            # "Need more time" — re-arm the clock without re-blocking (blocking stays active).
+            from task_manager import commands
+            try:
+                mins = int(data.get("minutes", 10))
+            except (ValueError, TypeError):
+                mins = 10
+            ok = commands.extend_focus(mins)
+            self._send_json(200, {"success": bool(ok), "minutes": mins})
+            return
+
         elif path == "/api/focus/complete" and self.command == 'POST':
             try:
                 from task_manager import commands
@@ -682,19 +702,6 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
                 self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
             return
             
-        elif path == "/api/focus/next" and self.command == 'GET':
-            try:
-                from task_manager import commands
-                limit = int(parse_qs(parsed.query).get('limit', ['3'])[0])
-                targets = commands.get_momentum_targets(limit=limit)
-                self.send_response(200)
-                self.end_headers_json()
-                self.wfile.write(json.dumps({"targets": targets}).encode('utf-8'))
-            except Exception as e:
-                self.send_response(500)
-                self.end_headers_json()
-                self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
-            return
 
         elif path.startswith("/api/tasks/") and path.endswith("/complete"):
             try:

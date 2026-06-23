@@ -3403,6 +3403,10 @@
     let currentFocusSecondsLeft = 0;
     let totalFocusSecondsInitial = 0;
     let focusLocalActive = false;   // this client owns a running countdown (authoritative for the UI)
+    let tfCountdownSecs = 0;        // live remaining seconds (module-level so "more time" can re-arm)
+    let sessionDecisionShown = false;
+    let focusCheckinTimer = null;
+    window.tfAvgFocusSpan = 25;     // learned attention span (min); refreshed from the server
     let deflections = 0;
     let isPaused = false;
     let activeBlockedSites = [];
@@ -3421,6 +3425,11 @@
                         updatePauseUI();
                     }
                     activateFocusLock(data);
+                    // Backstop: server says the timer hit 0 (within grace) — surface the decision
+                    // even if the local countdown drifted or this is a fresh page after a refresh.
+                    if (data.awaiting_decision && focusLocalActive && !sessionDecisionShown) {
+                        showSessionEndDecision();
+                    }
                 } else {
                     // Server reports no active session. Do NOT tear down a locally-running
                     // countdown — that was the bug: the start-race (poll fires before the start
@@ -3467,25 +3476,18 @@
             
             updateFocusTimerDisplay(currentFocusMinutesLeft, currentSecs);
 
-            let totalSeconds = totalFocusSecondsInitial;
-            focusTickInterval = setInterval(() => {
-                if (isPaused) return;
-                if (totalSeconds > 0) {
-                    totalSeconds--;
-                    const m = Math.floor(totalSeconds / 60);
-                    const s = totalSeconds % 60;
-                    updateFocusTimerDisplay(m, s);
-                    updateProgressAndGlow(totalSeconds, totalFocusSecondsInitial);
-                } else {
-                    completeFocusSession();
-                }
-            }, 1000);
-            
+            window.tfAvgFocusSpan = data.avg_focus_span || 25;
+            tfStartCountdown(totalFocusSecondsInitial);
+            // Mid-session check-in at the user's LEARNED attention span (capped to the session).
+            tfScheduleCheckin(Math.min(currentFocusMinutesLeft || 25, window.tfAvgFocusSpan) * 60);
+
             startMentalSupportFeed();
             startDefenseFeed();
 
             document.addEventListener('keydown', focusKeydownHandler);
             focusLocalActive = true;   // this client now owns the running countdown
+            // If we attached to a session whose timer already elapsed (refresh), go straight to the ask.
+            if (data.awaiting_decision) showSessionEndDecision();
         }
     }
 
@@ -3584,11 +3586,96 @@
         focusTickInterval = null; focusStatusInterval = null; focusDefenseInterval = null;
         focusLocalActive = false;
         isPaused = false;
+        sessionDecisionShown = false;
+        if (focusCheckinTimer) { clearTimeout(focusCheckinTimer); focusCheckinTimer = null; }
+        try { tfHideCheckin(); } catch (e) {}
+        const se = document.getElementById('session-end-modal'); if (se) se.classList.remove('active');
+        document.getElementById('focus-overlay').classList.remove('blur-heavy');
         document.getElementById('focus-progress-bar').style.width = '0%';
         document.getElementById('focus-overlay').style.boxShadow = 'none';
         document.getElementById('focus-timer').style.color = 'var(--blue)';
         document.getElementById('focus-timer').style.textShadow = '';
     }
+
+    // Re-armable countdown (module-level so "more time" can restart it). At zero we do NOT
+    // auto-complete — we ASK (most tasks don't fit one block; forcing "done" lies to the brain).
+    function tfStartCountdown(secs) {
+        tfCountdownSecs = Math.max(0, Math.round(secs));
+        totalFocusSecondsInitial = tfCountdownSecs || 1;
+        if (focusTickInterval) clearInterval(focusTickInterval);
+        updateFocusTimerDisplay(Math.floor(tfCountdownSecs / 60), tfCountdownSecs % 60);
+        focusTickInterval = setInterval(() => {
+            if (isPaused) return;
+            if (tfCountdownSecs > 0) {
+                tfCountdownSecs--;
+                updateFocusTimerDisplay(Math.floor(tfCountdownSecs / 60), tfCountdownSecs % 60);
+                updateProgressAndGlow(tfCountdownSecs, totalFocusSecondsInitial);
+            } else {
+                clearInterval(focusTickInterval); focusTickInterval = null;
+                showSessionEndDecision();
+            }
+        }, 1000);
+    }
+
+    function showSessionEndDecision() {
+        if (sessionDecisionShown) return;
+        sessionDecisionShown = true;
+        if (focusCheckinTimer) { clearTimeout(focusCheckinTimer); focusCheckinTimer = null; }
+        try { tfHideCheckin(); } catch (e) {}
+        const titleEl = document.getElementById('focus-task-title');
+        const task = titleEl ? titleEl.innerText : 'this mission';
+        const evening = (new Date()).getHours() >= 18;
+        const head = document.getElementById('se-head');
+        const sub = document.getElementById('se-sub');
+        if (head) head.innerText = evening ? "Time's up — and the day's winding down." : "Time's up. Where are you?";
+        if (sub) sub.innerText = evening
+            ? `No pressure. Finish “${task}”, give it a little more, or call it a good stop for today.`
+            : `Not everything fits one block — that's normal. Done with “${task}”, or want a bit more time?`;
+        document.getElementById('focus-overlay').classList.add('blur-heavy');
+        const m = document.getElementById('session-end-modal'); if (m) m.classList.add('active');
+    }
+    window.sessionMoreTime = async (mins) => {
+        try { await fetch('/api/focus/extend', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ minutes: mins }) }); } catch (e) {}
+        sessionDecisionShown = false;
+        const m = document.getElementById('session-end-modal'); if (m) m.classList.remove('active');
+        document.getElementById('focus-overlay').classList.remove('blur-heavy');
+        tfStartCountdown(mins * 60);
+        tfScheduleCheckin(Math.min(mins, window.tfAvgFocusSpan || 25) * 60);
+        showToast(`+${mins} min. No rush — pick up right where you left off.`, "var(--blue)");
+    };
+    window.sessionDoneFromDecision = async () => {
+        sessionDecisionShown = false;
+        const m = document.getElementById('session-end-modal'); if (m) m.classList.remove('active');
+        await submitMissionComplete();   // marks complete, records the span, opens next-targets
+    };
+    window.sessionPauseFromDecision = async () => {
+        sessionDecisionShown = false;
+        const m = document.getElementById('session-end-modal'); if (m) m.classList.remove('active');
+        try { await fetch('/api/focus_end', { method: 'POST' }); } catch (e) {}
+        deactivateFocusLock();
+        showToast("Good stop. It's saved exactly where you left it.", "var(--blue)");
+        try { loadTasks(); } catch (e) {}
+    };
+
+    // ── Mid-session attention / break check-in (learned span) ──
+    function tfScheduleCheckin(secs) {
+        if (focusCheckinTimer) clearTimeout(focusCheckinTimer);
+        if (!secs || secs < 60) return;   // too short to bother
+        focusCheckinTimer = setTimeout(showCheckin, secs * 1000);
+    }
+    function showCheckin() {
+        if (!focusLocalActive || sessionDecisionShown || isPaused) { tfScheduleCheckin((window.tfAvgFocusSpan || 25) * 60); return; }
+        const titleEl = document.getElementById('focus-task-title');
+        const task = titleEl ? titleEl.innerText : 'your task';
+        const span = window.tfAvgFocusSpan || 25;
+        const fc = document.getElementById('fc-text');
+        if (fc) fc.innerHTML = `You've been locked in on <b>${task}</b> for about ${span} min. Still on it — or did a tab pull you away?`;
+        const el = document.getElementById('focus-checkin'); if (el) el.classList.add('show');
+    }
+    window.tfHideCheckin = function () { const el = document.getElementById('focus-checkin'); if (el) el.classList.remove('show'); };
+    window.checkinKeepGoing = () => { tfHideCheckin(); tfScheduleCheckin((window.tfAvgFocusSpan || 25) * 60); showToast("Locked in. ✦", "var(--green)"); };
+    window.checkinBreak = () => { tfHideCheckin(); try { window.togglePauseFocus(); } catch (e) {} showToast("Breather. Stand up, look away — resume when you're ready.", "var(--blue)"); };
+    window.checkinWrap = () => { tfHideCheckin(); showSessionEndDecision(); };
 
     function updateFocusTimerDisplay(m, s = 0) {
         currentFocusMinutesLeft = m;
@@ -3660,12 +3747,18 @@
                 }
             } catch(te) {}
             
-            // Also show reward screen
-            document.getElementById('reward-minutes').innerText = timeUsedMins;
+            // Hand off to the "what's next" momentum modal — pre-answers the brain's "what now?"
+            // (Zeigarnik-in-reverse) so completing one mission flows into the next. Falls back to
+            // the static reward screen if anything goes wrong.
             const cycleText = document.getElementById('focus-cycle-text');
             const cText = cycleText ? `Focus Cycle ${cycleText.innerText} Completed` : 'Focus Cycle Completed';
-            document.getElementById('reward-cycle-text').innerText = cText;
-            document.getElementById('reward-screen').classList.add('active');
+            try {
+                await openMomentumDeployment(timeUsedMins, timeSavedMins, finalEffScore, cText);
+            } catch (e) {
+                document.getElementById('reward-minutes').innerText = timeUsedMins;
+                document.getElementById('reward-cycle-text').innerText = cText;
+                document.getElementById('reward-screen').classList.add('active');
+            }
 
         } catch(e) { console.error(e); }
     };

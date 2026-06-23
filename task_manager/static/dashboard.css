@@ -1947,6 +1947,19 @@
         .fs-site-input { width: 100%; background: var(--bg-primary); border: 1px solid var(--border-neutral); border-radius: 8px; padding: 9px 12px; color: var(--text-hero); font-size: 13px; outline: none; }
         .fs-site-input:focus { border-color: var(--blue); }
         .fs-note { font-size: 11px; color: var(--text-tertiary); line-height: 1.5; margin-top: 10px; background: color-mix(in srgb, var(--accent-warning) 8%, transparent); border: 1px solid color-mix(in srgb, var(--accent-warning) 22%, transparent); border-radius: 8px; padding: 9px 11px; }
+
+        /* ── Mid-session attention / break check-in ── */
+        .focus-checkin { position: fixed; left: 50%; bottom: 36px; transform: translateX(-50%) translateY(20px);
+            z-index: 10060; max-width: 460px; width: calc(100% - 48px);
+            background: color-mix(in srgb, var(--bg-surface) 92%, transparent); backdrop-filter: blur(12px);
+            border: 1px solid var(--border-default); border-radius: 14px; padding: 16px 18px;
+            box-shadow: 0 18px 50px rgba(0,0,0,0.45); opacity: 0; pointer-events: none; transition: all .35s cubic-bezier(.2,.8,.2,1); }
+        .focus-checkin.show { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
+        .fc-btn { flex: 1; min-width: 110px; background: color-mix(in srgb, var(--text-primary) 6%, transparent);
+            border: 1px solid var(--border-neutral); color: var(--text-body); border-radius: 9px; padding: 9px 12px;
+            font-size: 12.5px; cursor: pointer; transition: all .14s; }
+        .fc-btn:hover { border-color: var(--text-disabled); color: var(--text-primary); }
+        .fc-btn.fc-yes { background: color-mix(in srgb, var(--accent-success) 14%, transparent); border-color: color-mix(in srgb, var(--accent-success) 40%, transparent); color: var(--green); }
         .dc-dur-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
         .dc-dur { background: var(--bg-surface); border: 1px solid var(--border-subtle); color: var(--text-secondary); border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; font-family: var(--font-mono); }
         .dc-dur:hover { border-color: var(--border-neutral); color: var(--text-primary); }

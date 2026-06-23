@@ -198,6 +198,35 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         </div>
     </div>
 
+    <!-- Session-End Decision (timer ran out — done, more time, or stop?) -->
+    <div id="session-end-modal" class="abort-modal">
+        <div class="abort-modal-content" style="max-width:470px; text-align:left;">
+            <div style="font-size:32px; margin-bottom:6px;">⏱️</div>
+            <h2 id="se-head" style="color:var(--text-hero); font-size:22px; margin-bottom:8px;">Time's up. Where are you?</h2>
+            <p id="se-sub" style="color:var(--text-muted); margin-bottom:22px; line-height:1.55;">Not everything fits one block — that's completely normal.</p>
+            <div style="display:flex; flex-direction:column; gap:10px;">
+                <button onclick="sessionDoneFromDecision()" class="btn-modal-primary" style="background:var(--green); border:none;">✓ Done — mission complete</button>
+                <div style="font-size:11px; letter-spacing:1px; text-transform:uppercase; color:var(--text-secondary); margin-top:4px;">Need more time?</div>
+                <div style="display:flex; gap:8px;">
+                    <button onclick="sessionMoreTime(10)" class="btn-modal-primary" style="flex:1;">+10 min</button>
+                    <button onclick="sessionMoreTime(15)" class="btn-modal-primary" style="flex:1;">+15 min</button>
+                    <button onclick="sessionMoreTime(25)" class="btn-modal-primary" style="flex:1;">+25 min</button>
+                </div>
+                <button onclick="sessionPauseFromDecision()" style="margin-top:6px; background:transparent; border:1px solid var(--border-neutral); color:var(--text-muted); border-radius:10px; padding:11px; cursor:pointer; font-size:13px;">Stop here — save my progress</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mid-session attention / break check-in (learned span) -->
+    <div id="focus-checkin" class="focus-checkin">
+        <div id="fc-text" style="font-size:14px; color:var(--text-hero); margin-bottom:10px; line-height:1.5;">Still locked in?</div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button onclick="checkinKeepGoing()" class="fc-btn fc-yes">Yes — keep going</button>
+            <button onclick="checkinBreak()" class="fc-btn">Take a breather</button>
+            <button onclick="checkinWrap()" class="fc-btn">Wrap it up</button>
+        </div>
+    </div>
+
     <!-- Abort Modal -->
     <div id="abort-modal" class="abort-modal">
         <div class="abort-modal-content">

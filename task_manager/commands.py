@@ -1126,6 +1126,8 @@ class FocusManager:
             "priority": focus_status.get("priority"),
             "minutes_left": focus_status.get("remaining_minutes"), # Consistent with check_focus return
             "remaining_seconds": focus_status.get("remaining_seconds"),
+            "awaiting_decision": focus_status.get("awaiting_decision", False),  # timer hit 0, holding for "done/more?"
+            "avg_focus_span": get_avg_focus_span(),                             # learned concentration span (min)
             "paused": focus_status.get("paused", False),
             "cycles_completed": focus_status.get("cycles_completed", 0),
             "blocking_active": False,
@@ -1201,6 +1203,11 @@ def confirm_action(message: str) -> bool:
 # TIME MANAGEMENT UTILITIES
 # =========================================================
 
+# When a focus timer hits 0 we don't auto-end: we hold the session alive (blocking stays) for
+# this long so the user can answer "done / need more time?". If they walk away, it auto-ends.
+_FOCUS_GRACE_SECONDS = 180
+
+
 class TimeTracker:
     """Track time spent on tasks."""
     
@@ -1239,14 +1246,16 @@ class TimeTracker:
                         elapsed = (datetime.now() - start_time).total_seconds()
                     
                     remaining = (minutes * 60) - elapsed
-                    
-                    if remaining > 0:
+
+                    if remaining > -_FOCUS_GRACE_SECONDS:
+                        # Still running OR within the post-timer decision grace window: keep the
+                        # session loaded so check_focus() can hold it for "done / need more time?".
                         self.active_session = state['active_session']
                         self.start_time = time.time() - elapsed
                     else:
-                        # The session finished while the app was closed. Clear it. Only credit the
-                        # cycle / announce on a non-quiet (interactive) load — and never let a
-                        # bookkeeping helper crash a load that happens at import time.
+                        # The session finished (and the grace window passed) while the app was
+                        # closed. Clear it. Only credit the cycle / announce on a non-quiet
+                        # (interactive) load — and never let a bookkeeping helper crash an import.
                         if not quiet:
                             print("⏰ Previous focus session expired.")
                             try:
@@ -1374,11 +1383,9 @@ class TimeTracker:
             
         remaining = (self.active_session['minutes'] * 60) - elapsed
         
-        if remaining <= 0:
+        if remaining <= -_FOCUS_GRACE_SECONDS:
+            # Past the decision grace window with no answer → end + tear down blocking.
             session = self.active_session.copy()
-            # Clear the session AND tear down any blocking. Previously this was either/or — when
-            # the expiry hook was set it skipped clearing, so the session lingered; and the plain
-            # path never told the blocker, so the proxy/hosts stayed up after a session ran out.
             self.increment_cycle()
             self._save_state({'active_session': None, 'start_time': None})
             self.active_session = None
@@ -1390,6 +1397,11 @@ class TimeTracker:
                     pass
             return {'status': 'completed', 'session': session, 'cycles_completed': self.get_cycles()}
 
+        # The timer can hit 0 and HOLD here (blocking stays) so the user can answer
+        # "done / need more time?" — not everyone finishes in one block. After the grace
+        # window (above) we auto-end as a safety net.
+        awaiting = remaining <= 0
+        disp = max(0, remaining)
         return {
             'status': 'active',
             'task_id': self.active_session.get('task_id'),
@@ -1399,8 +1411,9 @@ class TimeTracker:
             'blocked_sites': self.active_session.get('blocked_sites', []),
             'mode': self.active_session.get('mode', 'gentle'),
             'elapsed_minutes': int(elapsed / 60),
-            'remaining_minutes': int(remaining / 60),
-            'remaining_seconds': int(remaining % 60),
+            'remaining_minutes': int(disp / 60),
+            'remaining_seconds': int(disp % 60),
+            'awaiting_decision': awaiting,
             'paused': is_paused,
             'cycles_completed': self.get_cycles()
         }
@@ -1513,11 +1526,74 @@ def complete_focus(efficiency_score=0, time_saved=0, time_used=0):
         print(f"Efficiency: {efficiency_score}%")
     print("[MOMENTUM MODE] Ready for next sequence.")
     
+    # Learn the user's real concentration span from what they actually focused.
+    _record_focus_span(time_used)
+
     # Force end the session properly globally
     time_tracker.end_focus(completed=True)
     focus_manager.end_focus_session()
-    
+
     return True
+
+
+def extend_focus(minutes: int = 10) -> bool:
+    """Give the current focus session more time WITHOUT re-blocking (blocking stays as-is).
+    Used when a session's timer runs out but the task isn't done — re-arms the clock."""
+    time_tracker._load_state(quiet=True)
+    if not time_tracker.active_session:
+        return False
+    try:
+        minutes = max(1, min(240, int(minutes)))
+    except (TypeError, ValueError):
+        minutes = 10
+    time_tracker.active_session['start_time'] = datetime.now().isoformat()
+    time_tracker.active_session['minutes'] = minutes
+    time_tracker.active_session['paused'] = False
+    time_tracker.active_session.pop('paused_at', None)
+    time_tracker.start_time = time.time()
+    time_tracker._save_state()
+    return True
+
+
+def _record_focus_span(minutes) -> None:
+    """Append an actual focus-block length to a rolling history (last 20) in user_stats.json.
+    This is how TaskFlow LEARNS your real attention span over time — not a single last-session
+    value, but an average, so the break/check-in nudge adapts to you."""
+    try:
+        m = int(minutes or 0)
+    except (TypeError, ValueError):
+        return
+    if m <= 0:
+        return
+    try:
+        stats_file = storage.data_dir / "user_stats.json"
+        stats = {}
+        if stats_file.exists():
+            with open(stats_file, 'r') as f:
+                stats = json.load(f)
+        spans = stats.get('focus_spans', [])
+        spans.append(m)
+        stats['focus_spans'] = spans[-20:]
+        with open(stats_file, 'w') as f:
+            json.dump(stats, f)
+    except Exception:
+        pass
+
+
+def get_avg_focus_span(default: int = 25) -> int:
+    """The user's learned average concentration span (minutes), clamped to a sane 10–90.
+    Falls back to a general default until we have at least 3 real data points — so a brand-new
+    user gets a sensible generic value, and an experienced one gets their own rhythm."""
+    try:
+        stats_file = storage.data_dir / "user_stats.json"
+        if stats_file.exists():
+            with open(stats_file, 'r') as f:
+                spans = json.load(f).get('focus_spans', [])
+            if len(spans) >= 3:
+                return max(10, min(90, round(sum(spans) / len(spans))))
+    except Exception:
+        pass
+    return default
 
 
 # =========================================================
