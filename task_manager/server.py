@@ -411,6 +411,14 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
                 self.end_headers_json()
                 self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
 
+        elif path == "/api/intelligence":
+            # Local, honest behavioral insights (no network/LLM) for the Intelligence tab.
+            try:
+                from task_manager import commands
+                self._send_json(200, commands.get_intelligence_insights())
+            except Exception as e:
+                self._send_json(200, {"insights": [], "have_data": False, "error": str(e)})
+
         elif path == "/api/focus/next":
             # Ranked next-targets for the post-completion momentum modal (Zeigarnik-in-reverse).
             try:

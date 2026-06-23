@@ -1601,6 +1601,106 @@ def get_focus_blocks_today() -> int:
     return 0
 
 
+def get_intelligence_insights() -> dict:
+    """Local, honest behavioral insights computed from the user's OWN data — no network, no LLM
+    (TaskFlow stays 100% offline). Each insight surfaces only when there's enough history to back
+    it; otherwise we say so plainly. This is the 'Nova data' the system quietly collects, mirrored
+    back as intelligence — and the precursor to the Phase-3 LLM layer.
+    """
+    insights = []
+    try:
+        tasks = storage.load_tasks()
+    except Exception:
+        tasks = []
+    completed = [t for t in tasks if getattr(t, 'completed', False)]
+    active = [t for t in tasks if not getattr(t, 'completed', False)
+              and not getattr(t, 'dropped_at', None) and not getattr(t, 'offloaded_at', None)]
+
+    # 1. Learned concentration span
+    try:
+        stats_file = storage.data_dir / "user_stats.json"
+        spans = []
+        if stats_file.exists():
+            with open(stats_file, 'r') as f:
+                spans = json.load(f).get('focus_spans', [])
+        if len(spans) >= 3:
+            avg = round(sum(spans) / len(spans))
+            insights.append({"kind": "rhythm",
+                "text": f"Your real focus span averages ~{avg} min. Sizing sessions near that tends "
+                        f"to finish cleanly; pushing far past it is where attention starts to drift."})
+    except Exception:
+        pass
+
+    # 2. Duration-estimate accuracy (the planning fallacy, mirrored)
+    try:
+        ratios = []
+        for t in completed:
+            planned = _duration_minutes(t, 0)
+            actual = getattr(t, 'focus_minutes_spent', 0) or 0
+            if planned and actual:
+                ratios.append(actual / planned)
+        if len(ratios) >= 3:
+            r = sum(ratios) / len(ratios)
+            pct = abs(round((r - 1) * 100))
+            if r >= 1.15:
+                insights.append({"kind": "estimate",
+                    "text": f"Your tasks run about {pct}% longer than you plan — the planning fallacy "
+                            f"in action. Padding estimates by ~{min(pct, 50)}% will make your day land."})
+            elif r <= 0.85:
+                insights.append({"kind": "estimate",
+                    "text": f"You finish about {pct}% faster than you estimate — you can safely commit "
+                            f"to a little more than you think."})
+            else:
+                insights.append({"kind": "estimate",
+                    "text": "Your time estimates land within ~15% of reality — rare, and worth protecting."})
+    except Exception:
+        pass
+
+    # 3. Most-postponed (too big / too vague)
+    try:
+        slipped = sorted([t for t in active if (getattr(t, 'postpone_count', 0) or 0) >= 2],
+                         key=lambda t: t.postpone_count, reverse=True)
+        if slipped:
+            t = slipped[0]
+            insights.append({"kind": "pattern",
+                "text": f"“{t.title}” has slipped ×{t.postpone_count}. Repeated postponing usually means "
+                        f"it's too big or too vague — peel off a 15-minute first step and start there."})
+    except Exception:
+        pass
+
+    # 4. Day-of-week rhythm
+    try:
+        dow = compute_day_of_week_stats(storage.load_daily_summaries())
+        if dow and dow.get('best_day_name'):
+            txt = f"You execute strongest on {dow['best_day_name']}s"
+            if dow.get('worst_day_name') and dow['worst_day_name'] != dow['best_day_name']:
+                txt += f", while {dow['worst_day_name']}s are your dip — plan those lighter."
+            else:
+                txt += "."
+            insights.append({"kind": "rhythm", "text": txt})
+    except Exception:
+        pass
+
+    # 5. Momentum / streak
+    try:
+        cfg = storage.load_config()
+        streak = cfg.get('execution_streak', 0) or 0
+        if streak >= 2:
+            insights.append({"kind": "momentum",
+                "text": f"{streak}-day execution streak. The chain itself is now a reason to show up "
+                        f"tomorrow — protect it."})
+    except Exception:
+        pass
+
+    have = len(insights) > 0
+    if not have:
+        insights.append({"kind": "nudge",
+            "text": "Not enough history yet to read your patterns. Run a few focus sessions and close "
+                    "some tasks — your concentration span, estimate accuracy, and strongest days will "
+                    "surface here automatically, computed only from your own behavior."})
+    return {"insights": insights, "have_data": have, "generated_at": datetime.now().isoformat()}
+
+
 def get_avg_focus_span(default: int = 25) -> int:
     """The user's learned average concentration span (minutes), clamped to a sane 10–90.
     Falls back to a general default until we have at least 3 real data points — so a brand-new

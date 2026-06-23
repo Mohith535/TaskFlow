@@ -249,6 +249,7 @@
             const vid = item.id.replace('nav-', '');
             switchView(vid);
             if (vid === 'ai' || vid === 'stats') loadStats().catch(console.error);
+            if (vid === 'ai') loadIntelligence().catch(console.error);
         });
     });
 
@@ -2244,6 +2245,25 @@
                 chipsEl.innerHTML = chips;
             }
         } catch (e) { console.error('dow', e); }
+    }
+
+    async function loadIntelligence() {
+        const box = document.getElementById('intel-logs');
+        if (!box) return;
+        try {
+            const d = await (await fetch('/api/intelligence')).json();
+            const colors = { pattern: 'var(--amber)', estimate: 'var(--blue)', rhythm: 'var(--ai-purple)', momentum: 'var(--green)', nudge: 'var(--text-disabled)' };
+            const labels = { pattern: 'PATTERN', estimate: 'ESTIMATE', rhythm: 'RHYTHM', momentum: 'MOMENTUM', nudge: 'NEXT' };
+            const items = d.insights || [];
+            if (!items.length) return;
+            box.innerHTML = items.map(it => {
+                const c = colors[it.kind] || 'var(--blue)';
+                return `<div style="padding:12px 14px; border-left:3px solid ${c}; background:color-mix(in srgb, var(--text-primary) 2%, transparent); border-radius:0 8px 8px 0;">
+                    <div style="font-size:10px; letter-spacing:1.5px; color:${c}; margin-bottom:5px; font-weight:700;">${labels[it.kind] || 'SIGNAL'}</div>
+                    <div style="font-size:13px; line-height:1.55; color:var(--text-body);">${escapeHtml(it.text)}</div>
+                </div>`;
+            }).join('');
+        } catch (e) { /* leave the static fallback in place */ }
     }
 
     async function loadStats() {
