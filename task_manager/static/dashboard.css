@@ -402,10 +402,25 @@
         .btn-deploy {
             width: 100%; margin-top: 16px; height: 44px; background: var(--bg-surface);
             border: 1px solid var(--border-neutral); border-radius: 8px;
-            color: var(--text-muted); font-weight: 600; cursor: pointer; transition: all 200ms;
+            color: var(--text-muted); font-weight: 600; cursor: pointer;
+            transition: transform 100ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 100ms, background 200ms, color 200ms, border-color 200ms;
+            transform-origin: center; position: relative; overflow: hidden;
         }
-        .btn-deploy.active { background: var(--blue-dark); color: #fff; border-color: var(--blue-dark); }
-        .btn-deploy.active:hover { box-shadow: 0 8px 24px color-mix(in srgb, var(--accent-info-strong) 40%, transparent); transform: translateY(-1px); }
+        .btn-deploy.active {
+            background: var(--blue-dark); color: #fff; border-color: var(--blue-dark);
+            box-shadow: 0 4px 16px color-mix(in srgb, var(--accent-info-strong) 30%, transparent);
+        }
+        .btn-deploy.active:hover { box-shadow: 0 8px 24px color-mix(in srgb, var(--accent-info-strong) 50%, transparent); transform: translateY(-1px) scale(1.005); }
+        .btn-deploy:active, .btn-deploy.pressing { transform: scale(0.96) translateY(1px); box-shadow: none !important; }
+        /* ripple ring */
+        .btn-deploy::after {
+            content: ''; position: absolute; inset: 0; border-radius: inherit;
+            background: radial-gradient(circle at center, rgba(255,255,255,0.18) 0%, transparent 70%);
+            opacity: 0; transform: scale(0.7);
+            transition: opacity 180ms, transform 280ms cubic-bezier(0.16, 1, 0.3, 1);
+            pointer-events: none;
+        }
+        .btn-deploy.ripple::after { opacity: 1; transform: scale(1.4); }
 
         /* ─── DEPLOYMENT MODAL (PREMIUM) ───────── */
         .deploy-modal-overlay {

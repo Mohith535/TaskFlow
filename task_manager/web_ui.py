@@ -845,10 +845,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     <label class="section-label" style="font-size:9px;">DEADLINE (OPTIONAL)</label>
                     <div style="display:flex; gap:8px; align-items:center;">
                         <input type="text" id="mission-deadline" class="deadline-input"
-                               placeholder="e.g. tomorrow 3pm, Friday, in 2 hours" autocomplete="off" style="flex:1;">
-                        <div style="position:relative; width:42px; height:42px; background:color-mix(in srgb, var(--text-primary) 5%, transparent); border:1px solid var(--border-neutral); border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer;" title="Pick a date manually">
-                            <span style="font-size:16px;">📅</span>
-                            <input type="date" id="mission-deadline-fallback" style="position:absolute; top:0; left:0; width:100%; height:100%; opacity:0; cursor:pointer;" onchange="document.getElementById('mission-deadline').value = this.value; document.getElementById('mission-deadline').dispatchEvent(new Event('input'));">
+                               placeholder="tomorrow 9am  ·  Friday 3pm  ·  29 Jun  ·  in 2h" autocomplete="off" style="flex:1;">
+                        <div onclick="document.getElementById('mission-deadline-fallback').showPicker ? document.getElementById('mission-deadline-fallback').showPicker() : document.getElementById('mission-deadline-fallback').click()"
+                             style="position:relative; width:42px; height:42px; background:color-mix(in srgb, var(--text-primary) 5%, transparent); border:1px solid var(--border-neutral); border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer; user-select:none;" title="Pick a date">
+                            <span style="font-size:16px; pointer-events:none;">📅</span>
+                            <input type="date" id="mission-deadline-fallback" style="position:absolute; top:0; left:0; width:1px; height:1px; opacity:0; pointer-events:none;" onchange="document.getElementById('mission-deadline').value = this.value; document.getElementById('mission-deadline').dispatchEvent(new Event('input'));">
                         </div>
                     </div>
                     <div style="display:flex; gap:8px; margin-top:8px; margin-bottom:8px; flex-wrap:wrap;">

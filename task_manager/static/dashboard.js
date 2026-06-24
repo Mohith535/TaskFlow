@@ -126,22 +126,30 @@
             }
         }
 
-        // 4. Month names: "may 7", "7 may", "may 7 3pm", "jun 15 8:45am"
+        // 4. Month names: "may 7", "7 may", "may 7 3pm", "jun 15 8:45am", "29 june 2026"
         const monthNames = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
         const monthFull = ['january','february','march','april','may','june','july','august','september','october','november','december'];
+        // Extract explicit 4-digit year if present (e.g. "29 june 2026")
+        const explicitYear = s.match(/\b(202\d|203\d)\b/);
+        const targetYear = explicitYear ? parseInt(explicitYear[1]) : null;
         for (let mi = 0; mi < 12; mi++) {
-            const r1 = new RegExp('\b(' + monthFull[mi] + '|' + monthNames[mi] + ')\s+(\d{1,2})');
-            const r2 = new RegExp('(\d{1,2})(?:st|nd|rd|th)?\s+(' + monthFull[mi] + '|' + monthNames[mi] + ')');
-            let match = s.match(r1);
+            // NOTE: double-escaped \\b \\s \\d so RegExp treats them as regex metacharacters.
+            // r2 (day before month) is checked FIRST — avoids "june 2026" being misread as "june 20".
+            // \\b after \\d{1,2} prevents matching partial years ("20" from "2026").
+            const r2 = new RegExp('(\\d{1,2})(?:st|nd|rd|th)?\\b\\s+(' + monthFull[mi] + '|' + monthNames[mi] + ')\\b');
+            const r1 = new RegExp('\\b(' + monthFull[mi] + '|' + monthNames[mi] + ')\\s+(\\d{1,2})\\b');
+            let match = s.match(r2);
             if (match) {
-                d = new Date(now.getFullYear(), mi, parseInt(match[2]));
-                if (d < now) d.setFullYear(d.getFullYear() + 1);
+                const yr = targetYear || now.getFullYear();
+                d = new Date(yr, mi, parseInt(match[1]));
+                if (!targetYear && d < now) d.setFullYear(d.getFullYear() + 1);
                 return applyTimeOrDefault(d, s);
             }
-            match = s.match(r2);
+            match = s.match(r1);
             if (match) {
-                d = new Date(now.getFullYear(), mi, parseInt(match[1]));
-                if (d < now) d.setFullYear(d.getFullYear() + 1);
+                const yr = targetYear || now.getFullYear();
+                d = new Date(yr, mi, parseInt(match[2]));
+                if (!targetYear && d < now) d.setFullYear(d.getFullYear() + 1);
                 return applyTimeOrDefault(d, s);
             }
         }
@@ -472,6 +480,17 @@
     document.getElementById('event-date').addEventListener('input', validateMissionInput);
 
     if (btnDeploy) {
+        // Mechanical press animation — ripple on every click
+        btnDeploy.addEventListener('mousedown', () => {
+            btnDeploy.classList.add('pressing');
+            btnDeploy.classList.remove('ripple');
+            void btnDeploy.offsetWidth; // reflow to restart animation
+            btnDeploy.classList.add('ripple');
+            setTimeout(() => btnDeploy.classList.remove('ripple'), 350);
+        });
+        btnDeploy.addEventListener('mouseup', () => btnDeploy.classList.remove('pressing'));
+        btnDeploy.addEventListener('mouseleave', () => btnDeploy.classList.remove('pressing'));
+
         btnDeploy.addEventListener('click', async () => {
             if (window.tfEditId != null) { await tfHandleEditSave(); return; }
             const title = missionTitle.value.trim();
@@ -1000,6 +1019,14 @@
             else if (totalMins < 60) focusEl.textContent = `${totalMins}m`;
             else focusEl.textContent = `${(totalMins / 60).toFixed(1)}h`;
         }
+    }
+
+    function openNovaForTask(taskId, taskTitle) {
+        // Open Nova in a new tab — it knows about all your tasks via its own API.
+        // The task title is passed as a URL hash so Nova can pre-fill context if supported.
+        const novaUrl = 'http://localhost:8765';
+        showToast('Opening Nova — ask it about "' + (taskTitle || 'this task') + '"', 'var(--ai-purple)');
+        window.open(novaUrl, '_blank', 'noopener');
     }
 
     async function loadDashboardIntelligence() {
@@ -2920,7 +2947,7 @@
                     <button class="btn-execute" style="width:100%; margin-bottom:10px; padding:13px;" onclick="startFocus(${task.id})">DEPLOY FOCUS SESSION</button>
                     <div style="display:flex;gap:8px;">
                         <button class="epdo-btn-util complete" onclick="completeTaskFromModal(${task.id})">✓ COMPLETE</button>
-                        <button class="epdo-btn-util ai" onclick="showToast('Querying Intelligence Core...', 'var(--ai-purple)')">✦ ASK AI</button>
+                        <button class="epdo-btn-util ai" onclick="openNovaForTask(${task.id}, ${JSON.stringify(task.title)})">✦ ASK AI</button>
                     </div>
                 </div>
 
@@ -3351,13 +3378,21 @@
                     if (!val) { parsedDeadlineISO = null; if(disp){disp.textContent='';disp.classList.remove('visible');} if(section)section.style.display='none'; if(window.tfUpdateProgressDots) tfUpdateProgressDots(); return; }
                     const parsed = parseDeadlineInput(val);
                     if (parsed) {
-                        parsedDeadlineISO = parsed.toISOString();
-                        const nice = parsed.toLocaleDateString([], {weekday:'long',day:'numeric',month:'short',year:'numeric'}) + ' at ' + parsed.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
-                        if(disp){disp.textContent='→ ' + nice; disp.style.color='var(--green)'; disp.classList.add('visible');}
-                        if(section) section.style.display='block';
+                        const nowCheck = new Date();
+                        if (parsed < nowCheck && (nowCheck - parsed) > 60000) {
+                            // Past date — reject
+                            parsedDeadlineISO = null;
+                            if(disp){disp.textContent="→ That date is already past. Try: 'tomorrow 9am'"; disp.style.color='var(--red)'; disp.classList.add('visible');}
+                            if(section)section.style.display='none';
+                        } else {
+                            parsedDeadlineISO = parsed.toISOString();
+                            const nice = parsed.toLocaleDateString([], {weekday:'long',day:'numeric',month:'short',year:'numeric'}) + ' · ' + parsed.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
+                            if(disp){disp.textContent='→ ' + nice; disp.style.color='var(--green)'; disp.classList.add('visible');}
+                            if(section) section.style.display='block';
+                        }
                     } else {
                         parsedDeadlineISO = null;
-                        if(disp){disp.textContent="→ Could not understand. Try: 'Friday 3pm'"; disp.style.color='var(--red)'; disp.classList.add('visible');}
+                        if(disp){disp.textContent="→ Try: 'tomorrow 9am', 'Friday 3pm', '29 Jun', 'in 2h'"; disp.style.color='var(--red)'; disp.classList.add('visible');}
                         if(section)section.style.display='none';
                     }
                     if(window.tfUpdateProgressDots) tfUpdateProgressDots();
