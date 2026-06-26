@@ -455,6 +455,18 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
             except Exception:
                 self._send_json(200, {"is_admin": False, "platform": "unknown"})
 
+        elif path == "/api/user-profile":
+            # Shared user_profile.json — read basics for OPERATOR M "About You" panel
+            import pathlib as _pl
+            _up = _pl.Path.home() / ".taskflow" / "user_profile.json"
+            try:
+                _data = json.loads(_up.read_text(encoding="utf-8")) if _up.exists() else {}
+            except Exception:
+                _data = {}
+            self.send_response(200)
+            self.end_headers_json()
+            self.wfile.write(json.dumps({"profile": _data}).encode("utf-8"))
+
         elif path == "/api/blocklist":
             try:
                 from task_manager.blockers.blocklist import blocklist_manager
@@ -851,6 +863,38 @@ class TaskFlowHandler(BaseHTTPRequestHandler):
                 self.send_response(500)
                 self.end_headers_json()
                 self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
+
+        elif path == "/api/user-profile":
+            # POST: update basics fields in user_profile.json
+            import pathlib as _pl2
+            try:
+                body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))))
+                _up2 = _pl2.Path.home() / ".taskflow" / "user_profile.json"
+                existing = {}
+                try:
+                    if _up2.exists():
+                        existing = json.loads(_up2.read_text(encoding="utf-8"))
+                except Exception:
+                    pass
+                if not isinstance(existing, dict):
+                    existing = {}
+                basics = existing.get("basics") or {}
+                for field in ("name", "pronouns", "life_context", "peak_hours"):
+                    if field in body:
+                        basics[field] = str(body[field]).strip()
+                existing["basics"] = basics
+                from datetime import datetime as _dt2
+                existing["updated_at"] = _dt2.now().isoformat()
+                _tmp2 = _up2.with_suffix(".json.tmp")
+                _tmp2.write_text(json.dumps(existing, indent=2, ensure_ascii=False), encoding="utf-8")
+                _tmp2.replace(_up2)
+                self.send_response(200)
+                self.end_headers_json()
+                self.wfile.write(json.dumps({"ok": True}).encode("utf-8"))
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers_json()
+                self.wfile.write(json.dumps({"error": str(e)}).encode("utf-8"))
 
         elif path == "/api/blocklist":
             try:

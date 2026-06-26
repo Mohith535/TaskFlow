@@ -420,6 +420,38 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     <button class="op-save-theme" onclick="tfSaveCustomTheme()">Save as Custom Theme</button>
                 </div>
                 <div class="op-reset" onclick="tfResetTheme()">Reset to Midnight</div>
+                <div class="op-h" style="margin-top:18px;">ABOUT YOU</div>
+                <div id="op-about-body">
+                    <div class="op-row" style="flex-direction:column;align-items:flex-start;gap:8px">
+                        <div class="op-label" style="margin-bottom:2px">Name</div>
+                        <input id="op-name" class="op-text-input" placeholder="What should I call you?" autocomplete="off"
+                               oninput="tfAboutDirty()" style="width:100%">
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+                        <div>
+                            <div class="op-label" style="margin-bottom:4px">Pronouns</div>
+                            <select id="op-pronouns" class="op-text-input" oninput="tfAboutDirty()">
+                                <option value="">Prefer not to say</option>
+                                <option value="he/him">he/him</option>
+                                <option value="she/her">she/her</option>
+                                <option value="they/them">they/them</option>
+                            </select>
+                        </div>
+                        <div>
+                            <div class="op-label" style="margin-bottom:4px">Peak hours</div>
+                            <select id="op-peak" class="op-text-input" oninput="tfAboutDirty()">
+                                <option value="">Select…</option>
+                                <option value="morning">Morning (6–12)</option>
+                                <option value="late_morning">Late morning</option>
+                                <option value="afternoon">Afternoon</option>
+                                <option value="evening">Evening (6pm+)</option>
+                                <option value="night">Night owl</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button id="op-about-save" class="op-save-theme" onclick="tfSaveAbout()" disabled style="margin-top:10px;opacity:.5">Save</button>
+                    <div class="op-sub" style="margin-top:8px;line-height:1.5">Deep psychological profile lives in <a href="http://localhost:18082" target="_blank" rel="noopener" style="color:var(--accent-info)">Nova ↗</a></div>
+                </div>
                 <div class="op-advanced-link" onclick="tfToggleAdvanced(event)">··· Advanced</div>
                 <div id="op-advanced" class="op-advanced">
                     <div class="op-h op-h-advanced">DATA COLLECTION</div>

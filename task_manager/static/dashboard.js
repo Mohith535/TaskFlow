@@ -4226,6 +4226,44 @@
         try { showToast(next ? 'Behavioral history on' : 'Behavioral history off — core history still recorded', next ? 'var(--accent-success)' : 'var(--text-secondary)'); } catch (e) {}
     };
 
+    // ── ABOUT YOU (shared user_profile.json) ─────────────────────────
+    async function tfLoadAbout() {
+        try {
+            const d = await (await fetch('/api/user-profile')).json();
+            const b = (d.profile || {}).basics || {};
+            const nameEl = document.getElementById('op-name');
+            const proEl = document.getElementById('op-pronouns');
+            const peakEl = document.getElementById('op-peak');
+            if (nameEl && b.name !== undefined) nameEl.value = b.name || '';
+            if (proEl && b.pronouns !== undefined) proEl.value = b.pronouns || '';
+            if (peakEl && b.peak_hours !== undefined) peakEl.value = b.peak_hours || '';
+        } catch (e) {}
+    }
+    window.tfAboutDirty = function() {
+        const btn = document.getElementById('op-about-save');
+        if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+    };
+    window.tfSaveAbout = async function() {
+        const btn = document.getElementById('op-about-save');
+        const payload = {
+            name: (document.getElementById('op-name') || {}).value || '',
+            pronouns: (document.getElementById('op-pronouns') || {}).value || '',
+            peak_hours: (document.getElementById('op-peak') || {}).value || '',
+        };
+        try {
+            await fetch('/api/user-profile', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (btn) { btn.disabled = true; btn.style.opacity = '.5'; }
+            try { showToast('Profile saved', 'var(--accent-success)'); } catch (e) {}
+        } catch (e) {
+            try { showToast('Save failed', 'var(--accent-danger)'); } catch (e2) {}
+        }
+    };
+    tfLoadAbout();
+
     // ── THEME SYSTEM ──────────────────────────────────────────────────
     window.tfActiveTheme = localStorage.getItem('tf_active_theme') || 'midnight';
     const TF_THEMES = [
