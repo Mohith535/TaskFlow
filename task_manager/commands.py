@@ -29,11 +29,30 @@ def parse_deadline(raw_string: str):
         return None
         
     import re
-    processed = raw_string.lower().strip()
-    
+    raw = raw_string.strip()
+
+    # FAST PATH — explicit / ISO numeric dates handled directly. Two reasons this must run
+    # BEFORE dateparser: (1) dateparser with no `languages` scans ~200 locales and takes
+    # 7s+ (cold-start far longer) — that is the "hang" non-interactive callers hit on
+    # --deadline; (2) under DATE_ORDER='DMY' dateparser returns None for ISO 'YYYY-MM-DD',
+    # which silently DROPPED the deadline. datetime parses these instantly and correctly.
+    try:
+        _iso = datetime.fromisoformat(raw)  # 2026-07-18 / 2026-07-18 14:00 / ...T... / +tz
+        return _iso.replace(tzinfo=None) if _iso.tzinfo else _iso
+    except (ValueError, TypeError):
+        pass
+    for _fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S", "%Y/%m/%d %H:%M",
+                 "%Y/%m/%d", "%d-%m-%Y", "%d/%m/%Y"):
+        try:
+            return datetime.strptime(raw, _fmt)
+        except ValueError:
+            pass
+
+    processed = raw.lower()
+
     # "monday 17h" -> "monday 17:00"
     processed = re.sub(r'(?<!in )(?<!\+)\b(\d{1,2})h\b', r'\1:00', processed)
-    
+
     # exact matches
     if processed == "tomorrow":
         processed = "tomorrow 9am"
@@ -41,10 +60,10 @@ def parse_deadline(raw_string: str):
         processed = "tomorrow 9am"
     elif processed == "evening":
         processed = "today 6pm"
-        
+
     # next day
     processed = re.sub(r'\bnext\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b', r'\1', processed)
-    
+
     dt = dateparser.parse(
         processed,
         settings={
@@ -53,7 +72,8 @@ def parse_deadline(raw_string: str):
             'DATE_ORDER': 'DMY',
             'RETURN_AS_TIMEZONE_AWARE': False,
             'TIMEZONE': 'local'
-        }
+        },
+        languages=['en']  # constrain to English — skips the ~200-locale scan (the real hang)
     )
     if dt and dt.tzinfo is not None:
         dt = dt.replace(tzinfo=None)
@@ -2314,36 +2334,50 @@ def add_task(is_hard: bool = False, preset_deadline: str = None, preset_duration
         Messenger.careful(f"Could not add task: {e}")
         return False
 
-def dump_task(title: str, duration: str = None, deadline: str = None, is_hard: bool = False, note: str = None, links: list = None) -> dict:
+def dump_task(title: str, duration: str = None, deadline: str = None, is_hard: bool = False, note: str = None, links: list = None, force: bool = False, is_event: bool = False, at: str = None) -> dict:
     """Frictionless capture: instantly add a task without prompts.
 
-    note  : optional description string (E3 --note).
-    links : optional list of {"url": str, "title": str|None} dicts (E3 --link/--link-title).
+    note     : optional description string (E3 --note).
+    links    : optional list of {"url": str, "title": str|None} dicts (E3 --link/--link-title).
+    force    : skip the duplicate guard (BUG 2).
+    is_event : create a time-locked Event instead of a Task (BUG 5; uses `at`/deadline for the slot).
+    at       : event start ("2026-07-18 14:00" / "tomorrow 3pm"); only used when is_event.
+
+    Returns the task dict on success, None when there's nothing to capture, or False when it
+    was skipped as a duplicate (so callers can tell the three cases apart).
     """
     import re
     from datetime import datetime
     tasks = storage.load_tasks()
     manager = TaskManager(tasks)
-    
+
     # Frictionless Parser: Extract #tags and !priority
     tags = ["inbox"]
     priority = "Medium"
-    
+
     # Extract tags starting with #
     extracted_tags = re.findall(r'#(\w+)', title)
     for t in extracted_tags:
         if t.lower() not in [tg.lower() for tg in tags]:
             tags.append(t)
-    
+
+    # BUG 3: pull bare URLs out of the dump text into real references (don't leave them in the title)
+    extracted_urls = re.findall(r'https?://[^\s]+', title)
+    if extracted_urls:
+        links = list(links or [])
+        for _u in extracted_urls:
+            links.append({"url": _u.rstrip('.,);]\'"'), "title": None})
+
     # Extract priority starting with !
     # Using (?!\w) ensures we don't match "!hello" as "!h"
-    extracted_priorities = re.findall(r'!(low|medium|high|noise|strategic|critical|l|m|h|p|purge)(?!\w)', title, re.IGNORECASE)
+    extracted_priorities = re.findall(r'!(low|medium|high|noise|strategic|critical|l|m|h|c|p|purge)(?!\w)', title, re.IGNORECASE)
     if extracted_priorities:
         priority = extracted_priorities[-1] # Take the last one specified
         
-    # Clean the title by removing the extracted markers
-    clean_title = re.sub(r'#\w+', '', title)
-    clean_title = re.sub(r'!(low|medium|high|noise|strategic|critical|l|m|h|p|purge)(?!\w)', '', clean_title, flags=re.IGNORECASE)
+    # Clean the title by removing the extracted markers (URLs first, then #tags / !priority)
+    clean_title = re.sub(r'https?://[^\s]+', '', title)
+    clean_title = re.sub(r'#\w+', '', clean_title)
+    clean_title = re.sub(r'!(low|medium|high|noise|strategic|critical|l|m|h|c|p|purge)(?!\w)', '', clean_title, flags=re.IGNORECASE)
     clean_title = re.sub(r'\s+', ' ', clean_title).strip()  # Collapse residual whitespace
 
     # S2-D: extract an inline natural-language deadline from the text (when no --deadline flag)
@@ -2373,10 +2407,37 @@ def dump_task(title: str, duration: str = None, deadline: str = None, is_hard: b
                 clean_title = re.sub(r'\s+', ' ', clean_title).strip()
 
     clean_title = validate_title(clean_title)
-    
+
     if not clean_title:
         return None
-        
+
+    # BUG 2: refuse exact duplicates — same normalized title OR same link URL — unless --force.
+    # Keeps automated callers (e.g. Opportunity Hunter) from piling up identical tasks.
+    if not force:
+        def _norm(s):
+            return re.sub(r'\s+', ' ', (s or '').strip().lower())
+        _new_title = _norm(clean_title)
+        _new_urls = {(_l.get('url') or '').strip().lower().rstrip('/')
+                     for _l in (links or []) if isinstance(_l, dict) and _l.get('url')}
+        for _t in manager.tasks:
+            if getattr(_t, 'completed', False) or getattr(_t, 'status', None) in ('completed', 'done', 'dropped', 'offloaded'):
+                continue
+            if _new_title and _norm(getattr(_t, 'title', '')) == _new_title:
+                try:
+                    print(f"Looks like a duplicate of #{_t.id}: \"{_t.title}\". Use --force to add anyway.")
+                except Exception:
+                    pass
+                return False
+            if _new_urls:
+                _existing = {(_lnk.get('url') or '').strip().lower().rstrip('/')
+                             for _lnk in (getattr(_t, 'links', None) or []) if isinstance(_lnk, dict) and _lnk.get('url')}
+                if _new_urls & _existing:
+                    try:
+                        print(f"Looks like a duplicate of #{_t.id} (same link). Use --force to add anyway.")
+                    except Exception:
+                        pass
+                    return False
+
     task = Task(
         id=0,
         title=clean_title,
@@ -2406,6 +2467,20 @@ def dump_task(title: str, duration: str = None, deadline: str = None, is_hard: b
         except Exception:
             pass
         calculate_reminder_time(task)
+
+    # BUG 5: time-locked Event for programmatic callers (--event [--at "<start>"]).
+    # Reuses the existing Event model fields (mission_type/date/start_time); the slot comes
+    # from --at, falling back to --deadline so `dump "Summit" --event --deadline "2026-07-18 14:00"` works.
+    if is_event:
+        task.mission_type = "Event"
+        _evt_dt = parse_deadline(at) if at else None
+        if not _evt_dt and deadline:
+            _evt_dt = parse_deadline(deadline)
+        elif not _evt_dt and inline_deadline_dt:
+            _evt_dt = inline_deadline_dt
+        if _evt_dt:
+            task.date = _evt_dt.strftime('%Y-%m-%d')
+            task.start_time = _evt_dt.strftime('%H:%M')
 
     # E3: enrichment captured via flags
     if note:
@@ -2786,6 +2861,31 @@ def _list_priority_color(t):
     return Fore.WHITE
 
 
+def _format_event_slot(t) -> str:
+    """Human time for a mission_type=Event task: 'Sat 18 Jul, 2:00 PM' from date + start_time[-end_time]."""
+    from datetime import datetime as _dt
+    d = getattr(t, 'date', None)
+    if not d:
+        return ""
+    try:
+        when = _dt.strptime(d, '%Y-%m-%d').strftime('%a %d %b').replace(" 0", " ")
+    except (ValueError, TypeError):
+        return str(d)
+    st = getattr(t, 'start_time', None)
+    if st:
+        try:
+            when += ", " + _dt.strptime(st, '%H:%M').strftime('%I:%M %p').lstrip('0')
+        except (ValueError, TypeError):
+            when += ", " + str(st)
+    et = getattr(t, 'end_time', None)
+    if et:
+        try:
+            when += "–" + _dt.strptime(et, '%H:%M').strftime('%I:%M %p').lstrip('0')
+        except (ValueError, TypeError):
+            pass
+    return when
+
+
 def _print_list_active_task(t, now, show_detail=False):
     pressure = get_pressure_level(t)
     title_color = Fore.WHITE
@@ -2807,7 +2907,23 @@ def _print_list_active_task(t, now, show_detail=False):
 
     id_str = f"{Fore.GREEN}#{t.id}{Style.RESET_ALL}"
     p_color = _list_priority_color(t)
-    print(f"{Fore.WHITE}○{Style.RESET_ALL} {id_str} · {title_color}{t.title}{Style.RESET_ALL}{dur} · {p_color}{t.priority}{Style.RESET_ALL}{tags}{postpone}")
+    _is_event = (getattr(t, 'mission_type', 'Task') == 'Event')
+    try:
+        _emoji = any(x in (sys.stdout.encoding or '').lower() for x in ('utf', 'cp65001'))
+    except Exception:
+        _emoji = False
+    if _is_event:
+        bullet = f"{Fore.MAGENTA}{'📅' if _emoji else '◆'}{Style.RESET_ALL}"
+        evt_tag = f" {Fore.MAGENTA}{Style.DIM}EVENT{Style.RESET_ALL}"
+    else:
+        bullet = f"{Fore.WHITE}○{Style.RESET_ALL}"
+        evt_tag = ""
+    print(f"{bullet} {id_str} · {title_color}{t.title}{Style.RESET_ALL}{evt_tag}{dur} · {p_color}{t.priority}{Style.RESET_ALL}{tags}{postpone}")
+
+    if _is_event:
+        _slot = _format_event_slot(t)
+        if _slot:
+            print(f"       {Fore.MAGENTA}{'📅 ' if _emoji else ''}{_slot}{Style.RESET_ALL}")
 
     dt = _list_deadline_dt(t)
     if dt is not None:
@@ -5948,11 +6064,11 @@ def focus_capture_dump(info, text, duration=None, deadline=None, is_hard=False):
         if t.lower() not in [x.lower() for x in tags]:
             tags.append(t)
     priority = "Medium"
-    pr = re.findall(r'!(low|medium|high|noise|strategic|critical|l|m|h|p|purge)(?!\w)', text, re.IGNORECASE)
+    pr = re.findall(r'!(low|medium|high|noise|strategic|critical|l|m|h|c|p|purge)(?!\w)', text, re.IGNORECASE)
     if pr:
         priority = pr[-1]
     clean = re.sub(r'#\w+', '', text)
-    clean = re.sub(r'!(low|medium|high|noise|strategic|critical|l|m|h|p|purge)(?!\w)', '', clean, flags=re.IGNORECASE)
+    clean = re.sub(r'!(low|medium|high|noise|strategic|critical|l|m|h|c|p|purge)(?!\w)', '', clean, flags=re.IGNORECASE)
     clean = re.sub(r'\s+', ' ', clean).strip()
     clean = validate_title(clean)
     if not clean:

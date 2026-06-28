@@ -571,6 +571,12 @@ Examples:
                              help='Attach a link/reference (auto-detected; repeatable, up to 10)')
     dump_parser.add_argument('--link-title', action='append', dest='link_titles', metavar='TITLE',
                              help='Title for the most recent --link')
+    dump_parser.add_argument('--force', action='store_true',
+                             help='Add even if it looks like a duplicate of an existing task')
+    dump_parser.add_argument('--event', action='store_true',
+                             help='Create a time-locked Event instead of a Task')
+    dump_parser.add_argument('--at', type=str, metavar='START',
+                             help='Event start time (use with --event), e.g. "2026-07-18 14:00"')
 
     # Link management (E6)
     link_parser = subparsers.add_parser('link', help='View/manage links & references for a task')
@@ -957,11 +963,15 @@ def main():
                     deadline=args.deadline,
                     is_hard=args.hard,
                     note=getattr(args, 'note', None),
-                    links=dump_links
+                    links=dump_links,
+                    force=getattr(args, 'force', False),
+                    is_event=getattr(args, 'event', False),
+                    at=getattr(args, 'at', None)
                 )
                 if _dumped is None:
                     print("Nothing to capture — a tag or priority alone isn't a task. Add a few words.")
                     print('Example: taskflow dump "Email the team #work !h"')
+                # _dumped is False → skipped as a duplicate; dump_task already explained why.
             else:
                 Messenger.careful("No text provided for dump.")
 
